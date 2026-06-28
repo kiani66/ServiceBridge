@@ -15,14 +15,14 @@ public class AuthServiceTests
     public async Task RegisterAsync_WhenEmailExists_ReturnsConflict()
     {
         var repository = new FakeUserRepository();
-        repository.Seed(CreateUser("user@paybridge.test", "Password123!"));
+        repository.Seed(CreateUser("user@servicebridge.test", "Password123!"));
         var jwtService = new FakeJwtTokenService();
         var service = CreateService(repository, jwtService);
 
         var result = await service.RegisterAsync(new UserRegisterRequest
         {
             FullName = "Existing User",
-            Email = "user@paybridge.test",
+            Email = "user@servicebridge.test",
             Password = "Password123!"
         });
 
@@ -41,7 +41,7 @@ public class AuthServiceTests
         var result = await service.RegisterAsync(new UserRegisterRequest
         {
             FullName = "New User",
-            Email = "new@paybridge.test",
+            Email = "new@servicebridge.test",
             Password = "short"
         });
 
@@ -60,7 +60,7 @@ public class AuthServiceTests
 
         var result = await service.LoginAsync(new UserLoginRequest
         {
-            Email = "missing@paybridge.test",
+            Email = "missing@servicebridge.test",
             Password = "Password123!"
         });
 
@@ -74,7 +74,7 @@ public class AuthServiceTests
     public async Task LoginAsync_WhenInactiveUserHasWrongPassword_ReturnsInvalidCredentials()
     {
         var repository = new FakeUserRepository();
-        var user = CreateUser("inactive@paybridge.test", "CorrectPassword1!");
+        var user = CreateUser("inactive@servicebridge.test", "CorrectPassword1!");
         user.IsActive = false;
         repository.Seed(user);
         var jwtService = new FakeJwtTokenService();
@@ -94,7 +94,7 @@ public class AuthServiceTests
     public async Task LoginAsync_WhenInactiveUserHasCorrectPassword_ReturnsUserInactive()
     {
         var repository = new FakeUserRepository();
-        var user = CreateUser("inactive@paybridge.test", "CorrectPassword1!");
+        var user = CreateUser("inactive@servicebridge.test", "CorrectPassword1!");
         user.IsActive = false;
         repository.Seed(user);
         var jwtService = new FakeJwtTokenService();
@@ -115,7 +115,7 @@ public class AuthServiceTests
     public async Task LoginAsync_WhenCredentialsAreValid_ReturnsTokenAndUserData()
     {
         var repository = new FakeUserRepository();
-        var user = CreateUser("active@paybridge.test", "CorrectPassword1!");
+        var user = CreateUser("active@servicebridge.test", "CorrectPassword1!");
         repository.Seed(user);
         var jwtService = new FakeJwtTokenService();
         var service = CreateService(repository, jwtService);

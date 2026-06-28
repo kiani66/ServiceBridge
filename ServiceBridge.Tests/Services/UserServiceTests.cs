@@ -51,7 +51,7 @@ public class UserServiceTests
         return new User
         {
             FullName = "Test User",
-            Email = "user@paybridge.test",
+            Email = "user@servicebridge.test",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("CurrentPassword1!"),
             IsActive = true
         };

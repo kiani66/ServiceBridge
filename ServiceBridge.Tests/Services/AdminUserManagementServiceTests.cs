@@ -19,7 +19,7 @@ public class AdminUserManagementServiceTests
         var result = await service.CreateAgentAsync(new CreateAgentRequest
         {
             FullName = "Agent One",
-            Email = "AGENT@PAYBRIDGE.TEST",
+            Email = "AGENT@SERVICEBRIDGE.TEST",
             Password = "AgentPassword1!"
         });
 
@@ -28,7 +28,7 @@ public class AdminUserManagementServiceTests
         var agent = Assert.Single(repository.Users);
         Assert.Equal(UserRole.Agent, agent.Role);
         Assert.True(agent.IsActive);
-        Assert.Equal("agent@paybridge.test", agent.Email);
+        Assert.Equal("agent@servicebridge.test", agent.Email);
         Assert.True(
             BCrypt.Net.BCrypt.Verify("AgentPassword1!", agent.PasswordHash));
         Assert.Equal(1, repository.SaveCount);
@@ -44,7 +44,7 @@ public class AdminUserManagementServiceTests
         var result = await service.CreateAgentAsync(new CreateAgentRequest
         {
             FullName = "Agent One",
-            Email = "user@paybridge.test",
+            Email = "user@servicebridge.test",
             Password = "AgentPassword1!"
         });
 
@@ -116,7 +116,7 @@ public class AdminUserManagementServiceTests
         return new User
         {
             FullName = "Test User",
-            Email = "user@paybridge.test",
+            Email = "user@servicebridge.test",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Password1!"),
             Role = role,
             IsActive = true
