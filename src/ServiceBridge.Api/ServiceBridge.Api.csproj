@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ServiceBridge.Application\ServiceBridge.Application.csproj" />
+    <ProjectReference Include="..\ServiceBridge.Infrastructure\ServiceBridge.Infrastructure.csproj" />
+    <ProjectReference Include="..\ServiceBridge.Shared\ServiceBridge.Shared.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
