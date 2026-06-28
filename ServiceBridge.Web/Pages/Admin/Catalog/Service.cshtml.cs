@@ -48,40 +48,40 @@ public class ServiceModel : PageModel
             "Service updated successfully.");
     }
 
-    public async Task<IActionResult> OnPostCreatePlanAsync(
+    public async Task<IActionResult> OnPostCreateVariantAsync(
         Guid id,
-        CreateServicePlanRequest plan)
+        CreateServiceVariantRequest variant)
     {
-        if (!TryValidateModel(plan, nameof(plan)))
+        if (!TryValidateModel(variant, nameof(variant)))
         {
-            ErrorMessage = "Review the service plan and try again.";
+            ErrorMessage = "Review the service variant and try again.";
             return await LoadAsync(id);
         }
 
         return await PostAsync(
             id,
             $"api/admin/catalog/services/{id}/plans",
-            plan,
-            "Service plan created successfully.");
+            variant,
+            "service variant created successfully.");
     }
 
-    public async Task<IActionResult> OnPostUpdatePlanAsync(
+    public async Task<IActionResult> OnPostUpdateVariantAsync(
         Guid id,
-        Guid planId,
-        UpdateServicePlanRequest plan)
+        Guid variantId,
+        UpdateServiceVariantRequest variant)
     {
-        if (planId == Guid.Empty ||
-            !TryValidateModel(plan, nameof(plan)))
+        if (variantId == Guid.Empty ||
+            !TryValidateModel(variant, nameof(variant)))
         {
-            ErrorMessage = "Review the service plan and try again.";
+            ErrorMessage = "Review the service variant and try again.";
             return await LoadAsync(id);
         }
 
         return await PutAsync(
             id,
-            $"api/admin/catalog/plans/{planId}",
-            plan,
-            "Service plan updated successfully.");
+            $"api/admin/catalog/plans/{variantId}",
+            variant,
+            "service variant updated successfully.");
     }
 
     public async Task<IActionResult> OnPostCreateFieldAsync(

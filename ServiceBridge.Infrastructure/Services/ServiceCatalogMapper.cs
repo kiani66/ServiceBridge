@@ -73,9 +73,9 @@ internal static class ServiceCatalogMapper
             SupportsUseExistingAccount = service.SupportsUseExistingAccount,
             SupportsCreateNewAccount = service.SupportsCreateNewAccount,
             SupportedFulfillmentModes = GetSupportedFulfillmentModes(service),
-            Plans = service.Plans
+            Plans = service.Variants
                 .OrderBy(x => x.DisplayOrder)
-                .Select(MapPlan)
+                .Select(MapVariant)
                 .ToArray(),
             RequiredFields = service.RequiredFields
                 .OrderBy(x => x.DisplayOrder)
@@ -103,9 +103,9 @@ internal static class ServiceCatalogMapper
             SupportsUseExistingAccount = service.SupportsUseExistingAccount,
             SupportsCreateNewAccount = service.SupportsCreateNewAccount,
             SupportedFulfillmentModes = GetSupportedFulfillmentModes(service),
-            Plans = service.Plans
+            Plans = service.Variants
                 .OrderBy(x => x.DisplayOrder)
-                .Select(MapPlan)
+                .Select(MapVariant)
                 .ToArray(),
             RequiredFields = service.RequiredFields
                 .OrderBy(x => x.DisplayOrder)
@@ -133,9 +133,9 @@ internal static class ServiceCatalogMapper
         };
     }
 
-    public static ServicePlanResponse MapPlan(ServicePlan plan)
+    public static ServiceVariantResponse MapVariant(ServiceVariant plan)
     {
-        return new ServicePlanResponse
+        return new ServiceVariantResponse
         {
             Id = plan.Id,
             Name = plan.Name,
@@ -169,7 +169,7 @@ internal static class ServiceCatalogMapper
 
     private static decimal GetDisplayBasePrice(DigitalService service)
     {
-        return service.Plans
+        return service.Variants
             .Where(x => x.IsActive)
             .OrderBy(x => x.DisplayOrder)
             .Select(x => (decimal?)x.BasePrice)
@@ -178,7 +178,7 @@ internal static class ServiceCatalogMapper
 
     private static string GetDisplayCurrencyCode(DigitalService service)
     {
-        return service.Plans
+        return service.Variants
             .Where(x => x.IsActive)
             .OrderBy(x => x.DisplayOrder)
             .Select(x => x.CurrencyCode)

@@ -271,14 +271,14 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int?>("PlanDurationDaysSnapshot")
+                    b.Property<int?>("VariantDurationDaysSnapshot")
                         .HasColumnType("int");
 
-                    b.Property<string>("PlanNameSnapshot")
+                    b.Property<string>("VariantNameSnapshot")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
-                    b.Property<string>("PlanRegionCodeSnapshot")
+                    b.Property<string>("VariantRegionCodeSnapshot")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
@@ -295,7 +295,7 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Property<Guid>("ServiceId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ServicePlanId")
+                    b.Property<Guid?>("ServiceVariantId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("Status")
@@ -314,7 +314,7 @@ namespace ServiceBridge.Infrastructure.Migrations
 
                     b.HasIndex("ServiceId");
 
-                    b.HasIndex("ServicePlanId");
+                    b.HasIndex("ServiceVariantId");
 
                     b.HasIndex("AssignedAgentId", "Status");
 
@@ -710,7 +710,7 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.ToTable("ServiceCategories");
                 });
 
-            modelBuilder.Entity("ServiceBridge.Domain.Entities.ServicePlan", b =>
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.ServiceVariant", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
@@ -768,11 +768,11 @@ namespace ServiceBridge.Infrastructure.Migrations
 
                     b.HasIndex("ServiceId", "IsActive", "DisplayOrder");
 
-                    b.ToTable("ServicePlans", t =>
+                    b.ToTable("ServiceVariants", t =>
                         {
-                            t.HasCheckConstraint("CK_ServicePlans_BasePrice_NonNegative", "[BasePrice] >= 0");
+                            t.HasCheckConstraint("CK_ServiceVariants_BasePrice_NonNegative", "[BasePrice] >= 0");
 
-                            t.HasCheckConstraint("CK_ServicePlans_DurationDays_Positive", "[DurationDays] IS NULL OR [DurationDays] > 0");
+                            t.HasCheckConstraint("CK_ServiceVariants_DurationDays_Positive", "[DurationDays] IS NULL OR [DurationDays] > 0");
                         });
                 });
 
@@ -953,9 +953,9 @@ namespace ServiceBridge.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("ServiceBridge.Domain.Entities.ServicePlan", "ServicePlan")
+                    b.HasOne("ServiceBridge.Domain.Entities.ServiceVariant", "ServiceVariant")
                         .WithMany()
-                        .HasForeignKey("ServicePlanId")
+                        .HasForeignKey("ServiceVariantId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ServiceBridge.Domain.Entities.User", "User")
@@ -968,7 +968,7 @@ namespace ServiceBridge.Infrastructure.Migrations
 
                     b.Navigation("Service");
 
-                    b.Navigation("ServicePlan");
+                    b.Navigation("ServiceVariant");
 
                     b.Navigation("User");
                 });
@@ -1079,10 +1079,10 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Navigation("Service");
                 });
 
-            modelBuilder.Entity("ServiceBridge.Domain.Entities.ServicePlan", b =>
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.ServiceVariant", b =>
                 {
                     b.HasOne("ServiceBridge.Domain.Entities.DigitalService", "Service")
-                        .WithMany("Plans")
+                        .WithMany("Variants")
                         .HasForeignKey("ServiceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1103,7 +1103,7 @@ namespace ServiceBridge.Infrastructure.Migrations
 
             modelBuilder.Entity("ServiceBridge.Domain.Entities.DigitalService", b =>
                 {
-                    b.Navigation("Plans");
+                    b.Navigation("Variants");
 
                     b.Navigation("ProfitMargins");
 

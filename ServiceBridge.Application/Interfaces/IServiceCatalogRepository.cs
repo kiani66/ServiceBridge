@@ -12,11 +12,11 @@ public interface IServiceCatalogRepository
     Task<Provider?> GetProviderBySlugAsync(string slug);
     Task<ServiceCategory?> GetCategoryByIdAsync(Guid id);
     Task<DigitalService?> GetServiceByIdAsync(Guid id);
-    Task<ServicePlan?> GetPlanByIdAsync(Guid id);
+    Task<ServiceVariant?> GetVariantByIdAsync(Guid id);
     Task<ServiceRequiredField?> GetRequiredFieldByIdAsync(Guid id);
     Task<bool> CategorySlugExistsAsync(string slug, Guid? excludingId = null);
     Task<bool> ServiceSlugExistsAsync(string slug, Guid? excludingId = null);
-    Task<bool> PlanSlugExistsAsync(Guid serviceId, string slug, Guid? excludingId = null);
+    Task<bool> VariantSlugExistsAsync(Guid serviceId, string slug, Guid? excludingId = null);
     Task<bool> FieldKeyExistsAsync(
         Guid serviceId,
         string fieldKey,
@@ -26,10 +26,10 @@ public interface IServiceCatalogRepository
     Task AddCategoryAsync(ServiceCategory category);
     Task AddProviderAsync(Provider provider);
     Task AddServiceAsync(DigitalService service);
-    Task AddPlanAsync(ServicePlan plan);
+    Task AddVariantAsync(ServiceVariant plan);
     Task AddRequiredFieldAsync(ServiceRequiredField field);
     Task UpdateCategoryAsync(ServiceCategory category);
     Task UpdateServiceAsync(DigitalService service);
-    Task UpdatePlanAsync(ServicePlan plan);
+    Task UpdateVariantAsync(ServiceVariant plan);
     Task UpdateRequiredFieldAsync(ServiceRequiredField field);
 }

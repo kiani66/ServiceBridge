@@ -197,29 +197,29 @@ public class AdminCatalogService : IAdminCatalogService
             AppMessages.ServiceUpdated);
     }
 
-    public async Task<ServiceResult<ServicePlanResponse>> CreatePlanAsync(
+    public async Task<ServiceResult<ServiceVariantResponse>> CreateVariantAsync(
         Guid serviceId,
-        CreateServicePlanRequest request)
+        CreateServiceVariantRequest request)
     {
         var service = await _repository.GetServiceByIdAsync(serviceId);
         if (service == null)
         {
-            return ServiceResult<ServicePlanResponse>.Fail(
+            return ServiceResult<ServiceVariantResponse>.Fail(
                 AppMessages.ServiceNotFound,
                 AppConstants.ErrorCodes.NotFound,
                 404);
         }
 
         var slug = NormalizeSlug(request.Slug);
-        if (await _repository.PlanSlugExistsAsync(serviceId, slug))
+        if (await _repository.VariantSlugExistsAsync(serviceId, slug))
         {
-            return ServiceResult<ServicePlanResponse>.Fail(
-                AppMessages.DuplicatePlanSlug,
+            return ServiceResult<ServiceVariantResponse>.Fail(
+                AppMessages.DuplicateVariantSlug,
                 AppConstants.ErrorCodes.Conflict,
                 409);
         }
 
-        var plan = new ServicePlan
+        var variant = new ServiceVariant
         {
             ServiceId = service.Id,
             Service = service,
@@ -235,54 +235,54 @@ public class AdminCatalogService : IAdminCatalogService
                 request.ProcessingTimeDescription)
         };
 
-        await _repository.AddPlanAsync(plan);
+        await _repository.AddVariantAsync(variant);
         _logger.LogInformation(
-            "Service plan {PlanId} created for service {ServiceId}.",
-            plan.Id,
+            "service variant {variantId} created for service {ServiceId}.",
+            variant.Id,
             serviceId);
 
-        return ServiceResult<ServicePlanResponse>.Created(
-            ServiceCatalogMapper.MapPlan(plan),
-            AppMessages.ServicePlanCreated);
+        return ServiceResult<ServiceVariantResponse>.Created(
+            ServiceCatalogMapper.MapVariant(variant),
+            AppMessages.ServiceVariantCreated);
     }
 
-    public async Task<ServiceResult<ServicePlanResponse>> UpdatePlanAsync(
+    public async Task<ServiceResult<ServiceVariantResponse>> UpdateVariantAsync(
         Guid id,
-        UpdateServicePlanRequest request)
+        UpdateServiceVariantRequest request)
     {
-        var plan = await _repository.GetPlanByIdAsync(id);
-        if (plan == null)
+        var variant = await _repository.GetVariantByIdAsync(id);
+        if (variant == null)
         {
-            return ServiceResult<ServicePlanResponse>.Fail(
-                AppMessages.ServicePlanNotFound,
+            return ServiceResult<ServiceVariantResponse>.Fail(
+                AppMessages.ServiceVariantNotFound,
                 AppConstants.ErrorCodes.NotFound,
                 404);
         }
 
         var slug = NormalizeSlug(request.Slug);
-        if (await _repository.PlanSlugExistsAsync(plan.ServiceId, slug, id))
+        if (await _repository.VariantSlugExistsAsync(variant.ServiceId, slug, id))
         {
-            return ServiceResult<ServicePlanResponse>.Fail(
-                AppMessages.DuplicatePlanSlug,
+            return ServiceResult<ServiceVariantResponse>.Fail(
+                AppMessages.DuplicateVariantSlug,
                 AppConstants.ErrorCodes.Conflict,
                 409);
         }
 
-        plan.Name = request.Name.Trim();
-        plan.Slug = slug;
-        plan.DurationDays = request.DurationDays;
-        plan.RegionCode = NormalizeOptional(request.RegionCode)?.ToUpperInvariant();
-        plan.CurrencyCode = request.CurrencyCode.Trim().ToUpperInvariant();
-        plan.BasePrice = request.BasePrice;
-        plan.IsActive = request.IsActive;
-        plan.DisplayOrder = request.DisplayOrder;
-        plan.ProcessingTimeDescription = NormalizeOptional(
+        variant.Name = request.Name.Trim();
+        variant.Slug = slug;
+        variant.DurationDays = request.DurationDays;
+        variant.RegionCode = NormalizeOptional(request.RegionCode)?.ToUpperInvariant();
+        variant.CurrencyCode = request.CurrencyCode.Trim().ToUpperInvariant();
+        variant.BasePrice = request.BasePrice;
+        variant.IsActive = request.IsActive;
+        variant.DisplayOrder = request.DisplayOrder;
+        variant.ProcessingTimeDescription = NormalizeOptional(
             request.ProcessingTimeDescription);
 
-        await _repository.UpdatePlanAsync(plan);
-        return ServiceResult<ServicePlanResponse>.Ok(
-            ServiceCatalogMapper.MapPlan(plan),
-            AppMessages.ServicePlanUpdated);
+        await _repository.UpdateVariantAsync(variant);
+        return ServiceResult<ServiceVariantResponse>.Ok(
+            ServiceCatalogMapper.MapVariant(variant),
+            AppMessages.ServiceVariantUpdated);
     }
 
     public async Task<ServiceResult<ServiceRequiredFieldResponse>> CreateRequiredFieldAsync(

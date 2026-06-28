@@ -22,7 +22,7 @@ internal class FakeOrderCreationRepository : IOrderCreationRepository
     {
         if (ServiceDefinition != null && planId.HasValue)
         {
-            ServiceDefinition.PlanId = planId;
+            ServiceDefinition.VariantId = planId;
         }
 
         return Task.FromResult(ServiceDefinition);

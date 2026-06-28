@@ -1,6 +1,6 @@
 namespace ServiceBridge.Application.DTOs;
 
-public class ServicePlanResponse
+public class ServiceVariantResponse
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;

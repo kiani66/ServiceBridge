@@ -26,8 +26,25 @@ public class ServiceCatalogModelTests
         AssertClientGeneratedId<Provider>();
         AssertClientGeneratedId<ServiceCategory>();
         AssertClientGeneratedId<DigitalService>();
-        AssertClientGeneratedId<ServicePlan>();
+        AssertClientGeneratedId<ServiceVariant>();
         AssertClientGeneratedId<ServiceRequiredField>();
+    }
+
+    [Fact]
+    public void ServiceVariant_ReplacesServicePlanAsDomainType()
+    {
+        Assert.Equal("ServiceVariant", typeof(ServiceVariant).Name);
+        Assert.Null(Type.GetType("ServiceBridge.Domain.Entities.ServicePlan, ServiceBridge.Domain"));
+    }
+
+    [Fact]
+    public void DigitalService_ExposesVariantsNavigation()
+    {
+        var variants = typeof(DigitalService).GetProperty(nameof(DigitalService.Variants));
+
+        Assert.NotNull(variants);
+        Assert.Equal(typeof(ICollection<ServiceVariant>), variants.PropertyType);
+        Assert.Null(typeof(DigitalService).GetProperty("Plans"));
     }
 
     [Fact]
@@ -72,26 +89,26 @@ public class ServiceCatalogModelTests
         Assert.Equal(18, basePrice.GetPrecision());
         Assert.Equal(4, basePrice.GetScale());
 
-        var planType = _context.Model.FindEntityType(typeof(ServicePlan))!;
-        var planBasePrice = planType.FindProperty(nameof(ServicePlan.BasePrice))!;
+        var variantType = _context.Model.FindEntityType(typeof(ServiceVariant))!;
+        var variantBasePrice = variantType.FindProperty(nameof(ServiceVariant.BasePrice))!;
 
-        Assert.Equal(18, planBasePrice.GetPrecision());
-        Assert.Equal(4, planBasePrice.GetScale());
+        Assert.Equal(18, variantBasePrice.GetPrecision());
+        Assert.Equal(4, variantBasePrice.GetScale());
     }
 
     [Fact]
-    public void ServicePlanSlug_IsUniquePerService()
+    public void ServiceVariantSlug_IsUniquePerService()
     {
-        var planType = _context.Model.FindEntityType(typeof(ServicePlan))!;
+        var variantType = _context.Model.FindEntityType(typeof(ServiceVariant))!;
 
         Assert.Contains(
-            planType.GetIndexes(),
+            variantType.GetIndexes(),
             index => index.IsUnique &&
                      index.Properties.Select(x => x.Name)
                          .SequenceEqual(new[]
                          {
-                             nameof(ServicePlan.ServiceId),
-                             nameof(ServicePlan.Slug)
+                             nameof(ServiceVariant.ServiceId),
+                             nameof(ServiceVariant.Slug)
                          }));
     }
 
@@ -117,7 +134,7 @@ public class ServiceCatalogModelTests
     public void CatalogRelationships_UseExpectedDeleteBehavior()
     {
         var serviceType = _context.Model.FindEntityType(typeof(DigitalService))!;
-        var planType = _context.Model.FindEntityType(typeof(ServicePlan))!;
+        var variantType = _context.Model.FindEntityType(typeof(ServiceVariant))!;
         var fieldType = _context.Model.FindEntityType(typeof(ServiceRequiredField))!;
 
         Assert.Contains(serviceType.GetForeignKeys(), foreignKey =>
@@ -126,7 +143,7 @@ public class ServiceCatalogModelTests
         Assert.Contains(serviceType.GetForeignKeys(), foreignKey =>
             foreignKey.Properties.Select(x => x.Name).SequenceEqual(new[] { "ProviderId" }) &&
             foreignKey.DeleteBehavior == DeleteBehavior.Restrict);
-        Assert.Equal(DeleteBehavior.Cascade, planType.GetForeignKeys().Single().DeleteBehavior);
+        Assert.Equal(DeleteBehavior.Cascade, variantType.GetForeignKeys().Single().DeleteBehavior);
         Assert.Equal(DeleteBehavior.Cascade, fieldType.GetForeignKeys().Single().DeleteBehavior);
     }
 

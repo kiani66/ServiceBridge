@@ -14,7 +14,7 @@ public class ServiceBridgeDbContext : DbContext
     public DbSet<Provider> Providers { get; set; } = null!;
     public DbSet<ServiceCategory> ServiceCategories { get; set; } = null!;
     public DbSet<DigitalService> DigitalServices { get; set; } = null!;
-    public DbSet<ServicePlan> ServicePlans { get; set; } = null!;
+    public DbSet<ServiceVariant> ServiceVariants { get; set; } = null!;
     public DbSet<ServiceRequiredField> ServiceRequiredFields { get; set; } = null!;
     public DbSet<ExchangeRate> ExchangeRates { get; set; } = null!;
     public DbSet<ProfitMargin> ProfitMargins { get; set; } = null!;

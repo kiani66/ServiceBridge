@@ -15,12 +15,12 @@ public interface IAdminCatalogService
     Task<ServiceResult<ServiceDetailResponse>> UpdateServiceAsync(
         Guid id,
         UpdateDigitalServiceRequest request);
-    Task<ServiceResult<ServicePlanResponse>> CreatePlanAsync(
+    Task<ServiceResult<ServiceVariantResponse>> CreateVariantAsync(
         Guid serviceId,
-        CreateServicePlanRequest request);
-    Task<ServiceResult<ServicePlanResponse>> UpdatePlanAsync(
+        CreateServiceVariantRequest request);
+    Task<ServiceResult<ServiceVariantResponse>> UpdateVariantAsync(
         Guid id,
-        UpdateServicePlanRequest request);
+        UpdateServiceVariantRequest request);
     Task<ServiceResult<ServiceRequiredFieldResponse>> CreateRequiredFieldAsync(
         Guid serviceId,
         CreateServiceRequiredFieldRequest request);

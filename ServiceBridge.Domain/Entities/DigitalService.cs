@@ -17,7 +17,7 @@ public class DigitalService : BaseEntity
 
     public ServiceCategory Category { get; set; } = null!;
     public Provider Provider { get; set; } = null!;
-    public ICollection<ServicePlan> Plans { get; set; } = new List<ServicePlan>();
+    public ICollection<ServiceVariant> Variants { get; set; } = new List<ServiceVariant>();
     public ICollection<ServiceRequiredField> RequiredFields { get; set; } =
         new List<ServiceRequiredField>();
     public ICollection<ProfitMargin> ProfitMargins { get; set; } = new List<ProfitMargin>();

@@ -2,16 +2,16 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ServiceBridge.Application.DTOs;
 
-public class CreateServicePlanRequest
+public class CreateServiceVariantRequest
 {
-    [Required(ErrorMessage = "Plan name is required.")]
-    [MaxLength(150, ErrorMessage = "Plan name cannot exceed 150 characters.")]
+    [Required(ErrorMessage = "Variant name is required.")]
+    [MaxLength(150, ErrorMessage = "Variant name cannot exceed 150 characters.")]
     public string Name { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Plan slug is required.")]
-    [MaxLength(170, ErrorMessage = "Plan slug cannot exceed 170 characters.")]
+    [Required(ErrorMessage = "Variant slug is required.")]
+    [MaxLength(170, ErrorMessage = "Variant slug cannot exceed 170 characters.")]
     [RegularExpression("^[a-z0-9]+(?:-[a-z0-9]+)*$",
-        ErrorMessage = "Plan slug must contain lowercase letters, numbers, and hyphens only.")]
+        ErrorMessage = "Variant slug must contain lowercase letters, numbers, and hyphens only.")]
     public string Slug { get; set; } = string.Empty;
 
     [Range(1, int.MaxValue, ErrorMessage = "Duration must be greater than zero.")]

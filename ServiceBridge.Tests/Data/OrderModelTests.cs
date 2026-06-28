@@ -56,6 +56,33 @@ public class OrderModelTests
     }
 
     [Fact]
+    public void Order_UsesServiceVariantForeignKey()
+    {
+        var orderType = _context.Model.FindEntityType(typeof(Order))!;
+
+        Assert.NotNull(orderType.FindProperty(nameof(Order.ServiceVariantId)));
+        Assert.Null(orderType.FindProperty("ServicePlanId"));
+        Assert.Contains(
+            orderType.GetForeignKeys(),
+            foreignKey => foreignKey.PrincipalEntityType.ClrType == typeof(ServiceVariant) &&
+                          foreignKey.Properties.Select(x => x.Name)
+                              .SequenceEqual(new[] { nameof(Order.ServiceVariantId) }));
+    }
+
+    [Fact]
+    public void Order_StoresVariantSnapshots()
+    {
+        var orderType = _context.Model.FindEntityType(typeof(Order))!;
+
+        Assert.NotNull(orderType.FindProperty(nameof(Order.VariantNameSnapshot)));
+        Assert.NotNull(orderType.FindProperty(nameof(Order.VariantDurationDaysSnapshot)));
+        Assert.NotNull(orderType.FindProperty(nameof(Order.VariantRegionCodeSnapshot)));
+        Assert.Null(orderType.FindProperty("PlanNameSnapshot"));
+        Assert.Null(orderType.FindProperty("PlanDurationDaysSnapshot"));
+        Assert.Null(orderType.FindProperty("PlanRegionCodeSnapshot"));
+    }
+
+    [Fact]
     public void Order_HasPricingIntegrityConstraints()
     {
         var designTimeModel = _context.GetService<IDesignTimeModel>().Model;
@@ -130,9 +157,9 @@ public class OrderModelTests
             nameof(Order.BaseAmountIrr),
             nameof(Order.ProfitAmountIrr),
             nameof(Order.FinalAmountIrr),
-            nameof(Order.PlanNameSnapshot),
-            nameof(Order.PlanDurationDaysSnapshot),
-            nameof(Order.PlanRegionCodeSnapshot)
+            nameof(Order.VariantNameSnapshot),
+            nameof(Order.VariantDurationDaysSnapshot),
+            nameof(Order.VariantRegionCodeSnapshot)
         };
 
         foreach (var propertyName in protectedProperties)

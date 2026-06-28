@@ -1,6 +1,6 @@
 namespace ServiceBridge.Domain.Entities;
 
-public class ServicePlan : BaseEntity
+public class ServiceVariant : BaseEntity
 {
     public Guid ServiceId { get; set; }
     public string Name { get; set; } = string.Empty;

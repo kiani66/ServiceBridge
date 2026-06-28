@@ -77,20 +77,20 @@ public class AdminCatalogController : BaseApiController
     }
 
     [HttpPost("services/{serviceId:guid}/plans")]
-    public async Task<IActionResult> CreatePlan(
+    public async Task<IActionResult> CreateVariant(
         Guid serviceId,
-        [FromBody] CreateServicePlanRequest request)
+        [FromBody] CreateServiceVariantRequest request)
     {
-        var result = await _adminCatalogService.CreatePlanAsync(serviceId, request);
+        var result = await _adminCatalogService.CreateVariantAsync(serviceId, request);
         return ToActionResult(result);
     }
 
     [HttpPut("plans/{id:guid}")]
-    public async Task<IActionResult> UpdatePlan(
+    public async Task<IActionResult> UpdateVariant(
         Guid id,
-        [FromBody] UpdateServicePlanRequest request)
+        [FromBody] UpdateServiceVariantRequest request)
     {
-        var result = await _adminCatalogService.UpdatePlanAsync(id, request);
+        var result = await _adminCatalogService.UpdateVariantAsync(id, request);
         return ToActionResult(result);
     }
 
