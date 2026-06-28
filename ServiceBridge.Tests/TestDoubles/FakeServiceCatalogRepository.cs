@@ -7,6 +7,7 @@ namespace ServiceBridge.Tests.TestDoubles;
 internal class FakeServiceCatalogRepository : IServiceCatalogRepository
 {
     private readonly Dictionary<Guid, ServiceCategory> _categories = new();
+    private readonly Dictionary<Guid, Provider> _providers = new();
     private readonly Dictionary<Guid, DigitalService> _services = new();
     private readonly Dictionary<Guid, ServicePlan> _plans = new();
     private readonly Dictionary<Guid, ServiceRequiredField> _fields = new();
@@ -16,10 +17,21 @@ internal class FakeServiceCatalogRepository : IServiceCatalogRepository
         _categories[category.Id] = category;
     }
 
+    public void SeedProvider(Provider provider)
+    {
+        _providers[provider.Id] = provider;
+    }
+
+    public Provider? FindProviderBySlug(string slug)
+    {
+        return _providers.Values.FirstOrDefault(x => x.Slug == slug);
+    }
+
     public void SeedService(DigitalService service)
     {
         _services[service.Id] = service;
         SeedCategory(service.Category);
+        SeedProvider(service.Provider);
 
         foreach (var field in service.RequiredFields)
         {
@@ -62,6 +74,11 @@ internal class FakeServiceCatalogRepository : IServiceCatalogRepository
     public Task<ServiceCategory?> GetCategoryByIdAsync(Guid id)
     {
         return Task.FromResult(_categories.GetValueOrDefault(id));
+    }
+
+    public Task<Provider?> GetProviderBySlugAsync(string slug)
+    {
+        return Task.FromResult(_providers.Values.FirstOrDefault(x => x.Slug == slug));
     }
 
     public Task<DigitalService?> GetServiceByIdAsync(Guid id)
@@ -125,9 +142,16 @@ internal class FakeServiceCatalogRepository : IServiceCatalogRepository
         return Task.CompletedTask;
     }
 
+    public Task AddProviderAsync(Provider provider)
+    {
+        _providers[provider.Id] = provider;
+        return Task.CompletedTask;
+    }
+
     public Task AddServiceAsync(DigitalService service)
     {
         _services[service.Id] = service;
+        service.Provider.Services.Add(service);
         return Task.CompletedTask;
     }
 

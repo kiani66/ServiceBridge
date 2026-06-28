@@ -9,6 +9,7 @@ public interface IServiceCatalogRepository
     Task<DigitalService?> GetActiveServiceByIdAsync(Guid id);
     Task<IReadOnlyCollection<ServiceCategory>> GetAllCategoriesAsync();
     Task<IReadOnlyCollection<DigitalService>> GetAllServicesAsync();
+    Task<Provider?> GetProviderBySlugAsync(string slug);
     Task<ServiceCategory?> GetCategoryByIdAsync(Guid id);
     Task<DigitalService?> GetServiceByIdAsync(Guid id);
     Task<ServicePlan?> GetPlanByIdAsync(Guid id);
@@ -23,6 +24,7 @@ public interface IServiceCatalogRepository
         CredentialActor actor,
         Guid? excludingId = null);
     Task AddCategoryAsync(ServiceCategory category);
+    Task AddProviderAsync(Provider provider);
     Task AddServiceAsync(DigitalService service);
     Task AddPlanAsync(ServicePlan plan);
     Task AddRequiredFieldAsync(ServiceRequiredField field);

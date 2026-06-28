@@ -11,6 +11,7 @@ public class ServiceBridgeDbContext : DbContext
     }
 
     public DbSet<User> Users { get; set; } = null!;
+    public DbSet<Provider> Providers { get; set; } = null!;
     public DbSet<ServiceCategory> ServiceCategories { get; set; } = null!;
     public DbSet<DigitalService> DigitalServices { get; set; } = null!;
     public DbSet<ServicePlan> ServicePlans { get; set; } = null!;

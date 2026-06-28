@@ -81,7 +81,7 @@ public class AgentOrderQueryRepository : IAgentOrderQueryRepository
                 OrderId = x.Id,
                 OrderNumber = x.OrderNumber,
                 ServiceName = x.Service.Name,
-                Provider = x.Service.Provider,
+                Provider = x.Service.Provider.Name,
                 CustomerName = x.User.FullName,
                 CustomerEmail = x.User.Email,
                 Status = x.Status.ToString(),

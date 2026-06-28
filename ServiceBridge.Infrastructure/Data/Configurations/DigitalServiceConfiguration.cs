@@ -17,10 +17,6 @@ public class DigitalServiceConfiguration : IEntityTypeConfiguration<DigitalServi
             .IsRequired()
             .HasMaxLength(150);
 
-        entity.Property(x => x.Provider)
-            .IsRequired()
-            .HasMaxLength(150);
-
         entity.Property(x => x.Slug)
             .IsRequired()
             .HasMaxLength(170);
@@ -64,6 +60,11 @@ public class DigitalServiceConfiguration : IEntityTypeConfiguration<DigitalServi
         entity.HasOne(x => x.Category)
             .WithMany(x => x.Services)
             .HasForeignKey(x => x.CategoryId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne(x => x.Provider)
+            .WithMany(x => x.Services)
+            .HasForeignKey(x => x.ProviderId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

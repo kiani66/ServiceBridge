@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.Extensions.Logging;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
@@ -109,12 +110,14 @@ public class AdminCatalogService : IAdminCatalogService
                 409);
         }
 
+        var provider = await ResolveProviderAsync(request.Provider);
         var service = new DigitalService
         {
             CategoryId = category.Id,
             Category = category,
+            ProviderId = provider.Id,
+            Provider = provider,
             Name = request.Name.Trim(),
-            Provider = request.Provider.Trim(),
             Slug = slug,
             Description = NormalizeOptional(request.Description),
             LogoUrl = NormalizeOptional(request.LogoUrl),
@@ -171,10 +174,13 @@ public class AdminCatalogService : IAdminCatalogService
                 409);
         }
 
+        var provider = await ResolveProviderAsync(request.Provider);
+
         service.CategoryId = category.Id;
         service.Category = category;
+        service.ProviderId = provider.Id;
+        service.Provider = provider;
         service.Name = request.Name.Trim();
-        service.Provider = request.Provider.Trim();
         service.Slug = slug;
         service.Description = NormalizeOptional(request.Description);
         service.LogoUrl = NormalizeOptional(request.LogoUrl);
@@ -376,6 +382,58 @@ public class AdminCatalogService : IAdminCatalogService
     private static string NormalizeSlug(string slug)
     {
         return slug.Trim().ToLowerInvariant();
+    }
+
+    private async Task<Provider> ResolveProviderAsync(string providerName)
+    {
+        var name = NormalizeProviderName(providerName);
+        var slug = NormalizeProviderSlug(name);
+        var provider = await _repository.GetProviderBySlugAsync(slug);
+        if (provider != null)
+        {
+            return provider;
+        }
+
+        provider = new Provider
+        {
+            Name = name,
+            Slug = slug,
+            IsActive = true
+        };
+        await _repository.AddProviderAsync(provider);
+        return provider;
+    }
+
+    private static string NormalizeProviderName(string providerName)
+    {
+        return string.IsNullOrWhiteSpace(providerName)
+            ? "Unknown Provider"
+            : providerName.Trim();
+    }
+
+    private static string NormalizeProviderSlug(string providerName)
+    {
+        var builder = new StringBuilder();
+        var previousWasSeparator = false;
+
+        foreach (var value in providerName.Trim().ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(value))
+            {
+                builder.Append(value);
+                previousWasSeparator = false;
+                continue;
+            }
+
+            if (!previousWasSeparator && builder.Length > 0)
+            {
+                builder.Append('-');
+                previousWasSeparator = true;
+            }
+        }
+
+        var slug = builder.ToString().Trim('-');
+        return string.IsNullOrWhiteSpace(slug) ? "unknown-provider" : slug;
     }
 
     private static ServiceResult<ServiceDetailResponse>? ValidateSupportedFulfillmentModes(
