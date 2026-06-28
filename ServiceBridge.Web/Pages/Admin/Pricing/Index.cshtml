@@ -1,0 +1,268 @@
+@page "/Admin/Pricing"
+@model ServiceBridge.Web.Pages.Admin.Pricing.IndexModel
+@{
+    ViewData["Title"] = "Pricing";
+}
+
+<div class="container pb-ops-page">
+    <div class="pb-page-heading">
+        <div>
+            <p class="pb-eyebrow">Admin operations</p>
+            <h1>Pricing</h1>
+            <p class="pb-muted-copy">Manage exchange rates and scoped profit margins.</p>
+        </div>
+    </div>
+
+    <partial name="_StatusMessage" />
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+    }
+
+    <div class="pb-pricing-admin-grid">
+        <section class="pb-order-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Currency conversion</p>
+                    <h2>Add exchange rate</h2>
+                </div>
+            </div>
+            <form method="post"
+                  asp-page-handler="CreateExchangeRate"
+                  class="pb-admin-form">
+                <div>
+                    <label for="currency-code" class="form-label">Currency</label>
+                    <input id="currency-code"
+                           name="currencyCode"
+                           value="USD"
+                           minlength="3"
+                           maxlength="3"
+                           class="form-control"
+                           required />
+                </div>
+                <div>
+                    <label for="rate-to-irr" class="form-label">Rate to IRR</label>
+                    <input id="rate-to-irr"
+                           name="rateToIrr"
+                           type="number"
+                           min="0.0001"
+                           step="0.0001"
+                           class="form-control"
+                           required />
+                </div>
+                <div>
+                    <label for="rate-effective" class="form-label">Effective from (UTC)</label>
+                    <input id="rate-effective"
+                           name="effectiveFromUtc"
+                           type="datetime-local"
+                           value="@Model.DefaultEffectiveUtc"
+                           class="form-control"
+                           required />
+                </div>
+                <label class="form-check">
+                    <input name="isActive"
+                           type="checkbox"
+                           value="true"
+                           checked
+                           class="form-check-input" />
+                    <span class="form-check-label">Active</span>
+                </label>
+                <button type="submit" class="btn btn-pb-primary">Add rate</button>
+            </form>
+        </section>
+
+        <section class="pb-order-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Revenue rule</p>
+                    <h2>Add profit margin</h2>
+                </div>
+            </div>
+            <form method="post"
+                  asp-page-handler="CreateProfitMargin"
+                  class="pb-admin-form">
+                <div>
+                    <label for="margin-scope" class="form-label">Scope</label>
+                    <select id="margin-scope"
+                            name="scope"
+                            class="form-select"
+                            onchange="document.getElementById('margin-target').disabled = this.value === 'Global';">
+                        <option value="Global">Global</option>
+                        <option value="Category">Category</option>
+                        <option value="Service">Service</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="margin-target" class="form-label">Target</label>
+                    <select id="margin-target"
+                            name="targetId"
+                            class="form-select"
+                            disabled>
+                        <optgroup label="Categories">
+                            @foreach (var category in Model.Categories)
+                            {
+                                <option value="@category.Id">@category.Name</option>
+                            }
+                        </optgroup>
+                        <optgroup label="Services">
+                            @foreach (var service in Model.Services)
+                            {
+                                <option value="@service.Id">@service.Name</option>
+                            }
+                        </optgroup>
+                    </select>
+                    <span class="pb-table-subtext">
+                        Choose a matching target after selecting Category or Service.
+                    </span>
+                </div>
+                <div>
+                    <label for="margin-percentage" class="form-label">Percentage</label>
+                    <input id="margin-percentage"
+                           name="percentage"
+                           type="number"
+                           min="0"
+                           max="100"
+                           step="0.01"
+                           class="form-control"
+                           required />
+                </div>
+                <div>
+                    <label for="margin-effective" class="form-label">Effective from (UTC)</label>
+                    <input id="margin-effective"
+                           name="effectiveFromUtc"
+                           type="datetime-local"
+                           value="@Model.DefaultEffectiveUtc"
+                           class="form-control"
+                           required />
+                </div>
+                <label class="form-check">
+                    <input name="isActive"
+                           type="checkbox"
+                           value="true"
+                           checked
+                           class="form-check-input" />
+                    <span class="form-check-label">Active</span>
+                </label>
+                <button type="submit" class="btn btn-pb-primary">Add margin</button>
+            </form>
+        </section>
+    </div>
+
+    <section class="pb-order-section">
+        <div class="pb-section-heading">
+            <div>
+                <p class="pb-eyebrow">Rate history</p>
+                <h2>Exchange rates</h2>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle pb-order-table">
+                <thead>
+                    <tr>
+                        <th>Currency</th>
+                        <th>Rate to IRR</th>
+                        <th>Effective</th>
+                        <th>Status</th>
+                        <th><span class="visually-hidden">Action</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var rate in Model.ExchangeRates)
+                    {
+                        <tr>
+                            <td><strong>@rate.CurrencyCode</strong></td>
+                            <td>@rate.RateToIrr.ToString("N0")</td>
+                            <td>@rate.EffectiveFromUtc.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                            <td>
+                                <span class="pb-status @(rate.IsActive ? "pb-status-success" : "pb-status-muted")">
+                                    @(rate.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <form method="post"
+                                      asp-page-handler="SetExchangeRateStatus"
+                                      class="d-inline">
+                                    <input type="hidden" name="id" value="@rate.Id" />
+                                    <input type="hidden" name="isActive" value="@(!rate.IsActive)" />
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                                        @(rate.IsActive ? "Deactivate" : "Activate")
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="pb-order-section">
+        <div class="pb-section-heading">
+            <div>
+                <p class="pb-eyebrow">Margin history</p>
+                <h2>Profit margins</h2>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle pb-order-table">
+                <thead>
+                    <tr>
+                        <th>Scope</th>
+                        <th>Target</th>
+                        <th>Percentage</th>
+                        <th>Effective</th>
+                        <th>Status</th>
+                        <th><span class="visually-hidden">Action</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var margin in Model.ProfitMargins)
+                    {
+                        <tr>
+                            <td><strong>@margin.Scope</strong></td>
+                            <td>@Model.MarginTargetLabel(margin)</td>
+                            <td>@margin.Percentage.ToString("0.##")%</td>
+                            <td>@margin.EffectiveFromUtc.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                            <td>
+                                <span class="pb-status @(margin.IsActive ? "pb-status-success" : "pb-status-muted")">
+                                    @(margin.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <form method="post"
+                                      asp-page-handler="SetProfitMarginStatus"
+                                      class="d-inline">
+                                    <input type="hidden" name="id" value="@margin.Id" />
+                                    <input type="hidden" name="isActive" value="@(!margin.IsActive)" />
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                                        @(margin.IsActive ? "Deactivate" : "Activate")
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('margin-scope')?.addEventListener('change', function () {
+            const target = document.getElementById('margin-target');
+            if (!target) return;
+
+            const group = this.value === 'Category' ? 'Categories' : 'Services';
+            for (const optionGroup of target.querySelectorAll('optgroup')) {
+                optionGroup.hidden = optionGroup.label !== group;
+            }
+            target.disabled = this.value === 'Global';
+            if (!target.disabled) {
+                const option = target.querySelector(`optgroup[label="${group}"] option`);
+                if (option) target.value = option.value;
+            }
+        });
+    </script>
+}

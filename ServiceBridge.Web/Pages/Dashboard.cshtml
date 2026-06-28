@@ -1,0 +1,38 @@
+@page "/Dashboard"
+@model ServiceBridge.Web.Pages.DashboardModel
+@{
+    ViewData["Title"] = "Admin dashboard";
+}
+
+<div class="container pb-ops-page">
+    <div class="pb-page-heading">
+        <div>
+            <p class="pb-eyebrow">Admin operations</p>
+            <h1>Dashboard</h1>
+            <p class="pb-muted-copy">Operational order summary and monitoring.</p>
+        </div>
+        <a asp-page="/Admin/Orders/Index" class="btn btn-pb-primary">Open assignment queue</a>
+    </div>
+
+    <partial name="_StatusMessage" />
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+    }
+
+    <div class="pb-stats-grid">
+        <div class="pb-summary-stat">
+            <span>Pending payments</span>
+            <strong>@Model.Summary.PendingPaymentOrderCount</strong>
+        </div>
+        <div class="pb-summary-stat">
+            <span>Paid orders</span>
+            <strong>@Model.Summary.PaidOrderCount</strong>
+        </div>
+        <div class="pb-summary-stat">
+            <span>Unassigned</span>
+            <strong>@Model.Summary.UnassignedOrderCount</strong>
+        </div>
+    </div>
+</div>

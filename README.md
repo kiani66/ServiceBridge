@@ -1,46 +1,36 @@
 # ServiceBridge
 
-ServiceBridge is the production v1.0 successor to the PayBridge MVP. It is a digital service mediation and payment platform for helping users in Iran purchase, activate, renew, and track international digital services.
-
-This repository starts with PR 1 only: repository and branding foundation. It intentionally does not implement authentication, catalog, pricing, orders, payments, admin operations, agent workflows, migrations, or production UI.
+ServiceBridge is the production v1.0 evolution of the mature MVP codebase. The repository preserves the existing layered monolith, business modules, tests, and Razor Pages/Web API split while renaming the product and codebase to ServiceBridge.
 
 ## Solution Structure
 
 ```text
 ServiceBridge.sln
-
-src/
-  ServiceBridge.Domain
-  ServiceBridge.Application
-  ServiceBridge.Infrastructure
-  ServiceBridge.Api
-  ServiceBridge.Web
-  ServiceBridge.Shared
-
-tests/
-  ServiceBridge.Tests
-
+ServiceBridge.Domain
+ServiceBridge.Application
+ServiceBridge.Infrastructure
+ServiceBridge.Api
+ServiceBridge.Web
+ServiceBridge.Shared
+ServiceBridge.Tests
 docs/
-  ServiceBridge.ProjectGuideline.md
-  ServiceBridge.Roadmap.md
-  ServiceBridge.Architecture.md
-  ServiceBridge.BusinessRules.md
 ```
 
 ## Technical Direction
 
 - .NET 8
 - ASP.NET Core Web API
-- Razor Pages web project
-- EF Core-ready Infrastructure project
+- Razor Pages
+- EF Core and SQL Server
 - xUnit tests
-- Clean/Onion architecture
+- Clean/Onion-style layered monolith
 - CQRS-lite without MediatR
-- Production-ready monolith, not microservices
+- No microservices
+- No workflow engine
 
 ## Validate
 
 ```powershell
-dotnet build
-dotnet test
+dotnet build ServiceBridge.sln
+dotnet test ServiceBridge.sln
 ```

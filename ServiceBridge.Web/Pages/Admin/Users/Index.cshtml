@@ -1,0 +1,185 @@
+@page "/Admin/Users"
+@model ServiceBridge.Web.Pages.Admin.Users.IndexModel
+@{
+    ViewData["Title"] = "User management";
+}
+
+<div class="container pb-ops-page">
+    <div class="pb-page-heading">
+        <div>
+            <p class="pb-eyebrow">Admin operations</p>
+            <h1>User management</h1>
+            <p class="pb-muted-copy">Find accounts and reset passwords securely.</p>
+        </div>
+        <div class="pb-summary-stat">
+            <span>Users</span>
+            <strong>@Model.Users.TotalCount</strong>
+        </div>
+    </div>
+
+    <partial name="_StatusMessage" />
+
+    <section class="pb-order-section">
+        <div class="pb-section-heading">
+            <div>
+                <p class="pb-eyebrow">Operations team</p>
+                <h2>Create agent</h2>
+            </div>
+        </div>
+        <form method="post"
+              asp-page-handler="CreateAgent"
+              class="pb-admin-form pb-agent-create-form">
+            <div>
+                <label for="agent-name" class="form-label">Full name</label>
+                <input id="agent-name"
+                       name="agent.FullName"
+                       class="form-control"
+                       maxlength="150"
+                       required />
+            </div>
+            <div>
+                <label for="agent-email" class="form-label">Email</label>
+                <input id="agent-email"
+                       name="agent.Email"
+                       type="email"
+                       class="form-control"
+                       maxlength="256"
+                       required />
+            </div>
+            <div>
+                <label for="agent-password" class="form-label">Initial password</label>
+                <input id="agent-password"
+                       name="agent.Password"
+                       type="password"
+                       class="form-control"
+                       minlength="6"
+                       maxlength="100"
+                       autocomplete="new-password"
+                       required />
+            </div>
+            <button type="submit" class="btn btn-pb-primary">Create agent</button>
+        </form>
+    </section>
+
+    <form method="get" class="pb-user-search">
+        <label for="search" class="form-label">Search users</label>
+        <div class="input-group">
+            <input id="search"
+                   name="search"
+                   value="@Model.Search"
+                   class="form-control"
+                   placeholder="Name or email" />
+            <button type="submit" class="btn btn-outline-primary">Search</button>
+        </div>
+    </form>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+    }
+
+    @if (Model.Users.Items.Count == 0)
+    {
+        <div class="pb-empty-state">
+            <h2>No users found</h2>
+            <p>Try a different name or email address.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive pb-order-table-wrap">
+            <table class="table align-middle pb-order-table">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Account</th>
+                        <th>Reset password</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in Model.Users.Items)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@user.FullName</strong>
+                                <span class="pb-table-subtext">@user.Email</span>
+                            </td>
+                            <td>@user.Role</td>
+                            <td>
+                                <span class="pb-status @(user.IsActive ? "pb-status-success" : "pb-status-muted")">
+                                    @(user.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </td>
+                            <td>@user.CreatedAt.ToString("yyyy-MM-dd")</td>
+                            <td>
+                                @if (user.Role == "Admin")
+                                {
+                                    <span class="pb-table-subtext">Protected admin account</span>
+                                }
+                                else
+                                {
+                                    <form method="post"
+                                          asp-page-handler="SetStatus"
+                                          class="d-inline">
+                                        <input type="hidden" name="userId" value="@user.UserId" />
+                                        <input type="hidden" name="isActive" value="@(!user.IsActive)" />
+                                        <input type="hidden" name="PageNumber" value="@Model.PageNumber" />
+                                        <input type="hidden" name="Search" value="@Model.Search" />
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">
+                                            @(user.IsActive ? "Deactivate" : "Activate")
+                                        </button>
+                                    </form>
+                                }
+                            </td>
+                            <td>
+                                <form method="post"
+                                      asp-page-handler="ResetPassword"
+                                      class="pb-reset-password-form">
+                                    <input type="hidden"
+                                           name="Input.UserId"
+                                           value="@user.UserId" />
+                                    <input type="hidden"
+                                           name="PageNumber"
+                                           value="@Model.PageNumber" />
+                                    <input type="hidden"
+                                           name="Search"
+                                           value="@Model.Search" />
+                                    <input type="password"
+                                           name="Input.NewPassword"
+                                           class="form-control form-control-sm"
+                                           minlength="6"
+                                           maxlength="100"
+                                           autocomplete="new-password"
+                                           placeholder="New password"
+                                           aria-label="New password for @user.FullName"
+                                           required />
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-danger"
+                                            onclick="return confirm('Reset password for @user.FullName?');">
+                                        Reset
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.Users.TotalPages > 1)
+        {
+            <nav class="pb-pagination" aria-label="User pages">
+                <a class="btn btn-sm btn-outline-primary @(Model.Users.Page <= 1 ? "disabled" : null)"
+                   asp-route-pageNumber="@(Model.Users.Page - 1)"
+                   asp-route-search="@Model.Search">Previous</a>
+                <span>Page @Model.Users.Page of @Model.Users.TotalPages</span>
+                <a class="btn btn-sm btn-outline-primary @(Model.Users.Page >= Model.Users.TotalPages ? "disabled" : null)"
+                   asp-route-pageNumber="@(Model.Users.Page + 1)"
+                   asp-route-search="@Model.Search">Next</a>
+            </nav>
+        }
+    }
+</div>

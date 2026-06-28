@@ -1,0 +1,299 @@
+@page "/Orders/Details/{id:guid}"
+@model ServiceBridge.Web.Pages.Orders.DetailsModel
+@{
+    ViewData["Title"] = "Order details";
+}
+
+<div class="container pb-orders-page">
+    <a asp-page="/Orders/Index" class="pb-back-link">&larr; Back to orders</a>
+
+    <partial name="_StatusMessage" />
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger mt-3" role="alert">@Model.ErrorMessage</div>
+    }
+
+    @if (Model.Order != null)
+    {
+        <div class="pb-order-detail-header">
+            <div>
+                <p class="pb-eyebrow">@Model.Order.OrderNumber</p>
+                <h1>@Model.Order.ServiceName</h1>
+                <p>@Model.Order.Provider &middot; @Model.Order.FulfillmentMode</p>
+                @if (!string.IsNullOrWhiteSpace(Model.Order.PlanName))
+                {
+                    <p>
+                        Plan: @Model.Order.PlanName
+                        @if (Model.Order.PlanDurationDays.HasValue)
+                        {
+                            <span>&middot; @Model.Order.PlanDurationDays.Value days</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.Order.PlanRegionCode))
+                        {
+                            <span>&middot; @Model.Order.PlanRegionCode</span>
+                        }
+                    </p>
+                }
+            </div>
+            <div class="pb-order-detail-actions">
+                <span class="pb-status @Model.StatusCssClass(Model.Order.Status)">
+                    @Model.StatusLabel(Model.Order.Status)
+                </span>
+                @if (Model.Order.CanCancel)
+                {
+                    <form method="post" asp-page-handler="Cancel" asp-route-id="@Model.Order.OrderId">
+                        <button type="submit"
+                                class="btn btn-outline-danger"
+                                onclick="return confirm('Cancel this order?');">
+                            Cancel order
+                        </button>
+                    </form>
+                }
+            </div>
+        </div>
+
+        @if (Model.Order.Status == "WaitingForPayment")
+        {
+            <section class="pb-action-band">
+                <div>
+                    <strong>Payment required</strong>
+                    <span>The order becomes paid only after a successful gateway callback.</span>
+                </div>
+                <form method="post"
+                      asp-page-handler="InitiatePayment"
+                      asp-route-id="@Model.Order.OrderId">
+                    <button type="submit" class="btn btn-pb-primary">
+                        Pay @Model.Order.FinalPriceIrr.ToString("N0") IRR
+                    </button>
+                </form>
+            </section>
+        }
+
+        <section class="pb-order-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Pricing snapshot</p>
+                    <h2>Order pricing</h2>
+                </div>
+            </div>
+            <dl class="pb-order-facts">
+                <div><dt>Base price</dt><dd>@Model.Order.BasePriceUsdSnapshot.ToString("0.##") USD</dd></div>
+                <div><dt>Exchange rate</dt><dd>@Model.Order.ExchangeRateSnapshot.ToString("N0") IRR</dd></div>
+                <div><dt>Margin</dt><dd>@Model.Order.MarginSnapshot.ToString("0.##")%</dd></div>
+                <div><dt>Final price</dt><dd>@Model.Order.FinalPriceIrr.ToString("N0") IRR</dd></div>
+            </dl>
+        </section>
+
+        <section class="pb-order-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Timeline</p>
+                    <h2>Important dates</h2>
+                </div>
+            </div>
+            <dl class="pb-order-facts">
+                <div><dt>Created</dt><dd>@Model.Order.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</dd></div>
+                @if (Model.Order.PaidAt.HasValue)
+                {
+                    <div><dt>Paid</dt><dd>@Model.Order.PaidAt.Value.ToString("yyyy-MM-dd HH:mm") UTC</dd></div>
+                }
+                @if (Model.Order.AssignedAt.HasValue)
+                {
+                    <div><dt>Assigned</dt><dd>@Model.Order.AssignedAt.Value.ToString("yyyy-MM-dd HH:mm") UTC</dd></div>
+                }
+                @if (Model.Order.CompletedAt.HasValue)
+                {
+                    <div><dt>Completed</dt><dd>@Model.Order.CompletedAt.Value.ToString("yyyy-MM-dd HH:mm") UTC</dd></div>
+                }
+                @if (Model.Order.CancelledAt.HasValue)
+                {
+                    <div><dt>Cancelled</dt><dd>@Model.Order.CancelledAt.Value.ToString("yyyy-MM-dd HH:mm") UTC</dd></div>
+                }
+            </dl>
+        </section>
+
+        @if (Model.Order.Fields.Count > 0)
+        {
+            <section class="pb-order-section">
+                <div class="pb-section-heading">
+                    <div>
+                        <p class="pb-eyebrow">Submitted information</p>
+                        <h2>Order fields</h2>
+                    </div>
+                </div>
+                <dl class="pb-agent-fields">
+                    @foreach (var field in Model.Order.Fields)
+                    {
+                        <div>
+                            <dt>
+                                @field.FieldLabel
+                                @if (field.IsSensitive)
+                                {
+                                    <span class="pb-sensitive-label">Sensitive</span>
+                                }
+                            </dt>
+                            <dd><code>@field.Value</code></dd>
+                        </div>
+                    }
+                </dl>
+            </section>
+        }
+
+        @if (Model.Order.DeliveryFields.Count > 0)
+        {
+            <section class="pb-order-section">
+                <div class="pb-section-heading">
+                    <div>
+                        <p class="pb-eyebrow">Delivery</p>
+                        <h2>Delivered account credentials</h2>
+                    </div>
+                </div>
+                <dl class="pb-agent-fields">
+                    @foreach (var field in Model.Order.DeliveryFields.OrderBy(x => x.DisplayOrder))
+                    {
+                        <div>
+                            <dt>
+                                @field.FieldLabel
+                                @if (field.IsSensitive)
+                                {
+                                    <span class="pb-sensitive-label">Sensitive</span>
+                                }
+                            </dt>
+                            <dd><code>@field.Value</code></dd>
+                        </div>
+                    }
+                </dl>
+            </section>
+        }
+
+        @if (Model.Order.Notes.Count > 0)
+        {
+            <section class="pb-order-section">
+                <div class="pb-section-heading">
+                    <div>
+                        <p class="pb-eyebrow">Updates</p>
+                        <h2>Agent notes</h2>
+                    </div>
+                </div>
+                <div class="pb-order-notes">
+                    @foreach (var note in Model.Order.Notes)
+                    {
+                        <article>
+                            <p>@note.Text</p>
+                            <span>@note.AuthorName · @note.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</span>
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+
+        @if (Model.Order.CustomerActions.Count > 0)
+        {
+            <section class="pb-order-section">
+                <div class="pb-section-heading">
+                    <div>
+                        <p class="pb-eyebrow">Action required</p>
+                        <h2>Customer action requests</h2>
+                    </div>
+                </div>
+                <div class="pb-order-notes">
+                    @foreach (var action in Model.Order.CustomerActions)
+                    {
+                        <article>
+                            <p>@action.RequestText</p>
+                            <span>Requested @action.RequestedAt.ToString("yyyy-MM-dd HH:mm") UTC</span>
+                            @if (action.IsResolved)
+                            {
+                                <div class="mt-2">
+                                    <strong>Your response</strong>
+                                    <p class="mb-0">@action.CustomerResponse</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <form method="post"
+                                      asp-page-handler="RespondToCustomerAction"
+                                      asp-route-id="@Model.Order.OrderId"
+                                      class="pb-note-form mt-3">
+                                    <input type="hidden"
+                                           asp-for="CustomerActionRequestId"
+                                           value="@action.Id" />
+                                    <label asp-for="CustomerActionResponse"
+                                           class="form-label">Your response</label>
+                                    <textarea asp-for="CustomerActionResponse"
+                                              class="form-control"
+                                              rows="3"
+                                              maxlength="2000"
+                                              required></textarea>
+                                    <button type="submit" class="btn btn-primary">
+                                        Submit response
+                                    </button>
+                                </form>
+                            }
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+
+        <section class="pb-order-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Payments</p>
+                    <h2>Payment history</h2>
+                </div>
+            </div>
+            @if (Model.Order.Payments.Count == 0)
+            {
+                <p class="pb-muted-copy">No payment attempt has been recorded.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Created</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Gateway reference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var payment in Model.Order.Payments)
+                            {
+                                <tr>
+                                    <td>@payment.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                                    <td>@payment.AmountIrr.ToString("N0") IRR</td>
+                                    <td>@payment.Status</td>
+                                    <td>@(payment.GatewayReference ?? "-")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="pb-order-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Audit trail</p>
+                    <h2>Status history</h2>
+                </div>
+            </div>
+            <ol class="pb-status-history">
+                @foreach (var item in Model.Order.StatusHistory)
+                {
+                    <li>
+                        <div>
+                            <strong>@Model.StatusLabel(item.Status)</strong>
+                        </div>
+                        <time>@item.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</time>
+                    </li>
+                }
+            </ol>
+        </section>
+    }
+</div>

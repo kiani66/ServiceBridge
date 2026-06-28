@@ -1,0 +1,37 @@
+@page
+@model ServiceBridge.Web.Pages.ErrorModel
+@{
+    ViewData["Title"] = "Error";
+}
+
+<div class="pb-auth-page">
+    <div class="pb-auth-card">
+        <div class="text-center">
+            <div class="pb-logo-icon" style="background: #fee2e2;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="#dc3545" viewBox="0 0 16 16">
+                    <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5m.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/>
+                </svg>
+            </div>
+            <h2>Something went wrong</h2>
+            <p class="pb-subtitle">An unexpected error occurred. Please try again.</p>
+        </div>
+
+        @if (Model.ShowRequestId)
+        {
+            <p class="text-muted text-center" style="font-size: 0.8rem;">
+                <strong>Request ID:</strong> <code>@Model.RequestId</code>
+            </p>
+        }
+
+        @if (Model.ShowErrorMessage)
+        {
+            <div class="alert alert-warning" role="alert">
+                @Model.ErrorMessage
+            </div>
+        }
+
+        <div class="d-grid">
+            <a asp-page="/Account/Login" class="btn btn-pb-primary">Back to Login</a>
+        </div>
+    </div>
+</div>

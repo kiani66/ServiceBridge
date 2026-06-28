@@ -1,0 +1,483 @@
+@page "{id:guid}"
+@model ServiceBridge.Web.Pages.Services.DetailsModel
+@using ServiceBridge.Domain.Enums
+@{
+    ViewData["Title"] = Model.Service?.Name ?? "Service details";
+}
+
+<div class="container pb-service-details-page">
+    <a asp-page="/Services/Index" class="pb-back-link">&larr; Back to services</a>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger mt-3" role="alert">@Model.ErrorMessage</div>
+    }
+    else if (Model.Service != null)
+    {
+        <section class="pb-service-overview">
+            <div class="pb-service-logo pb-service-logo-lg">
+                @if (!string.IsNullOrWhiteSpace(Model.Service.LogoUrl))
+                {
+                    <img src="@Model.Service.LogoUrl" alt="@Model.Service.Name logo" />
+                }
+                else
+                {
+                    <span aria-hidden="true">@Model.Service.Name[..1].ToUpperInvariant()</span>
+                }
+            </div>
+
+            <div class="pb-service-overview-copy">
+                <span class="pb-category-label">@Model.Service.CategoryName</span>
+                <h1>@Model.Service.Name</h1>
+                <p>
+                    @(string.IsNullOrWhiteSpace(Model.Service.Description)
+                        ? "Subscription purchase or renewal through ServiceBridge."
+                        : Model.Service.Description)
+                </p>
+            </div>
+
+            <div class="pb-price-panel">
+                @if (Model.Quote != null)
+                {
+                    <span>Final local price</span>
+                    <strong id="quote-final-amount">@Model.Quote.FinalAmountIrr.ToString("N0") IRR</strong>
+                    <small id="quote-foreign-price">
+                        @Model.Quote.ForeignPrice.ToString("0.##") @Model.Quote.CurrencyCode
+                        at @Model.Quote.ExchangeRate.ToString("N0") IRR
+                    </small>
+                    <div class="pb-price-breakdown">
+                        <span>Base <b id="quote-base-amount">@Model.Quote.BaseAmountIrr.ToString("N0")</b></span>
+                        <span>Margin <span id="quote-margin-percent">@Model.Quote.MarginPercentage.ToString("0.##")</span>% <b id="quote-profit-amount">@Model.Quote.ProfitAmountIrr.ToString("N0")</b></span>
+                    </div>
+                }
+                else
+                {
+                    <span>Base service price</span>
+                    <strong>@Model.Service.BasePrice.ToString("0.##") @Model.Service.CurrencyCode</strong>
+                    <small class="pb-pricing-unavailable">
+                        @(Model.PricingMessage ?? "Local pricing is currently unavailable.")
+                    </small>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.Service.ProcessingTimeDescription))
+                {
+                    <small class="pb-processing-time">@Model.Service.ProcessingTimeDescription</small>
+                }
+                @if (Model.Quote?.PlanName != null)
+                {
+                    <small id="quote-plan-summary" class="pb-processing-time">
+                        Plan: @Model.Quote.PlanName
+                        @if (Model.Quote.PlanDurationDays.HasValue)
+                        {
+                            <span> / @Model.Quote.PlanDurationDays.Value days</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.Quote.PlanRegionCode))
+                        {
+                            <span> / @Model.Quote.PlanRegionCode</span>
+                        }
+                    </small>
+                }
+                else
+                {
+                    <small id="quote-plan-summary" class="pb-processing-time" hidden></small>
+                }
+            </div>
+        </section>
+
+        @if (Model.Service.Plans.Count > 0)
+        {
+            <section class="pb-required-fields-section js-plan-selection"
+                     data-service-id="@Model.Service.Id">
+                <div class="pb-section-heading">
+                    <div>
+                        <p class="pb-eyebrow">Plan selection</p>
+                        <h2>Choose duration, region and price</h2>
+                    </div>
+                </div>
+
+                <form method="get" class="pb-order-create-form">
+                    <div class="pb-plan-grid">
+                        @foreach (var plan in Model.Service.Plans.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name))
+                        {
+                            var isSelected = Model.SelectedPlanId == plan.Id;
+                            <label class="pb-plan-card @(isSelected ? "pb-plan-card-selected" : null)" for="plan-@plan.Id">
+                                <div class="pb-plan-card-head">
+                                    <strong>@plan.Name</strong>
+                                    <span class="pb-flag pb-flag-required js-plan-selected-badge" hidden="@(!isSelected)">Selected</span>
+                                </div>
+                                <div class="pb-plan-price">
+                                    <span>@plan.BasePrice.ToString("0.##")</span>
+                                    <small>@plan.CurrencyCode</small>
+                                </div>
+                                <dl class="pb-plan-meta">
+                                    <div>
+                                        <dt>Duration</dt>
+                                        <dd>@(plan.DurationDays.HasValue ? $"{plan.DurationDays.Value} days" : "Custom")</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Region</dt>
+                                        <dd>@(string.IsNullOrWhiteSpace(plan.RegionCode) ? "Any" : plan.RegionCode)</dd>
+                                    </div>
+                                </dl>
+                                @if (!string.IsNullOrWhiteSpace(plan.ProcessingTimeDescription))
+                                {
+                                    <p>@plan.ProcessingTimeDescription</p>
+                                }
+                                <input id="plan-@plan.Id"
+                                       class="form-check-input"
+                                       type="radio"
+                                       name="SelectedPlanId"
+                                       value="@plan.Id"
+                                       checked="@isSelected"
+                                       data-plan-name="@plan.Name"
+                                       data-plan-duration="@plan.DurationDays"
+                                       data-plan-region="@plan.RegionCode"
+                                       data-plan-price="@plan.BasePrice"
+                                       data-plan-currency="@plan.CurrencyCode"
+                                       data-plan-option />
+                            </label>
+                        }
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary mt-3 pb-js-fallback">
+                        Update price
+                    </button>
+                </form>
+            </section>
+        }
+
+        <section class="pb-required-fields-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">How it works</p>
+                    <h2>Before you place the order</h2>
+                </div>
+            </div>
+            <div class="pb-service-guide-grid">
+                <article class="pb-guide-card">
+                    <span>1</span>
+                    <h3>Choose the exact plan</h3>
+                    <p>Select duration and region before submitting the order so pricing is locked correctly.</p>
+                </article>
+                <article class="pb-guide-card">
+                    <span>2</span>
+                    <h3>Send only required information</h3>
+                    <p>Sensitive fields are encrypted after submission and shown only to the assigned operator when needed.</p>
+                </article>
+                <article class="pb-guide-card">
+                    <span>3</span>
+                    <h3>Track delivery</h3>
+                    <p>After payment, an agent processes the request. If a new account is created, credentials are delivered after completion.</p>
+                </article>
+            </div>
+            <details class="pb-service-faq">
+                <summary>What if I already have an account?</summary>
+                <p>Choose “Use my existing account” and provide the login details or verification notes requested by the form.</p>
+            </details>
+            <details class="pb-service-faq">
+                <summary>What if I do not have an account?</summary>
+                <p>Choose “Create a new account for me”. The agent creates the account and delivers login information when the order is completed.</p>
+            </details>
+            <details class="pb-service-faq">
+                <summary>Can the final amount change?</summary>
+                <p>The final IRR amount is calculated from the selected plan, active exchange rate and configured margin at order creation time.</p>
+            </details>
+        </section>
+
+        <section class="pb-required-fields-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Order requirements</p>
+                    <h2>Information needed</h2>
+                </div>
+                <span>@Model.Service.RequiredFields.Count field(s)</span>
+            </div>
+
+            @if (Model.Service.RequiredFields.Count == 0)
+            {
+                <p class="pb-muted-copy">No account information is required for this service.</p>
+            }
+            else
+            {
+                <div class="pb-required-fields">
+                    @foreach (var field in Model.Service.RequiredFields.OrderBy(x => x.FulfillmentMode).ThenBy(x => x.Actor).ThenBy(x => x.DisplayOrder))
+                    {
+                        <div class="pb-required-field">
+                            <div>
+                                <strong>@field.Label</strong>
+                                <span>@field.FulfillmentMode / @field.Actor / @field.FieldType</span>
+                            </div>
+                            <div class="pb-field-flags">
+                                @if (field.IsRequired)
+                                {
+                                    <span class="pb-flag pb-flag-required">Required</span>
+                                }
+                                @if (field.IsSensitive)
+                                {
+                                    <span class="pb-flag pb-flag-sensitive">Sensitive</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="pb-required-fields-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Place your order</p>
+                    <h2>Create order</h2>
+                </div>
+            </div>
+
+            @if (User.Identity?.IsAuthenticated != true)
+            {
+                <div class="alert alert-info mb-0">
+                    Please log in with a customer account to create an order.
+                    <a asp-page="/Account/Login" class="btn btn-sm btn-primary ms-2">Login</a>
+                </div>
+            }
+            else if (!User.IsInRole(ServiceBridge.Shared.Constants.AppConstants.Roles.User))
+            {
+                <p class="pb-muted-copy">Order creation is available to customer accounts only.</p>
+            }
+            else
+            {
+                <form method="post" class="pb-order-create-form">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <input asp-for="SelectedPlanId" id="selected-plan-id" type="hidden" />
+
+                    @if (Model.Service.SupportedFulfillmentModes.Count > 1)
+                    {
+                        <fieldset class="pb-order-create-field">
+                            <legend class="form-label">Fulfillment mode</legend>
+                            @foreach (var mode in Model.Service.SupportedFulfillmentModes)
+                            {
+                                <label class="form-check">
+                                    <input asp-for="SelectedFulfillmentMode"
+                                           type="radio"
+                                           value="@mode"
+                                           checked="@(Model.SelectedFulfillmentMode == mode)"
+                                           class="form-check-input js-fulfillment-mode" />
+                                    <span class="form-check-label">
+                                        @(mode == OrderFulfillmentMode.UseExistingAccount
+                                            ? "Use my existing account"
+                                            : "Create a new account for me")
+                                    </span>
+                                </label>
+                                <p class="pb-muted-copy mb-2">
+                                    @(mode == OrderFulfillmentMode.UseExistingAccount
+                                        ? "ServiceBridge will activate the service on your existing account."
+                                        : "ServiceBridge will create a new account and deliver login details after completion.")
+                                </p>
+                            }
+                        </fieldset>
+                    }
+                    else
+                    {
+                        <input asp-for="SelectedFulfillmentMode"
+                               type="hidden"
+                               value="@Model.Service.SupportedFulfillmentModes.FirstOrDefault()" />
+                    }
+
+                    @foreach (var mode in Model.Service.SupportedFulfillmentModes)
+                    {
+                        var fields = Model.Service.RequiredFields
+                            .Where(x => x.FulfillmentMode == mode && x.Actor == CredentialActor.Customer)
+                            .OrderBy(x => x.DisplayOrder)
+                            .ToArray();
+                        var groupValue = mode.ToString();
+
+                        <div class="js-fulfillment-fields" data-mode="@groupValue">
+                            @for (var i = 0; i < fields.Length; i++)
+                            {
+                                var field = fields[i];
+                                var existingValue = Model.SelectedFulfillmentMode == mode
+                                    ? Model.OrderFields.FirstOrDefault(x =>
+                                        string.Equals(x.FieldKey, field.FieldKey, StringComparison.OrdinalIgnoreCase))?.Value
+                                    : null;
+                                var inputType = field.IsSensitive || field.FieldType.Equals("Password", StringComparison.OrdinalIgnoreCase)
+                                    ? "password"
+                                    : field.FieldType.Equals("Email", StringComparison.OrdinalIgnoreCase)
+                                        ? "email"
+                                        : field.FieldType.Equals("Number", StringComparison.OrdinalIgnoreCase)
+                                            ? "number"
+                                            : field.FieldType.Equals("Url", StringComparison.OrdinalIgnoreCase)
+                                                ? "url"
+                                                : "text";
+
+                                <div class="pb-order-create-field">
+                                    <input name="OrderFields[@i].FieldKey" type="hidden" value="@field.FieldKey" />
+                                    <label for="order-field-@groupValue-@i" class="form-label">
+                                        @field.Label
+                                        @if (field.IsRequired)
+                                        {
+                                            <span class="text-danger" aria-label="required">*</span>
+                                        }
+                                    </label>
+                                    @if (field.FieldType.Equals("Textarea", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <textarea id="order-field-@groupValue-@i"
+                                                  name="OrderFields[@i].Value"
+                                                  class="form-control"
+                                                  rows="4"
+                                                  required="@field.IsRequired">@existingValue</textarea>
+                                    }
+                                    else
+                                    {
+                                        <input id="order-field-@groupValue-@i"
+                                               name="OrderFields[@i].Value"
+                                               value="@existingValue"
+                                               type="@inputType"
+                                               class="form-control"
+                                               required="@field.IsRequired"
+                                               autocomplete="@(field.IsSensitive ? "off" : null)" />
+                                    }
+                                    @if (field.IsSensitive)
+                                    {
+                                        <small class="form-text text-muted">This value is encrypted and masked after submission.</small>
+                                    }
+                                    <span asp-validation-for="OrderFields[i].Value" class="text-danger"></span>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (Model.Quote == null)
+                    {
+                        <div class="alert alert-warning mb-0">
+                            @(Model.PricingMessage ?? "Pricing is unavailable. Order creation is temporarily disabled.")
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="pb-order-submit-row">
+                            <div>
+                                <span>Final amount</span>
+                                <strong id="order-final-amount">@Model.Quote.FinalAmountIrr.ToString("N0") IRR</strong>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Create order</button>
+                        </div>
+                    }
+                </form>
+            }
+        </section>
+    }
+</div>
+
+<script>
+    (() => {
+        document.documentElement.classList.add('js-enabled');
+        const planInputs = document.querySelectorAll('[data-plan-option]');
+        const selectedPlanInput = document.getElementById('selected-plan-id');
+        const numberFormatter = new Intl.NumberFormat('en-US');
+
+        function readQuotePayload(payload) {
+            return payload?.quote ?? payload?.Quote ?? payload?.data ?? payload?.Data;
+        }
+
+        function formatAmount(value, maximumFractionDigits = 0) {
+            return new Intl.NumberFormat('en-US', {
+                maximumFractionDigits
+            }).format(Number(value ?? 0));
+        }
+
+        function updateSelectedPlanUi(selectedInput) {
+            planInputs.forEach(input => {
+                const card = input.closest('.pb-plan-card');
+                const badge = card
+                    ?.querySelector('.js-plan-selected-badge');
+                card?.classList.toggle('pb-plan-card-selected', input === selectedInput);
+                if (badge) {
+                    badge.hidden = input !== selectedInput;
+                }
+            });
+
+            if (selectedPlanInput) {
+                selectedPlanInput.value = selectedInput.value;
+            }
+        }
+
+        function updateQuoteUi(quote) {
+            const finalAmount = quote?.finalAmountIrr ?? quote?.FinalAmountIrr;
+            const foreignPrice = quote?.foreignPrice ?? quote?.ForeignPrice;
+            const currencyCode = quote?.currencyCode ?? quote?.CurrencyCode;
+            const exchangeRate = quote?.exchangeRate ?? quote?.ExchangeRate;
+            const baseAmount = quote?.baseAmountIrr ?? quote?.BaseAmountIrr;
+            const margin = quote?.marginPercentage ?? quote?.MarginPercentage;
+            const profit = quote?.profitAmountIrr ?? quote?.ProfitAmountIrr;
+            const planName = quote?.planName ?? quote?.PlanName;
+            const planDuration = quote?.planDurationDays ?? quote?.PlanDurationDays;
+            const planRegion = quote?.planRegionCode ?? quote?.PlanRegionCode;
+
+            const finalText = `${numberFormatter.format(finalAmount ?? 0)} IRR`;
+            const finalEl = document.getElementById('quote-final-amount');
+            const orderFinalEl = document.getElementById('order-final-amount');
+            if (finalEl) finalEl.textContent = finalText;
+            if (orderFinalEl) orderFinalEl.textContent = finalText;
+
+            const foreignEl = document.getElementById('quote-foreign-price');
+            if (foreignEl) {
+                foreignEl.textContent = `${formatAmount(foreignPrice, 2)} ${currencyCode} at ${numberFormatter.format(exchangeRate ?? 0)} IRR`;
+            }
+
+            const baseEl = document.getElementById('quote-base-amount');
+            const marginEl = document.getElementById('quote-margin-percent');
+            const profitEl = document.getElementById('quote-profit-amount');
+            if (baseEl) baseEl.textContent = numberFormatter.format(baseAmount ?? 0);
+            if (marginEl) marginEl.textContent = formatAmount(margin, 2);
+            if (profitEl) profitEl.textContent = numberFormatter.format(profit ?? 0);
+
+            const planSummary = document.getElementById('quote-plan-summary');
+            if (planSummary && planName) {
+                const parts = [`Plan: ${planName}`];
+                if (planDuration) parts.push(`${planDuration} days`);
+                if (planRegion) parts.push(planRegion);
+                planSummary.textContent = parts.join(' / ');
+                planSummary.hidden = false;
+            }
+        }
+
+        async function refreshPlanQuote(input) {
+            updateSelectedPlanUi(input);
+            const url = `${window.location.pathname}?handler=Quote&planId=${encodeURIComponent(input.value)}`;
+            const response = await fetch(url, {
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!response.ok) {
+                throw new Error('Quote request failed.');
+            }
+
+            const payload = await response.json();
+            const quote = readQuotePayload(payload);
+            if (!quote) {
+                throw new Error(payload?.message ?? payload?.Message ?? 'Quote unavailable.');
+            }
+
+            updateQuoteUi(quote);
+        }
+
+        planInputs.forEach(input => {
+            input.addEventListener('change', () => {
+                refreshPlanQuote(input).catch(() => input.form?.submit());
+            });
+        });
+
+        const radios = document.querySelectorAll('.js-fulfillment-mode');
+        const groups = document.querySelectorAll('.js-fulfillment-fields');
+
+        function syncFulfillmentFields() {
+            const selected = document.querySelector('.js-fulfillment-mode:checked')?.value
+                ?? document.querySelector('input[name="SelectedFulfillmentMode"]')?.value;
+            groups.forEach(group => {
+                const active = group.dataset.mode === selected;
+                group.hidden = !active;
+                group.querySelectorAll('input, textarea, select').forEach(input => {
+                    input.disabled = !active;
+                });
+            });
+        }
+
+        radios.forEach(radio => radio.addEventListener('change', syncFulfillmentFields));
+        syncFulfillmentFields();
+    })();
+</script>

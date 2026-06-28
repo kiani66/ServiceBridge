@@ -1,0 +1,73 @@
+@page
+@model ServiceBridge.Web.Pages.User.UserProfileModel
+@{
+    ViewData["Title"] = "My Profile";
+}
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8">
+            <div class="pb-profile-card">
+                <!-- Profile Header with gradient background -->
+                <div class="pb-profile-header">
+                    <div class="pb-profile-avatar">
+                        @if (!string.IsNullOrEmpty(Model.Profile?.ProfileImageUrl))
+                        {
+                            <img src="@Model.Profile.ProfileImageUrl" alt="Profile photo" />
+                        }
+                        else
+                        {
+                            <span class="pb-avatar-placeholder">
+                                @(Model.Profile?.FullName?.Substring(0, 1).ToUpper() ?? "U")
+                            </span>
+                        }
+                    </div>
+                    <div class="pb-profile-name">@Model.Profile?.FullName</div>
+                    <div class="pb-profile-role">@Model.Profile?.Role</div>
+                </div>
+
+                <!-- Profile Details -->
+                <div class="pb-profile-body">
+                    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @Model.ErrorMessage
+                        </div>
+                    }
+
+                    @if (Model.Profile != null)
+                    {
+                        <div class="pb-profile-detail">
+                            <span class="pb-profile-detail-label">Email</span>
+                            <span class="pb-profile-detail-value">@Model.Profile.Email</span>
+                        </div>
+                        <div class="pb-profile-detail">
+                            <span class="pb-profile-detail-label">Role</span>
+                            <span class="pb-profile-detail-value">
+                                <span class="badge" style="background-color: var(--pb-primary);">@Model.Profile.Role</span>
+                            </span>
+                        </div>
+                        <div class="pb-profile-detail">
+                            <span class="pb-profile-detail-label">User ID</span>
+                            <span class="pb-profile-detail-value" style="font-size: 0.8rem; word-break: break-all;">@Model.Profile.UserId</span>
+                        </div>
+                        <div class="pb-profile-detail">
+                            <span class="pb-profile-detail-label">Member since</span>
+                            <span class="pb-profile-detail-value">@Model.Profile.CreatedAt.ToString("MMMM dd, yyyy")</span>
+                        </div>
+                        <div class="pb-profile-detail">
+                            <span class="pb-profile-detail-label">Last updated</span>
+                            <span class="pb-profile-detail-value">@(Model.Profile.UpdatedAt?.ToString("MMMM dd, yyyy") ?? "N/A")</span>
+                        </div>
+
+                        <div class="mt-4 d-flex flex-wrap gap-2">
+                            <a asp-page="/User/EditProfile" class="btn btn-pb-outline btn-sm">Edit Profile</a>
+                            <a asp-page="/User/UpdatePhoto" class="btn btn-pb-outline btn-sm">Update Photo</a>
+                            <a asp-page="/User/ChangePassword" class="btn btn-pb-outline btn-sm">Change Password</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

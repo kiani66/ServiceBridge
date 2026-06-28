@@ -1,0 +1,121 @@
+@page "/Agent/Orders"
+@model ServiceBridge.Web.Pages.Agent.Orders.IndexModel
+@{
+    ViewData["Title"] = "Assigned orders";
+}
+
+<div class="container pb-ops-page">
+    <div class="pb-page-heading">
+        <div>
+            <p class="pb-eyebrow">Agent workspace</p>
+            <h1>Assigned orders</h1>
+            <p class="pb-muted-copy">Process activations and customer requests.</p>
+        </div>
+        <div class="pb-summary-stat">
+            <span>Results</span>
+            <strong>@Model.Orders.TotalCount</strong>
+        </div>
+    </div>
+
+    <partial name="_StatusMessage" />
+
+    <form method="get" class="pb-order-filters">
+        <label for="status">Status</label>
+        <select id="status"
+                asp-for="Status"
+                asp-items="Html.GetEnumSelectList<ServiceBridge.Domain.Enums.OrderStatus>()"
+                class="form-select">
+            <option value="">All statuses</option>
+        </select>
+        <button type="submit" class="btn btn-outline-primary">Filter</button>
+    </form>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+    }
+    else if (Model.Orders.Items.Count == 0)
+    {
+        <div class="pb-empty-state">
+            <h2>No assigned orders</h2>
+            <p>Orders assigned by an administrator will appear here.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive pb-order-table-wrap">
+            <table class="table align-middle pb-order-table">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Customer</th>
+                        <th>Service</th>
+                        <th>Assigned</th>
+                        <th>Status</th>
+                        <th><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model.Orders.Items)
+                    {
+                        <tr>
+                            <td><strong>@order.OrderNumber</strong></td>
+                            <td>@order.CustomerName</td>
+                            <td>
+                                <strong>@order.ServiceName</strong>
+                                @if (!string.IsNullOrWhiteSpace(order.PlanName))
+                                {
+                                    <span class="pb-table-subtext">
+                                        @order.PlanName
+                                        @if (order.PlanDurationDays.HasValue)
+                                        {
+                                            <text> / @order.PlanDurationDays.Value days</text>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(order.PlanRegionCode))
+                                        {
+                                            <text> / @order.PlanRegionCode</text>
+                                        }
+                                    </span>
+                                }
+                            </td>
+                            <td>
+                                @(order.AssignedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")
+                                @if (order.AssignedAt.HasValue)
+                                {
+                                    <span class="pb-table-subtext">UTC</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="pb-status @Model.StatusCssClass(order.Status)">
+                                    @Model.StatusLabel(order.Status)
+                                </span>
+                                @if (order.HasPendingCustomerAction)
+                                {
+                                    <span class="pb-sensitive-label">Customer action</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <a asp-page="/Agent/Orders/Details"
+                                   asp-route-id="@order.OrderId"
+                                   class="btn btn-sm btn-outline-primary">Open</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.Orders.TotalPages > 1)
+        {
+            <nav class="pb-pagination" aria-label="Assigned order pages">
+                <a class="btn btn-sm btn-outline-primary @(Model.Orders.Page <= 1 ? "disabled" : null)"
+                   asp-route-pageNumber="@(Model.Orders.Page - 1)"
+                   asp-route-status="@Model.Status">Previous</a>
+                <span>Page @Model.Orders.Page of @Model.Orders.TotalPages</span>
+                <a class="btn btn-sm btn-outline-primary @(Model.Orders.Page >= Model.Orders.TotalPages ? "disabled" : null)"
+                   asp-route-pageNumber="@(Model.Orders.Page + 1)"
+                   asp-route-status="@Model.Status">Next</a>
+            </nav>
+        }
+    }
+</div>

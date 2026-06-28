@@ -1,0 +1,560 @@
+@page "/Admin/Catalog/Services/{id:guid}"
+@model ServiceBridge.Web.Pages.Admin.Catalog.ServiceModel
+@using ServiceBridge.Domain.Enums
+@{
+    ViewData["Title"] = "Manage service";
+}
+
+<div class="container pb-ops-page">
+    <a asp-page="/Admin/Catalog/Index" class="pb-back-link">&larr; Back to catalog</a>
+
+    <partial name="_StatusMessage" />
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+    }
+
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+    @if (Model.Service != null)
+    {
+        <div class="pb-order-detail-header">
+            <div>
+                <p class="pb-eyebrow">@Model.Service.Provider</p>
+                <h1>@Model.Service.Name</h1>
+                <p>@Model.Service.CategoryName &middot; @Model.Service.Slug</p>
+            </div>
+            <span class="pb-status @(Model.Service.IsActive ? "pb-status-success" : "pb-status-muted")">
+                @(Model.Service.IsActive ? "Active" : "Inactive")
+            </span>
+        </div>
+
+        <section class="pb-order-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Service definition</p>
+                    <h2>General settings</h2>
+                </div>
+            </div>
+            <form method="post"
+                  asp-page-handler="UpdateService"
+                  asp-route-id="@Model.Service.Id"
+                  class="pb-admin-form pb-admin-form-two-column">
+                <div>
+                    <label for="service-category" class="form-label">Category</label>
+                    <select id="service-category"
+                            name="service.CategoryId"
+                            class="form-select"
+                            required>
+                        @foreach (var category in Model.Categories)
+                        {
+                            <option value="@category.Id"
+                                    selected="@(category.Id == Model.Service.CategoryId)">
+                                @category.Name
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="service-name" class="form-label">Name</label>
+                    <input id="service-name"
+                           name="service.Name"
+                           value="@Model.Service.Name"
+                           class="form-control"
+                           maxlength="150"
+                           required />
+                </div>
+                <div>
+                    <label for="service-provider" class="form-label">Provider</label>
+                    <input id="service-provider"
+                           name="service.Provider"
+                           value="@Model.Service.Provider"
+                           class="form-control"
+                           maxlength="150"
+                           required />
+                </div>
+                <div>
+                    <label for="service-slug" class="form-label">Slug</label>
+                    <input id="service-slug"
+                           name="service.Slug"
+                           value="@Model.Service.Slug"
+                           class="form-control"
+                           maxlength="170"
+                           pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                           required />
+                </div>
+                <div>
+                    <label for="service-price" class="form-label">Base price</label>
+                    <input id="service-price"
+                           name="service.BasePrice"
+                           value="@Model.Service.BasePrice"
+                           type="number"
+                           min="0.0001"
+                           step="0.0001"
+                           class="form-control"
+                           required />
+                </div>
+                <div>
+                    <label for="service-currency" class="form-label">Currency</label>
+                    <input id="service-currency"
+                           name="service.CurrencyCode"
+                           value="@Model.Service.CurrencyCode"
+                           minlength="3"
+                           maxlength="3"
+                           class="form-control"
+                           required />
+                </div>
+                <div class="pb-form-span">
+                    <label for="service-description" class="form-label">Description</label>
+                    <textarea id="service-description"
+                              name="service.Description"
+                              rows="3"
+                              maxlength="2000"
+                              class="form-control">@Model.Service.Description</textarea>
+                </div>
+                <div>
+                    <label for="service-processing" class="form-label">Processing time</label>
+                    <input id="service-processing"
+                           name="service.ProcessingTimeDescription"
+                           value="@Model.Service.ProcessingTimeDescription"
+                           class="form-control"
+                           maxlength="250" />
+                </div>
+                <div>
+                    <label for="service-logo" class="form-label">Logo URL</label>
+                    <input id="service-logo"
+                           name="service.LogoUrl"
+                           value="@Model.Service.LogoUrl"
+                           type="url"
+                           class="form-control"
+                           maxlength="500" />
+                </div>
+                <div class="form-check pb-form-span">
+                    <input id="service-active"
+                           name="service.IsActive"
+                           type="checkbox"
+                           value="true"
+                           checked="@Model.Service.IsActive"
+                           class="form-check-input" />
+                    <label for="service-active" class="form-check-label">Active</label>
+                </div>
+                <div class="form-check">
+                    <input id="service-support-existing"
+                           name="service.SupportsUseExistingAccount"
+                           type="checkbox"
+                           value="true"
+                           checked="@Model.Service.SupportsUseExistingAccount"
+                           class="form-check-input" />
+                    <label for="service-support-existing" class="form-check-label">
+                        Supports existing account
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input id="service-support-new"
+                           name="service.SupportsCreateNewAccount"
+                           type="checkbox"
+                           value="true"
+                           checked="@Model.Service.SupportsCreateNewAccount"
+                           class="form-check-input" />
+                    <label for="service-support-new" class="form-check-label">
+                        Supports creating new account
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-pb-primary pb-form-span">
+                    Save service
+                </button>
+            </form>
+        </section>
+
+        <section class="pb-order-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Pricing variants</p>
+                    <h2>Plans, duration and region</h2>
+                </div>
+            </div>
+
+            @if (Model.Service.Plans.Count == 0)
+            {
+                <p class="pb-muted-copy">
+                    No plans are configured. Add at least one plan before scaling this service.
+                </p>
+            }
+
+            @foreach (var plan in Model.Service.Plans.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name))
+            {
+                <form method="post"
+                      asp-page-handler="UpdatePlan"
+                      asp-route-id="@Model.Service.Id"
+                      class="pb-field-editor">
+                    <input type="hidden" name="planId" value="@plan.Id" />
+                    <div>
+                        <label class="form-label">Name</label>
+                        <input name="plan.Name"
+                               value="@plan.Name"
+                               class="form-control form-control-sm"
+                               maxlength="150"
+                               required />
+                    </div>
+                    <div>
+                        <label class="form-label">Slug</label>
+                        <input name="plan.Slug"
+                               value="@plan.Slug"
+                               class="form-control form-control-sm"
+                               maxlength="170"
+                               pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                               required />
+                    </div>
+                    <div>
+                        <label class="form-label">Duration days</label>
+                        <input name="plan.DurationDays"
+                               value="@plan.DurationDays"
+                               type="number"
+                               min="1"
+                               class="form-control form-control-sm" />
+                    </div>
+                    <div>
+                        <label class="form-label">Region</label>
+                        <input name="plan.RegionCode"
+                               value="@plan.RegionCode"
+                               class="form-control form-control-sm"
+                               maxlength="20"
+                               placeholder="GLOBAL" />
+                    </div>
+                    <div>
+                        <label class="form-label">Price</label>
+                        <input name="plan.BasePrice"
+                               value="@plan.BasePrice"
+                               type="number"
+                               min="0.0001"
+                               step="0.0001"
+                               class="form-control form-control-sm"
+                               required />
+                    </div>
+                    <div>
+                        <label class="form-label">Currency</label>
+                        <input name="plan.CurrencyCode"
+                               value="@plan.CurrencyCode"
+                               minlength="3"
+                               maxlength="3"
+                               class="form-control form-control-sm"
+                               required />
+                    </div>
+                    <div>
+                        <label class="form-label">Order</label>
+                        <input name="plan.DisplayOrder"
+                               value="@plan.DisplayOrder"
+                               type="number"
+                               min="0"
+                               class="form-control form-control-sm" />
+                    </div>
+                    <div>
+                        <label class="form-label">Processing</label>
+                        <input name="plan.ProcessingTimeDescription"
+                               value="@plan.ProcessingTimeDescription"
+                               class="form-control form-control-sm"
+                               maxlength="250" />
+                    </div>
+                    <div class="pb-field-flags-editor">
+                        <label class="form-check">
+                            <input name="plan.IsActive"
+                                   type="checkbox"
+                                   value="true"
+                                   checked="@plan.IsActive"
+                                   class="form-check-input" />
+                            <span class="form-check-label">Active</span>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Save plan</button>
+                </form>
+            }
+
+            <form method="post"
+                  asp-page-handler="CreatePlan"
+                  asp-route-id="@Model.Service.Id"
+                  class="pb-field-editor pb-field-editor-new">
+                <div>
+                    <label for="plan-name" class="form-label">Name</label>
+                    <input id="plan-name"
+                           name="plan.Name"
+                           class="form-control form-control-sm"
+                           maxlength="150"
+                           placeholder="Monthly / Global"
+                           required />
+                </div>
+                <div>
+                    <label for="plan-slug" class="form-label">Slug</label>
+                    <input id="plan-slug"
+                           name="plan.Slug"
+                           class="form-control form-control-sm"
+                           maxlength="170"
+                           pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                           placeholder="monthly-global"
+                           required />
+                </div>
+                <div>
+                    <label for="plan-duration" class="form-label">Duration days</label>
+                    <input id="plan-duration"
+                           name="plan.DurationDays"
+                           type="number"
+                           min="1"
+                           value="30"
+                           class="form-control form-control-sm" />
+                </div>
+                <div>
+                    <label for="plan-region" class="form-label">Region</label>
+                    <input id="plan-region"
+                           name="plan.RegionCode"
+                           value="GLOBAL"
+                           class="form-control form-control-sm"
+                           maxlength="20" />
+                </div>
+                <div>
+                    <label for="plan-price" class="form-label">Price</label>
+                    <input id="plan-price"
+                           name="plan.BasePrice"
+                           type="number"
+                           min="0.0001"
+                           step="0.0001"
+                           value="@Model.Service.BasePrice"
+                           class="form-control form-control-sm"
+                           required />
+                </div>
+                <div>
+                    <label for="plan-currency" class="form-label">Currency</label>
+                    <input id="plan-currency"
+                           name="plan.CurrencyCode"
+                           value="@Model.Service.CurrencyCode"
+                           minlength="3"
+                           maxlength="3"
+                           class="form-control form-control-sm"
+                           required />
+                </div>
+                <div>
+                    <label for="plan-order" class="form-label">Order</label>
+                    <input id="plan-order"
+                           name="plan.DisplayOrder"
+                           type="number"
+                           min="0"
+                           value="@Model.Service.Plans.Count"
+                           class="form-control form-control-sm" />
+                </div>
+                <div>
+                    <label for="plan-processing" class="form-label">Processing</label>
+                    <input id="plan-processing"
+                           name="plan.ProcessingTimeDescription"
+                           value="@Model.Service.ProcessingTimeDescription"
+                           class="form-control form-control-sm"
+                           maxlength="250" />
+                </div>
+                <div class="pb-field-flags-editor">
+                    <label class="form-check">
+                        <input name="plan.IsActive"
+                               type="checkbox"
+                               value="true"
+                               checked
+                               class="form-check-input" />
+                        <span class="form-check-label">Active</span>
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-sm btn-pb-primary">Add plan</button>
+            </form>
+        </section>
+
+        <section class="pb-order-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Order form</p>
+                    <h2>Required fields</h2>
+                </div>
+            </div>
+
+            @foreach (var field in Model.Service.RequiredFields.OrderBy(x => x.FulfillmentMode).ThenBy(x => x.Actor).ThenBy(x => x.DisplayOrder))
+            {
+                <form method="post"
+                      asp-page-handler="UpdateField"
+                      asp-route-id="@Model.Service.Id"
+                      class="pb-field-editor">
+                    <input type="hidden" name="fieldId" value="@field.Id" />
+                    <div>
+                        <label class="form-label">Key</label>
+                        <input name="field.FieldKey"
+                               value="@field.FieldKey"
+                               class="form-control form-control-sm"
+                               pattern="[a-z][a-z0-9_]*"
+                               required />
+                    </div>
+                    <div>
+                        <label class="form-label">Label</label>
+                        <input name="field.Label"
+                               value="@field.Label"
+                               class="form-control form-control-sm"
+                               required />
+                    </div>
+                    <div>
+                        <label class="form-label">Type</label>
+                        <select name="field.FieldType" class="form-select form-select-sm">
+                            @foreach (var fieldType in Enum.GetValues<ServiceFieldType>())
+                            {
+                                <option value="@fieldType"
+                                        selected="@(field.FieldType == fieldType.ToString())">
+                                    @fieldType
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Mode</label>
+                        <select name="field.FulfillmentMode" class="form-select form-select-sm">
+                            @foreach (var mode in Enum.GetValues<OrderFulfillmentMode>())
+                            {
+                                <option value="@mode"
+                                        selected="@(field.FulfillmentMode == mode)">
+                                    @mode
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Actor</label>
+                        <select name="field.Actor" class="form-select form-select-sm">
+                            @foreach (var actor in Enum.GetValues<CredentialActor>())
+                            {
+                                <option value="@actor"
+                                        selected="@(field.Actor == actor)">
+                                    @actor
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Order</label>
+                        <input name="field.DisplayOrder"
+                               value="@field.DisplayOrder"
+                               type="number"
+                               min="0"
+                               class="form-control form-control-sm" />
+                    </div>
+                    <div class="pb-field-flags-editor">
+                        <label class="form-check">
+                            <input name="field.IsRequired"
+                                   type="checkbox"
+                                   value="true"
+                                   checked="@field.IsRequired"
+                                   class="form-check-input" />
+                            <span class="form-check-label">Required</span>
+                        </label>
+                        <label class="form-check">
+                            <input name="field.IsSensitive"
+                                   type="checkbox"
+                                   value="true"
+                                   checked="@field.IsSensitive"
+                                   class="form-check-input" />
+                            <span class="form-check-label">Sensitive</span>
+                        </label>
+                        <label class="form-check">
+                            <input name="field.IsVisibleToCustomerAfterCompletion"
+                                   type="checkbox"
+                                   value="true"
+                                   checked="@field.IsVisibleToCustomerAfterCompletion"
+                                   class="form-check-input" />
+                            <span class="form-check-label">Visible after completion</span>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                </form>
+            }
+
+            <form method="post"
+                  asp-page-handler="CreateField"
+                  asp-route-id="@Model.Service.Id"
+                  class="pb-field-editor pb-field-editor-new">
+                <div>
+                    <label for="field-key" class="form-label">Key</label>
+                    <input id="field-key"
+                           name="field.FieldKey"
+                           class="form-control form-control-sm"
+                           pattern="[a-z][a-z0-9_]*"
+                           placeholder="email"
+                           required />
+                </div>
+                <div>
+                    <label for="field-label" class="form-label">Label</label>
+                    <input id="field-label"
+                           name="field.Label"
+                           class="form-control form-control-sm"
+                           placeholder="Account email"
+                           required />
+                </div>
+                <div>
+                    <label for="field-type" class="form-label">Type</label>
+                    <select id="field-type"
+                            name="field.FieldType"
+                            class="form-select form-select-sm">
+                        @foreach (var fieldType in Enum.GetValues<ServiceFieldType>())
+                        {
+                            <option value="@fieldType">@fieldType</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="field-mode" class="form-label">Mode</label>
+                    <select id="field-mode"
+                            name="field.FulfillmentMode"
+                            class="form-select form-select-sm">
+                        @foreach (var mode in Enum.GetValues<OrderFulfillmentMode>())
+                        {
+                            <option value="@mode">@mode</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="field-actor" class="form-label">Actor</label>
+                    <select id="field-actor"
+                            name="field.Actor"
+                            class="form-select form-select-sm">
+                        @foreach (var actor in Enum.GetValues<CredentialActor>())
+                        {
+                            <option value="@actor">@actor</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="field-order" class="form-label">Order</label>
+                    <input id="field-order"
+                           name="field.DisplayOrder"
+                           type="number"
+                           min="0"
+                           value="@Model.Service.RequiredFields.Count"
+                           class="form-control form-control-sm" />
+                </div>
+                <div class="pb-field-flags-editor">
+                    <label class="form-check">
+                        <input name="field.IsRequired"
+                               type="checkbox"
+                               value="true"
+                               checked
+                               class="form-check-input" />
+                        <span class="form-check-label">Required</span>
+                    </label>
+                    <label class="form-check">
+                        <input name="field.IsSensitive"
+                               type="checkbox"
+                               value="true"
+                               class="form-check-input" />
+                        <span class="form-check-label">Sensitive</span>
+                    </label>
+                    <label class="form-check">
+                        <input name="field.IsVisibleToCustomerAfterCompletion"
+                               type="checkbox"
+                               value="true"
+                               class="form-check-input" />
+                        <span class="form-check-label">Visible after completion</span>
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-sm btn-pb-primary">Add field</button>
+            </form>
+        </section>
+    }
+</div>

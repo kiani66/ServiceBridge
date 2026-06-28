@@ -1,0 +1,111 @@
+@page "/Orders"
+@model ServiceBridge.Web.Pages.Orders.IndexModel
+@{
+    ViewData["Title"] = "My orders";
+}
+
+<div class="container pb-orders-page">
+    <div class="pb-page-heading">
+        <div>
+            <p class="pb-eyebrow">Account activity</p>
+            <h1>My orders</h1>
+        </div>
+        <a asp-page="/Services/Index" class="btn btn-primary">Browse services</a>
+    </div>
+
+    <partial name="_StatusMessage" />
+
+    <form method="get" class="pb-order-filters">
+        <label for="status">Status</label>
+        <select id="status"
+                asp-for="Status"
+                asp-items="Html.GetEnumSelectList<ServiceBridge.Domain.Enums.OrderStatus>()"
+                class="form-select">
+            <option value="">All statuses</option>
+        </select>
+        <button type="submit" class="btn btn-outline-primary">Filter</button>
+    </form>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+    }
+    else if (Model.Orders.Items.Count == 0)
+    {
+        <div class="pb-empty-state">
+            <h2>No orders yet</h2>
+            <p>Your service purchase and renewal requests will appear here.</p>
+            <a asp-page="/Services/Index" class="btn btn-primary">View services</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive pb-order-table-wrap">
+            <table class="table align-middle pb-order-table">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Service</th>
+                        <th>Created</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model.Orders.Items)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@order.OrderNumber</strong>
+                            </td>
+                            <td>
+                                <strong>@order.ServiceName</strong>
+                                <span class="pb-table-subtext">@order.Provider</span>
+                                @if (!string.IsNullOrWhiteSpace(order.PlanName))
+                                {
+                                    <span class="pb-table-subtext">
+                                        @order.PlanName
+                                        @if (order.PlanDurationDays.HasValue)
+                                        {
+                                            <text> / @order.PlanDurationDays.Value days</text>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(order.PlanRegionCode))
+                                        {
+                                            <text> / @order.PlanRegionCode</text>
+                                        }
+                                    </span>
+                                }
+                            </td>
+                            <td>@order.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                            <td>@order.FinalPriceIrr.ToString("N0") IRR</td>
+                            <td>
+                                <span class="pb-status @Model.StatusCssClass(order.Status)">
+                                    @Model.StatusLabel(order.Status)
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <a asp-page="/Orders/Details"
+                                   asp-route-id="@order.OrderId"
+                                   class="btn btn-sm btn-outline-primary">View</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.Orders.TotalPages > 1)
+        {
+            <nav class="pb-pagination" aria-label="Order pages">
+                <a class="btn btn-sm btn-outline-primary @(Model.Orders.Page <= 1 ? "disabled" : null)"
+                   asp-route-pageNumber="@(Model.Orders.Page - 1)"
+                   asp-route-status="@Model.Status">Previous</a>
+                <span>Page @Model.Orders.Page of @Model.Orders.TotalPages</span>
+                <a class="btn btn-sm btn-outline-primary @(Model.Orders.Page >= Model.Orders.TotalPages ? "disabled" : null)"
+                   asp-route-pageNumber="@(Model.Orders.Page + 1)"
+                   asp-route-status="@Model.Status">Next</a>
+            </nav>
+        }
+    }
+</div>

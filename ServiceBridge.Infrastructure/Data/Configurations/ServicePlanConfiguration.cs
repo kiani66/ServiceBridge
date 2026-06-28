@@ -1,0 +1,66 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ServiceBridge.Domain.Entities;
+
+namespace ServiceBridge.Infrastructure.Data.Configurations;
+
+public class ServicePlanConfiguration : IEntityTypeConfiguration<ServicePlan>
+{
+    public void Configure(EntityTypeBuilder<ServicePlan> entity)
+    {
+        entity.HasKey(x => x.Id);
+
+        entity.Property(x => x.Id)
+            .ValueGeneratedNever();
+
+        entity.Property(x => x.Name)
+            .IsRequired()
+            .HasMaxLength(150);
+
+        entity.Property(x => x.Slug)
+            .IsRequired()
+            .HasMaxLength(170);
+
+        entity.Property(x => x.RegionCode)
+            .HasMaxLength(20);
+
+        entity.Property(x => x.CurrencyCode)
+            .IsRequired()
+            .HasMaxLength(3)
+            .IsFixedLength();
+
+        entity.Property(x => x.BasePrice)
+            .HasPrecision(18, 4)
+            .IsRequired();
+
+        entity.Property(x => x.ProcessingTimeDescription)
+            .HasMaxLength(250);
+
+        entity.Property(x => x.CreatedAt)
+            .IsRequired();
+
+        entity.Property(x => x.UpdatedAt)
+            .IsRequired(false);
+
+        entity.HasIndex(x => new { x.ServiceId, x.Slug })
+            .IsUnique();
+
+        entity.HasIndex(x => new { x.ServiceId, x.IsActive, x.DisplayOrder });
+
+        entity.HasOne(x => x.Service)
+            .WithMany(x => x.Plans)
+            .HasForeignKey(x => x.ServiceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.ToTable(table =>
+        {
+            table.HasCheckConstraint(
+                "CK_ServicePlans_BasePrice_NonNegative",
+                "[BasePrice] >= 0");
+
+            table.HasCheckConstraint(
+                "CK_ServicePlans_DurationDays_Positive",
+                "[DurationDays] IS NULL OR [DurationDays] > 0");
+        });
+    }
+}

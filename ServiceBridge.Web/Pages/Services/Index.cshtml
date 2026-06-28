@@ -1,0 +1,80 @@
+@page
+@model ServiceBridge.Web.Pages.Services.IndexModel
+@{
+    ViewData["Title"] = "Services";
+}
+
+<section class="pb-catalog-header">
+    <div class="container">
+        <p class="pb-eyebrow">Digital services</p>
+        <h1>Choose the service you need</h1>
+        <p>Browse available subscriptions and review the account information required for activation or renewal.</p>
+    </div>
+</section>
+
+<div class="container pb-catalog-content">
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+    }
+    else if (Model.Services.Count == 0)
+    {
+        <div class="pb-empty-state">
+            <div class="pb-empty-mark" aria-hidden="true">PB</div>
+            <h2>No services are available yet</h2>
+            <p>The catalog is being prepared. Please check back later.</p>
+        </div>
+    }
+    else
+    {
+        <div class="pb-service-grid">
+            @foreach (var service in Model.Services)
+            {
+                <article class="pb-service-card">
+                    <div class="pb-service-card-top">
+                        <div class="pb-service-logo">
+                            @if (!string.IsNullOrWhiteSpace(service.LogoUrl))
+                            {
+                                <img src="@service.LogoUrl" alt="@service.Name logo" loading="lazy" />
+                            }
+                            else
+                            {
+                                <span aria-hidden="true">@service.Name[..1].ToUpperInvariant()</span>
+                            }
+                        </div>
+                        <span class="pb-category-label">@service.CategoryName</span>
+                    </div>
+
+                    <div class="pb-service-card-body">
+                        <h2>@service.Name</h2>
+                        <p class="pb-service-description">
+                            @(string.IsNullOrWhiteSpace(service.Description)
+                                ? "Subscription purchase or renewal through ServiceBridge."
+                                : service.Description)
+                        </p>
+
+                        <div class="pb-service-meta">
+                            <div>
+                                <span>Base price</span>
+                                <strong>@service.BasePrice.ToString("0.##") @service.CurrencyCode</strong>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(service.ProcessingTimeDescription))
+                            {
+                                <div>
+                                    <span>Processing</span>
+                                    <strong>@service.ProcessingTimeDescription</strong>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <a asp-page="/Services/Details"
+                       asp-route-id="@service.Id"
+                       class="btn btn-pb-outline pb-service-action">
+                        View details
+                    </a>
+                </article>
+            }
+        </div>
+    }
+</div>

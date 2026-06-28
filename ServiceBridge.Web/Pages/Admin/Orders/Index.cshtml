@@ -1,0 +1,124 @@
+@page "/Admin/Orders"
+@model ServiceBridge.Web.Pages.Admin.Orders.IndexModel
+@{
+    ViewData["Title"] = "Assignment queue";
+}
+
+<div class="container pb-ops-page">
+    <div class="pb-page-heading">
+        <div>
+            <p class="pb-eyebrow">Admin operations</p>
+            <h1>Assignment queue</h1>
+            <p class="pb-muted-copy">Paid orders waiting for an available agent.</p>
+        </div>
+        <div class="pb-summary-stat">
+            <span>Waiting</span>
+            <strong>@Model.Orders.TotalCount</strong>
+        </div>
+    </div>
+
+    <partial name="_StatusMessage" />
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+    }
+
+    @if (Model.Orders.Items.Count == 0)
+    {
+        <div class="pb-empty-state">
+            <h2>Queue is clear</h2>
+            <p>New paid orders will appear here for assignment.</p>
+        </div>
+    }
+    else if (Model.Agents.Count == 0)
+    {
+        <div class="alert alert-warning" role="alert">
+            No active agents are available. Activate an agent before assigning orders.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive pb-order-table-wrap">
+            <table class="table align-middle pb-order-table">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Customer</th>
+                        <th>Service</th>
+                        <th>Paid</th>
+                        <th>Amount</th>
+                        <th>Assignment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model.Orders.Items)
+                    {
+                        <tr>
+                            <td><strong>@order.OrderNumber</strong></td>
+                            <td>@order.CustomerName</td>
+                            <td>
+                                <strong>@order.ServiceName</strong>
+                                @if (!string.IsNullOrWhiteSpace(order.PlanName))
+                                {
+                                    <span class="pb-table-subtext">
+                                        @order.PlanName
+                                        @if (order.PlanDurationDays.HasValue)
+                                        {
+                                            <text> / @order.PlanDurationDays.Value days</text>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(order.PlanRegionCode))
+                                        {
+                                            <text> / @order.PlanRegionCode</text>
+                                        }
+                                    </span>
+                                }
+                            </td>
+                            <td>@order.PaidAt.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                            <td>@order.FinalAmountIrr.ToString("N0") IRR</td>
+                            <td>
+                                <form method="post"
+                                      asp-page-handler="Assign"
+                                      class="pb-inline-assignment">
+                                    <input type="hidden" name="orderId" value="@order.OrderId" />
+                                    <input type="hidden" name="pageNumber" value="@Model.PageNumber" />
+                                    <select name="agentId"
+                                            class="form-select form-select-sm"
+                                            aria-label="Agent for @order.OrderNumber"
+                                            required>
+                                        <option value="">Select agent</option>
+                                        @foreach (var agent in Model.Agents)
+                                        {
+                                            <option value="@agent.AgentId">
+                                                @agent.FullName (@agent.ActiveOrderCount active)
+                                            </option>
+                                        }
+                                    </select>
+                                    <input type="text"
+                                           name="notes"
+                                           class="form-control form-control-sm"
+                                           maxlength="1000"
+                                           placeholder="Assignment notes (optional)" />
+                                    <button type="submit" class="btn btn-sm btn-pb-primary">
+                                        Assign
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.Orders.TotalPages > 1)
+        {
+            <nav class="pb-pagination" aria-label="Assignment queue pages">
+                <a class="btn btn-sm btn-outline-primary @(Model.Orders.Page <= 1 ? "disabled" : null)"
+                   asp-route-pageNumber="@(Model.Orders.Page - 1)">Previous</a>
+                <span>Page @Model.Orders.Page of @Model.Orders.TotalPages</span>
+                <a class="btn btn-sm btn-outline-primary @(Model.Orders.Page >= Model.Orders.TotalPages ? "disabled" : null)"
+                   asp-route-pageNumber="@(Model.Orders.Page + 1)">Next</a>
+            </nav>
+        }
+    }
+</div>

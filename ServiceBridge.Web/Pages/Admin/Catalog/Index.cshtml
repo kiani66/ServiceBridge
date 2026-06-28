@@ -1,0 +1,270 @@
+@page "/Admin/Catalog"
+@model ServiceBridge.Web.Pages.Admin.Catalog.IndexModel
+@{
+    ViewData["Title"] = "Service catalog";
+}
+
+<div class="container pb-ops-page">
+    <div class="pb-page-heading">
+        <div>
+            <p class="pb-eyebrow">Admin operations</p>
+            <h1>Service catalog</h1>
+            <p class="pb-muted-copy">Create and maintain purchasable digital services.</p>
+        </div>
+        <div class="pb-summary-stat">
+            <span>Services</span>
+            <strong>@Model.Services.Count</strong>
+        </div>
+    </div>
+
+    <partial name="_StatusMessage" />
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+    }
+
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+    <div class="pb-catalog-admin-grid">
+        <section class="pb-order-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Catalog structure</p>
+                    <h2>Add category</h2>
+                </div>
+            </div>
+            <form method="post"
+                  asp-page-handler="CreateCategory"
+                  class="pb-admin-form">
+                <div>
+                    <label for="category-name" class="form-label">Name</label>
+                    <input id="category-name"
+                           name="category.Name"
+                           class="form-control"
+                           maxlength="100"
+                           required />
+                </div>
+                <div>
+                    <label for="category-slug" class="form-label">Slug</label>
+                    <input id="category-slug"
+                           name="category.Slug"
+                           class="form-control"
+                           maxlength="120"
+                           pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                           placeholder="ai-subscriptions"
+                           required />
+                </div>
+                <div>
+                    <label for="category-order" class="form-label">Display order</label>
+                    <input id="category-order"
+                           name="category.DisplayOrder"
+                           type="number"
+                           min="0"
+                           value="0"
+                           class="form-control" />
+                </div>
+                <div class="form-check">
+                    <input id="category-active"
+                           name="category.IsActive"
+                           type="checkbox"
+                           value="true"
+                           checked
+                           class="form-check-input" />
+                    <label for="category-active" class="form-check-label">Active</label>
+                </div>
+                <button type="submit" class="btn btn-pb-primary">Add category</button>
+            </form>
+        </section>
+
+        <section class="pb-order-section">
+            <div class="pb-section-heading">
+                <div>
+                    <p class="pb-eyebrow">Purchasable product</p>
+                    <h2>Add service</h2>
+                </div>
+            </div>
+            @if (Model.Categories.Count == 0)
+            {
+                <p class="pb-muted-copy">Create a category before adding services.</p>
+            }
+            else
+            {
+                <form method="post"
+                      asp-page-handler="CreateService"
+                      class="pb-admin-form pb-admin-form-two-column">
+                    <div>
+                        <label for="service-category" class="form-label">Category</label>
+                        <select id="service-category"
+                                name="service.CategoryId"
+                                class="form-select"
+                                required>
+                            @foreach (var category in Model.Categories)
+                            {
+                                <option value="@category.Id">@category.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label for="service-name" class="form-label">Name</label>
+                        <input id="service-name"
+                               name="service.Name"
+                               class="form-control"
+                               maxlength="150"
+                               placeholder="ChatGPT Plus"
+                               required />
+                    </div>
+                    <div>
+                        <label for="service-provider" class="form-label">Provider</label>
+                        <input id="service-provider"
+                               name="service.Provider"
+                               class="form-control"
+                               maxlength="150"
+                               placeholder="OpenAI"
+                               required />
+                    </div>
+                    <div>
+                        <label for="service-slug" class="form-label">Slug</label>
+                        <input id="service-slug"
+                               name="service.Slug"
+                               class="form-control"
+                               maxlength="170"
+                               pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                               placeholder="chatgpt-plus"
+                               required />
+                    </div>
+                    <div>
+                        <label for="service-price" class="form-label">Base price</label>
+                        <input id="service-price"
+                               name="service.BasePrice"
+                               type="number"
+                               min="0.0001"
+                               step="0.0001"
+                               class="form-control"
+                               required />
+                    </div>
+                    <div>
+                        <label for="service-currency" class="form-label">Currency</label>
+                        <input id="service-currency"
+                               name="service.CurrencyCode"
+                               value="USD"
+                               minlength="3"
+                               maxlength="3"
+                               class="form-control"
+                               required />
+                    </div>
+                    <div class="pb-form-span">
+                        <label for="service-description" class="form-label">Description</label>
+                        <textarea id="service-description"
+                                  name="service.Description"
+                                  rows="2"
+                                  maxlength="2000"
+                                  class="form-control"></textarea>
+                    </div>
+                    <div>
+                        <label for="service-processing" class="form-label">Processing time</label>
+                        <input id="service-processing"
+                               name="service.ProcessingTimeDescription"
+                               class="form-control"
+                               maxlength="250"
+                               placeholder="Usually 1 to 6 hours" />
+                    </div>
+                    <div>
+                        <label for="service-logo" class="form-label">Logo URL</label>
+                        <input id="service-logo"
+                               name="service.LogoUrl"
+                               type="url"
+                               class="form-control"
+                               maxlength="500" />
+                    </div>
+                    <div class="form-check pb-form-span">
+                        <input id="service-active"
+                               name="service.IsActive"
+                               type="checkbox"
+                               value="true"
+                               checked
+                               class="form-check-input" />
+                        <label for="service-active" class="form-check-label">Active</label>
+                    </div>
+                    <div class="form-check">
+                        <input id="service-support-existing"
+                               name="service.SupportsUseExistingAccount"
+                               type="checkbox"
+                               value="true"
+                               checked
+                               class="form-check-input" />
+                        <label for="service-support-existing" class="form-check-label">
+                            Supports existing account
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input id="service-support-new"
+                               name="service.SupportsCreateNewAccount"
+                               type="checkbox"
+                               value="true"
+                               class="form-check-input" />
+                        <label for="service-support-new" class="form-check-label">
+                            Supports creating new account
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-pb-primary pb-form-span">
+                        Add service
+                    </button>
+                </form>
+            }
+        </section>
+    </div>
+
+    <section class="pb-order-section">
+        <div class="pb-section-heading">
+            <div>
+                <p class="pb-eyebrow">Current catalog</p>
+                <h2>Services</h2>
+            </div>
+        </div>
+
+        @if (Model.Services.Count == 0)
+        {
+            <p class="pb-muted-copy">No services have been created.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle pb-order-table">
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>Category</th>
+                            <th>Price</th>
+                            <th>Status</th>
+                            <th><span class="visually-hidden">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var service in Model.Services)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@service.Name</strong>
+                                    <span class="pb-table-subtext">@service.Provider</span>
+                                </td>
+                                <td>@service.CategoryName</td>
+                                <td>@service.BasePrice.ToString("0.####") @service.CurrencyCode</td>
+                                <td>
+                                    <span class="pb-status @(service.IsActive ? "pb-status-success" : "pb-status-muted")">
+                                        @(service.IsActive ? "Active" : "Inactive")
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <a asp-page="/Admin/Catalog/Service"
+                                       asp-route-id="@service.Id"
+                                       class="btn btn-sm btn-outline-primary">Manage</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>

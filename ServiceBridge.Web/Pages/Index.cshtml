@@ -1,0 +1,22 @@
+@page
+@model ServiceBridge.Web.Pages.IndexModel
+@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="pb-auth-page">
+    <div class="text-center">
+        <div class="mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="#5A32B7" class="bi bi-cash-stack" viewBox="0 0 16 16">
+                <path d="M1 3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1zm7 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/>
+                <path d="M0 5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm3 0a2 2 0 0 1-2 2v4a2 2 0 0 1 2 2h10a2 2 0 0 1 2-2V7a2 2 0 0 1-2-2z"/>
+            </svg>
+        </div>
+        <h1 class="display-5 fw-bold" style="color: #5A32B7;">ServiceBridge</h1>
+        <p class="lead text-muted mb-4">International Payments &amp; Foreign Service Purchases</p>
+        <div class="d-flex justify-content-center gap-3">
+            <a asp-page="/Account/Login" class="btn btn-pb-primary btn-lg">Sign In</a>
+            <a asp-page="/Account/Register" class="btn btn-pb-outline btn-lg">Create Account</a>
+        </div>
+    </div>
+</div>

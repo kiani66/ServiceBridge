@@ -1,0 +1,334 @@
+@page "/Agent/Orders/Details/{id:guid}"
+@model ServiceBridge.Web.Pages.Agent.Orders.DetailsModel
+@{
+    ViewData["Title"] = "Process order";
+}
+
+<div class="container pb-ops-page">
+    <a asp-page="/Agent/Orders/Index" class="pb-back-link">&larr; Back to assigned orders</a>
+
+    <partial name="_StatusMessage" />
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger mt-3" role="alert">@Model.ErrorMessage</div>
+    }
+
+    @if (Model.Order != null)
+    {
+        <div class="pb-order-detail-header">
+            <div>
+                <p class="pb-eyebrow">@Model.Order.OrderNumber</p>
+                <h1>@Model.Order.ServiceName</h1>
+                <p>
+                    @Model.Order.CustomerName &middot; @Model.Order.CustomerEmail &middot;
+                    @Model.Order.FulfillmentMode
+                </p>
+                @if (!string.IsNullOrWhiteSpace(Model.Order.PlanName))
+                {
+                    <p>
+                        Plan: @Model.Order.PlanName
+                        @if (Model.Order.PlanDurationDays.HasValue)
+                        {
+                            <span>&middot; @Model.Order.PlanDurationDays.Value days</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.Order.PlanRegionCode))
+                        {
+                            <span>&middot; @Model.Order.PlanRegionCode</span>
+                        }
+                    </p>
+                }
+            </div>
+            <span class="pb-status @Model.StatusCssClass(Model.Order.Status)">
+                @Model.StatusLabel(Model.Order.Status)
+            </span>
+        </div>
+
+        @if (Model.Order.Status == "Assigned")
+        {
+            <section class="pb-action-band">
+                <div>
+                    <strong>Ready to process</strong>
+                    <span>Start when you are ready to perform the external activation.</span>
+                </div>
+                <form method="post" asp-page-handler="Start" asp-route-id="@Model.Order.OrderId">
+                    <button type="submit" class="btn btn-pb-primary">Start processing</button>
+                </form>
+            </section>
+        }
+        else if (Model.Order.Status == "Processing")
+        {
+            <section class="pb-action-band pb-action-band-grid">
+                @if (!Model.Order.CustomerActions.Any(x => !x.IsResolved))
+                {
+                    <form method="post"
+                          asp-page-handler="RequestCustomerAction"
+                          asp-route-id="@Model.Order.OrderId">
+                        <label asp-for="CustomerActionNote" class="form-label">
+                            Request customer action
+                        </label>
+                        <div class="input-group">
+                            <input asp-for="CustomerActionNote"
+                                   class="form-control"
+                                   maxlength="1000"
+                                   placeholder="Example: Send the verification code" />
+                            <button type="submit" class="btn btn-outline-warning">Request</button>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <div>
+                        <strong>Waiting for customer response</strong>
+                        <span>The order remains in Processing while this request is open.</span>
+                    </div>
+                }
+                <form method="post"
+                      asp-page-handler="Complete"
+                      asp-route-id="@Model.Order.OrderId"
+                      class="pb-complete-form">
+                    <button type="submit"
+                            class="btn btn-success"
+                            onclick="return confirm('Mark this order as completed?');">
+                        Mark completed
+                    </button>
+                </form>
+                <form method="post"
+                      asp-page-handler="Fail"
+                      asp-route-id="@Model.Order.OrderId">
+                    <label asp-for="FailureReason" class="form-label">Failure reason</label>
+                    <div class="input-group">
+                        <input asp-for="FailureReason"
+                               class="form-control"
+                               maxlength="1000"
+                               required />
+                        <button type="submit"
+                                class="btn btn-outline-danger"
+                                onclick="return confirm('Mark this order as failed?');">
+                            Mark failed
+                        </button>
+                    </div>
+                </form>
+            </section>
+        }
+
+        <div class="pb-ops-grid">
+            <div>
+                <section class="pb-order-section">
+                    <div class="pb-section-heading">
+                        <div>
+                            <p class="pb-eyebrow">Activation data</p>
+                            <h2>Service information</h2>
+                        </div>
+                    </div>
+                    @if (Model.Order.Fields.Count == 0)
+                    {
+                        <p class="pb-muted-copy">
+                            Credentials are unavailable for the current order state.
+                        </p>
+                    }
+                    else
+                    {
+                        <dl class="pb-agent-fields">
+                            @foreach (var field in Model.Order.Fields)
+                            {
+                                <div>
+                                    <dt>
+                                        @field.FieldLabel
+                                        @if (field.IsSensitive)
+                                        {
+                                            <span class="pb-sensitive-label">Sensitive</span>
+                                        }
+                                    </dt>
+                                    <dd><code>@field.Value</code></dd>
+                                </div>
+                            }
+                        </dl>
+                    }
+                </section>
+
+                @if (Model.Order.DeliveryFields.Count > 0)
+                {
+                    <section class="pb-order-section">
+                        <div class="pb-section-heading">
+                            <div>
+                                <p class="pb-eyebrow">Delivery</p>
+                                <h2>Agent delivery credentials</h2>
+                            </div>
+                        </div>
+                        <form method="post"
+                              asp-page-handler="SaveDeliveryCredentials"
+                              asp-route-id="@Model.Order.OrderId"
+                              class="pb-note-form">
+                            @for (var i = 0; i < Model.Order.DeliveryFields.Count; i++)
+                            {
+                                var field = Model.Order.DeliveryFields.OrderBy(x => x.DisplayOrder).ElementAt(i);
+                                var inputType = field.IsSensitive || field.FieldType.Equals("Password", StringComparison.OrdinalIgnoreCase)
+                                    ? "password"
+                                    : field.FieldType.Equals("Email", StringComparison.OrdinalIgnoreCase)
+                                        ? "email"
+                                        : field.FieldType.Equals("Number", StringComparison.OrdinalIgnoreCase)
+                                            ? "number"
+                                            : "text";
+
+                                <div class="pb-order-create-field">
+                                    <input name="DeliveryCredentials[@i].FieldKey"
+                                           type="hidden"
+                                           value="@field.FieldKey" />
+                                    <label for="delivery-field-@i" class="form-label">
+                                        @field.FieldLabel
+                                        @if (field.IsRequired)
+                                        {
+                                            <span class="text-danger" aria-label="required">*</span>
+                                        }
+                                    </label>
+                                    @if (field.FieldType.Equals("Textarea", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <textarea id="delivery-field-@i"
+                                                  name="DeliveryCredentials[@i].Value"
+                                                  class="form-control"
+                                                  rows="3"
+                                                  required="@field.IsRequired">@field.Value</textarea>
+                                    }
+                                    else
+                                    {
+                                        <input id="delivery-field-@i"
+                                               name="DeliveryCredentials[@i].Value"
+                                               value="@field.Value"
+                                               type="@inputType"
+                                               class="form-control"
+                                               required="@field.IsRequired"
+                                               autocomplete="@(field.IsSensitive ? "off" : null)" />
+                                    }
+                                    <small class="form-text text-muted">
+                                        @(field.IsVisibleToCustomerAfterCompletion
+                                            ? "Visible to the customer after completion."
+                                            : "Internal delivery field.")
+                                    </small>
+                                </div>
+                            }
+                            <button type="submit" class="btn btn-outline-primary">
+                                Save delivery credentials
+                            </button>
+                        </form>
+                    </section>
+                }
+
+                @if (Model.Order.CustomerActions.Count > 0)
+                {
+                    <section class="pb-order-section">
+                        <div class="pb-section-heading">
+                            <div>
+                                <p class="pb-eyebrow">Customer interaction</p>
+                                <h2>Action requests</h2>
+                            </div>
+                        </div>
+                        <div class="pb-order-notes">
+                            @foreach (var action in Model.Order.CustomerActions)
+                            {
+                                <article>
+                                    <p>@action.RequestText</p>
+                                    @if (action.IsResolved)
+                                    {
+                                        <strong>Customer response</strong>
+                                        <p>@action.CustomerResponse</p>
+                                    }
+                                    else
+                                    {
+                                        <span>Awaiting customer response</span>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    </section>
+                }
+
+                <section class="pb-order-section">
+                    <div class="pb-section-heading">
+                        <div>
+                            <p class="pb-eyebrow">Communication</p>
+                            <h2>Order notes</h2>
+                        </div>
+                    </div>
+                    @if (Model.Order.Notes.Count > 0)
+                    {
+                        <div class="pb-order-notes">
+                            @foreach (var note in Model.Order.Notes)
+                            {
+                                <article>
+                                    <p>@note.Text</p>
+                                    <span>
+                                        @note.AuthorName &middot;
+                                        @(note.IsVisibleToCustomer ? "Customer visible" : "Internal") &middot;
+                                        @note.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC
+                                    </span>
+                                </article>
+                            }
+                        </div>
+                    }
+                    <form method="post"
+                          asp-page-handler="AddNote"
+                          asp-route-id="@Model.Order.OrderId"
+                          class="pb-note-form">
+                        <label asp-for="NoteText" class="form-label">Add note</label>
+                        <textarea asp-for="NoteText"
+                                  class="form-control"
+                                  rows="3"
+                                  maxlength="2000"></textarea>
+                        <div class="form-check">
+                            <input asp-for="NoteVisibleToCustomer" class="form-check-input" />
+                            <label asp-for="NoteVisibleToCustomer" class="form-check-label">
+                                Visible to customer
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-outline-primary">Save note</button>
+                    </form>
+                </section>
+            </div>
+
+            <div>
+                <section class="pb-order-section">
+                    <div class="pb-section-heading">
+                        <div>
+                            <p class="pb-eyebrow">Order</p>
+                            <h2>Key dates</h2>
+                        </div>
+                    </div>
+                    <dl class="pb-order-facts pb-order-facts-single">
+                        <div><dt>Created</dt><dd>@Model.Order.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</dd></div>
+                        @if (Model.Order.PaidAt.HasValue)
+                        {
+                            <div><dt>Paid</dt><dd>@Model.Order.PaidAt.Value.ToString("yyyy-MM-dd HH:mm") UTC</dd></div>
+                        }
+                        @if (Model.Order.AssignedAt.HasValue)
+                        {
+                            <div><dt>Assigned</dt><dd>@Model.Order.AssignedAt.Value.ToString("yyyy-MM-dd HH:mm") UTC</dd></div>
+                        }
+                        @if (Model.Order.CompletedAt.HasValue)
+                        {
+                            <div><dt>Completed</dt><dd>@Model.Order.CompletedAt.Value.ToString("yyyy-MM-dd HH:mm") UTC</dd></div>
+                        }
+                    </dl>
+                </section>
+
+                <section class="pb-order-section">
+                    <div class="pb-section-heading">
+                        <div>
+                            <p class="pb-eyebrow">Audit trail</p>
+                            <h2>Status history</h2>
+                        </div>
+                    </div>
+                    <ol class="pb-status-history">
+                        @foreach (var item in Model.Order.StatusHistory)
+                        {
+                            <li>
+                                <strong>@Model.StatusLabel(item.Status)</strong>
+                                <time>@item.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</time>
+                            </li>
+                        }
+                    </ol>
+                </section>
+            </div>
+        </div>
+    }
+</div>
