@@ -1,9 +1,9 @@
 using System.Security.Cryptography;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Settings;
+using ServiceBridge.Domain.Catalog;
 using ServiceBridge.Domain.Entities;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Infrastructure.Data;
@@ -305,8 +305,8 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
 
     private async Task<Provider> EnsureProviderAsync(string name)
     {
-        var providerName = NormalizeProviderName(name);
-        var slug = NormalizeProviderSlug(providerName);
+        var providerName = ProviderSlugNormalizer.NormalizeName(name);
+        var slug = ProviderSlugNormalizer.NormalizeSlug(providerName);
         var provider = await _context.Providers
             .FirstOrDefaultAsync(x => x.Slug == slug);
 
@@ -328,38 +328,6 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
         };
         await _context.Providers.AddAsync(provider);
         return provider;
-    }
-
-    private static string NormalizeProviderName(string providerName)
-    {
-        return string.IsNullOrWhiteSpace(providerName)
-            ? "Unknown Provider"
-            : providerName.Trim();
-    }
-
-    private static string NormalizeProviderSlug(string providerName)
-    {
-        var builder = new StringBuilder();
-        var previousWasSeparator = false;
-
-        foreach (var value in providerName.Trim().ToLowerInvariant())
-        {
-            if (char.IsLetterOrDigit(value))
-            {
-                builder.Append(value);
-                previousWasSeparator = false;
-                continue;
-            }
-
-            if (!previousWasSeparator && builder.Length > 0)
-            {
-                builder.Append('-');
-                previousWasSeparator = true;
-            }
-        }
-
-        var slug = builder.ToString().Trim('-');
-        return string.IsNullOrWhiteSpace(slug) ? "unknown-provider" : slug;
     }
 
     private async Task AddServicePlanIfMissingAsync(

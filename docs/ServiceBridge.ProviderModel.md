@@ -36,6 +36,24 @@ The migration is SQL Server compatible and preserves existing `DigitalServices` 
 
 Existing admin catalog create/edit DTOs still accept provider text. The application resolves provider text to a normalized slug, reuses an existing provider when possible, and creates a provider when needed. This keeps existing admin flows working without adding a Provider admin UI in this PR.
 
+## Slug Normalization Policy
+
+Provider slugs are normalized in Domain by `ProviderSlugNormalizer`. The EF migration and runtime provider resolution use the same policy:
+
+- Empty or whitespace provider text becomes `Unknown Provider` with slug `unknown-provider`.
+- Names are lowercased.
+- `&` becomes `and`.
+- Periods, commas, and apostrophes are removed.
+- Forward slash, backslash, and spaces become hyphens.
+- Repeated hyphens collapse to a single hyphen.
+
+Examples:
+
+- `OpenAI` -> `openai`
+- `Open AI, Inc.` -> `open-ai-inc`
+- `AT&T` -> `at-and-t`
+- `Provider/Region` -> `provider-region`
+
 ## Not In This PR
 
 `ServicePlan` was not renamed to `ServiceVariant`.

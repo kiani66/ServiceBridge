@@ -1,3 +1,4 @@
+using ServiceBridge.Domain.Catalog;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Domain.ValueObjects;
 using Xunit;
@@ -82,5 +83,19 @@ public class CatalogVocabularyTests
         Assert.Equal(2, (int)FulfillmentMode.InventoryCode);
         Assert.Equal(3, (int)FulfillmentMode.ExternalAutomation);
         Assert.Equal(4, (int)FulfillmentMode.InstructionOnly);
+    }
+
+    [Theory]
+    [InlineData("OpenAI", "openai")]
+    [InlineData("Open AI, Inc.", "open-ai-inc")]
+    [InlineData("AT&T", "at-and-t")]
+    [InlineData("Provider/Region", "provider-region")]
+    [InlineData("", "unknown-provider")]
+    [InlineData("   ", "unknown-provider")]
+    public void ProviderSlugNormalizer_NormalizesProviderSlugs(
+        string providerName,
+        string expectedSlug)
+    {
+        Assert.Equal(expectedSlug, ProviderSlugNormalizer.NormalizeSlug(providerName));
     }
 }

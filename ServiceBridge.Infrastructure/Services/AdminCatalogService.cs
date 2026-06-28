@@ -1,8 +1,8 @@
-using System.Text;
 using Microsoft.Extensions.Logging;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Results;
+using ServiceBridge.Domain.Catalog;
 using ServiceBridge.Domain.Entities;
 using ServiceBridge.Shared.Constants;
 using ServiceBridge.Shared.Messages;
@@ -386,8 +386,8 @@ public class AdminCatalogService : IAdminCatalogService
 
     private async Task<Provider> ResolveProviderAsync(string providerName)
     {
-        var name = NormalizeProviderName(providerName);
-        var slug = NormalizeProviderSlug(name);
+        var name = ProviderSlugNormalizer.NormalizeName(providerName);
+        var slug = ProviderSlugNormalizer.NormalizeSlug(name);
         var provider = await _repository.GetProviderBySlugAsync(slug);
         if (provider != null)
         {
@@ -402,38 +402,6 @@ public class AdminCatalogService : IAdminCatalogService
         };
         await _repository.AddProviderAsync(provider);
         return provider;
-    }
-
-    private static string NormalizeProviderName(string providerName)
-    {
-        return string.IsNullOrWhiteSpace(providerName)
-            ? "Unknown Provider"
-            : providerName.Trim();
-    }
-
-    private static string NormalizeProviderSlug(string providerName)
-    {
-        var builder = new StringBuilder();
-        var previousWasSeparator = false;
-
-        foreach (var value in providerName.Trim().ToLowerInvariant())
-        {
-            if (char.IsLetterOrDigit(value))
-            {
-                builder.Append(value);
-                previousWasSeparator = false;
-                continue;
-            }
-
-            if (!previousWasSeparator && builder.Length > 0)
-            {
-                builder.Append('-');
-                previousWasSeparator = true;
-            }
-        }
-
-        var slug = builder.ToString().Trim('-');
-        return string.IsNullOrWhiteSpace(slug) ? "unknown-provider" : slug;
     }
 
     private static ServiceResult<ServiceDetailResponse>? ValidateSupportedFulfillmentModes(
