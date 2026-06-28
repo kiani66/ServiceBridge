@@ -4,7 +4,7 @@ Source: ServiceBridge Project Guideline v1.3.
 
 ServiceBridge is a production-oriented digital service mediation platform. It connects users in Iran to international digital services through local IRR pricing, secure payment, dynamic order data collection, controlled fulfillment, tracking, and operations.
 
-The project was previously named PayBridge. PayBridge remains the MVP reference repository only. ServiceBridge is the production v1.0 repository and must use ServiceBridge naming in projects, namespaces, public branding, and documentation.
+The production repository must use ServiceBridge naming in projects, namespaces, public branding, and documentation. The prior MVP repository is a reference source only and must not be modified during ServiceBridge cleanup work.
 
 ## Product Roles
 
@@ -36,27 +36,22 @@ FinalPriceIRR = BaseForeignPrice * ExchangeRate * (1 + MarginPercent / 100)
 
 Order prices must be snapshotted at order creation time. Later exchange-rate or margin changes must never change existing orders.
 
-## PR 1 Scope
+## Migration Baseline
 
-This PR creates only the repository foundation:
+The current ServiceBridge codebase preserves the migrated MVP behavior and test coverage while using ServiceBridge naming. Cleanup PRs must be limited to migration safety, configuration hygiene, documentation, and validation unless a later roadmap PR explicitly authorizes business feature work.
 
-- Solution and project structure.
-- Correct project references.
-- BaseEntity.
-- ServiceResult<T>.
-- Shared constants.
-- EF Core-ready Infrastructure shell.
-- Initial docs and README.
-- One passing xUnit test.
+Allowed migration cleanup:
 
-Out of scope for PR 1:
+- Rename-related fixes.
+- Documentation of migration risks.
+- Build and test validation.
+- Low-cost tests that lock architecture or migration invariants.
+
+Out of scope for migration cleanup:
 
 - Authentication.
-- Catalog.
-- Pricing.
-- Orders.
-- Payments.
-- Admin panel.
-- Agent panel.
+- Catalog V2 or ServiceVariant.
+- Payment hardening.
+- Tickets, notifications, inventory, wallet, or audit improvements.
 - Database migrations.
-- Business module implementation.
+- Business behavior changes.

@@ -19,7 +19,7 @@ public class AdminSeederTests
 
         var admin = Assert.Single(repository.Users);
         Assert.Equal(UserRole.Admin, admin.Role);
-        Assert.Equal("alikianigpt@gmail.com", admin.Email);
+        Assert.Equal("admin@servicebridge.local", admin.Email);
         Assert.Equal("System Admin", admin.FullName);
         Assert.True(admin.IsActive);
         Assert.NotEqual(Guid.Empty, admin.Id);
@@ -34,7 +34,7 @@ public class AdminSeederTests
         var repository = new FakeUserRepository();
         repository.Seed(new User
         {
-            Email = "existing@paybridge.test",
+            Email = "existing@servicebridge.test",
             FullName = "Existing Admin",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Existing123!"),
             Role = UserRole.Admin,
@@ -79,7 +79,7 @@ public class AdminSeederTests
         return new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["AdminSeed:Email"] = "alikianigpt@gmail.com",
+                ["AdminSeed:Email"] = "admin@servicebridge.local",
                 ["AdminSeed:Password"] = "ValidSeedPassword1!",
                 ["AdminSeed:FullName"] = "System Admin"
             })
