@@ -3,8 +3,8 @@ namespace ServiceBridge.Domain.Entities;
 public class DigitalService : BaseEntity
 {
     public Guid CategoryId { get; set; }
+    public Guid ProviderId { get; set; }
     public string Name { get; set; } = string.Empty;
-    public string Provider { get; set; } = string.Empty;
     public string Slug { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? LogoUrl { get; set; }
@@ -16,6 +16,7 @@ public class DigitalService : BaseEntity
     public string? ProcessingTimeDescription { get; set; }
 
     public ServiceCategory Category { get; set; } = null!;
+    public Provider Provider { get; set; } = null!;
     public ICollection<ServicePlan> Plans { get; set; } = new List<ServicePlan>();
     public ICollection<ServiceRequiredField> RequiredFields { get; set; } =
         new List<ServiceRequiredField>();

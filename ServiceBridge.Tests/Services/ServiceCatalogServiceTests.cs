@@ -29,6 +29,7 @@ public class ServiceCatalogServiceTests
             result.Data.RequiredFields.Select(x => x.FieldKey));
         Assert.Equal("Password", result.Data.RequiredFields.Last().FieldType);
         Assert.True(result.Data.RequiredFields.Last().IsSensitive);
+        Assert.Equal("OpenAI", result.Data.Provider);
     }
 
     [Fact]
@@ -116,6 +117,53 @@ public class ServiceCatalogServiceTests
         Assert.Equal("chatgpt-plus", result.Data?.Slug);
         Assert.Equal("USD", result.Data?.CurrencyCode);
         Assert.Equal(category.Name, result.Data?.CategoryName);
+        Assert.Equal("OpenAI", result.Data?.Provider);
+        Assert.NotNull(repository.FindProviderBySlug("openai"));
+    }
+
+    [Fact]
+    public async Task CreateServiceAsync_WhenProviderTextHasSeparators_NormalizesProviderSlug()
+    {
+        var repository = new FakeServiceCatalogRepository();
+        var category = new ServiceCategory { Name = "AI", Slug = "ai" };
+        repository.SeedCategory(category);
+        var catalogService = CreateAdminService(repository);
+        var request = CreateServiceRequest(category.Id);
+        request.Provider = "Open AI, Inc.";
+
+        var result = await catalogService.CreateServiceAsync(request);
+
+        Assert.True(result.Success);
+        Assert.Equal("Open AI, Inc.", result.Data?.Provider);
+        Assert.NotNull(repository.FindProviderBySlug("open-ai-inc"));
+    }
+
+    [Fact]
+    public async Task UpdateServiceAsync_WhenProviderTextChanges_ResolvesProvider()
+    {
+        var repository = new FakeServiceCatalogRepository();
+        var service = CreateDigitalService();
+        repository.SeedService(service);
+        var catalogService = CreateAdminService(repository);
+
+        var result = await catalogService.UpdateServiceAsync(
+            service.Id,
+            new UpdateDigitalServiceRequest
+            {
+                CategoryId = service.CategoryId,
+                Name = "ChatGPT Plus",
+                Provider = "Open AI, Inc.",
+                Slug = "chatgpt-plus",
+                CurrencyCode = "USD",
+                BasePrice = 20,
+                IsActive = true,
+                SupportsUseExistingAccount = true,
+                SupportsCreateNewAccount = false
+            });
+
+        Assert.True(result.Success);
+        Assert.Equal("Open AI, Inc.", result.Data?.Provider);
+        Assert.Equal("open-ai-inc", service.Provider.Slug);
     }
 
     [Fact]
@@ -217,17 +265,31 @@ public class ServiceCatalogServiceTests
             Slug = "ai-services",
             IsActive = true
         };
+        var provider = new Provider
+        {
+            Name = "OpenAI",
+            Slug = "openai",
+            IsActive = true
+        };
 
         return new DigitalService
         {
             CategoryId = category.Id,
             Category = category,
+            ProviderId = provider.Id,
+            Provider = provider,
             Name = "ChatGPT Plus",
             Slug = "chatgpt-plus",
             CurrencyCode = "USD",
             BasePrice = 20,
             IsActive = true
         };
+    }
+
+    [Fact]
+    public void ServicePlan_RemainsCurrentCatalogPlanType()
+    {
+        Assert.Equal("ServicePlan", typeof(ServicePlan).Name);
     }
 
     private static ServiceRequiredField CreateField(
@@ -269,6 +331,7 @@ public class ServiceCatalogServiceTests
         {
             CategoryId = categoryId,
             Name = "ChatGPT Plus",
+            Provider = "OpenAI",
             Slug = "chatgpt-plus",
             CurrencyCode = "USD",
             BasePrice = 20,

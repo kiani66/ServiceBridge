@@ -23,6 +23,7 @@ public class ServiceCatalogModelTests
     [Fact]
     public void CatalogEntities_UseClientGeneratedIds()
     {
+        AssertClientGeneratedId<Provider>();
         AssertClientGeneratedId<ServiceCategory>();
         AssertClientGeneratedId<DigitalService>();
         AssertClientGeneratedId<ServicePlan>();
@@ -30,10 +31,16 @@ public class ServiceCatalogModelTests
     }
 
     [Fact]
-    public void CategoryAndServiceSlugs_AreUnique()
+    public void CategoryProviderAndServiceSlugs_AreUnique()
     {
+        var providerType = _context.Model.FindEntityType(typeof(Provider))!;
         var categoryType = _context.Model.FindEntityType(typeof(ServiceCategory))!;
         var serviceType = _context.Model.FindEntityType(typeof(DigitalService))!;
+
+        Assert.Contains(
+            providerType.GetIndexes(),
+            index => index.IsUnique &&
+                     index.Properties.Select(x => x.Name).SequenceEqual(new[] { "Slug" }));
 
         Assert.Contains(
             categoryType.GetIndexes(),
@@ -44,6 +51,16 @@ public class ServiceCatalogModelTests
             serviceType.GetIndexes(),
             index => index.IsUnique &&
                      index.Properties.Select(x => x.Name).SequenceEqual(new[] { "Slug" }));
+    }
+
+    [Fact]
+    public void Provider_RequiresNameSlugAndDefaultsActive()
+    {
+        var providerType = _context.Model.FindEntityType(typeof(Provider))!;
+
+        Assert.False(providerType.FindProperty(nameof(Provider.Name))!.IsNullable);
+        Assert.False(providerType.FindProperty(nameof(Provider.Slug))!.IsNullable);
+        Assert.Equal(true, providerType.FindProperty(nameof(Provider.IsActive))!.GetDefaultValue());
     }
 
     [Fact]
@@ -103,7 +120,12 @@ public class ServiceCatalogModelTests
         var planType = _context.Model.FindEntityType(typeof(ServicePlan))!;
         var fieldType = _context.Model.FindEntityType(typeof(ServiceRequiredField))!;
 
-        Assert.Equal(DeleteBehavior.Restrict, serviceType.GetForeignKeys().Single().DeleteBehavior);
+        Assert.Contains(serviceType.GetForeignKeys(), foreignKey =>
+            foreignKey.Properties.Select(x => x.Name).SequenceEqual(new[] { "CategoryId" }) &&
+            foreignKey.DeleteBehavior == DeleteBehavior.Restrict);
+        Assert.Contains(serviceType.GetForeignKeys(), foreignKey =>
+            foreignKey.Properties.Select(x => x.Name).SequenceEqual(new[] { "ProviderId" }) &&
+            foreignKey.DeleteBehavior == DeleteBehavior.Restrict);
         Assert.Equal(DeleteBehavior.Cascade, planType.GetForeignKeys().Single().DeleteBehavior);
         Assert.Equal(DeleteBehavior.Cascade, fieldType.GetForeignKeys().Single().DeleteBehavior);
     }

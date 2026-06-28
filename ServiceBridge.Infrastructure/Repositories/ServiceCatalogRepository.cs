@@ -20,6 +20,7 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
         return await _context.DigitalServices
             .AsNoTracking()
             .Include(x => x.Category)
+            .Include(x => x.Provider)
             .Include(x => x.Plans.Where(plan => plan.IsActive).OrderBy(plan => plan.DisplayOrder))
             .Where(x => x.IsActive && x.Category.IsActive)
             .OrderBy(x => x.Category.DisplayOrder)
@@ -32,6 +33,7 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
         return await _context.DigitalServices
             .AsNoTracking()
             .Include(x => x.Category)
+            .Include(x => x.Provider)
             .Include(x => x.Plans.Where(plan => plan.IsActive).OrderBy(plan => plan.DisplayOrder))
             .Include(x => x.RequiredFields.OrderBy(field => field.DisplayOrder))
             .FirstOrDefaultAsync(x =>
@@ -54,6 +56,7 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
         return await _context.DigitalServices
             .AsNoTracking()
             .Include(x => x.Category)
+            .Include(x => x.Provider)
             .Include(x => x.Plans.OrderBy(plan => plan.DisplayOrder))
             .OrderBy(x => x.Category.DisplayOrder)
             .ThenBy(x => x.Name)
@@ -66,10 +69,17 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
             .FirstOrDefaultAsync(x => x.Id == id);
     }
 
+    public async Task<Provider?> GetProviderBySlugAsync(string slug)
+    {
+        return await _context.Providers
+            .FirstOrDefaultAsync(x => x.Slug == slug);
+    }
+
     public async Task<DigitalService?> GetServiceByIdAsync(Guid id)
     {
         return await _context.DigitalServices
             .Include(x => x.Category)
+            .Include(x => x.Provider)
             .Include(x => x.Plans.OrderBy(plan => plan.DisplayOrder))
             .Include(x => x.RequiredFields.OrderBy(field => field.DisplayOrder))
             .FirstOrDefaultAsync(x => x.Id == id);
@@ -132,6 +142,12 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
     public async Task AddCategoryAsync(ServiceCategory category)
     {
         await _context.ServiceCategories.AddAsync(category);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task AddProviderAsync(Provider provider)
+    {
+        await _context.Providers.AddAsync(provider);
         await _context.SaveChangesAsync();
     }
 

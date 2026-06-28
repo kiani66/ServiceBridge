@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Settings;
+using ServiceBridge.Domain.Catalog;
 using ServiceBridge.Domain.Entities;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Infrastructure.Data;
@@ -254,6 +255,7 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
     {
         var service = await _context.DigitalServices
             .FirstOrDefaultAsync(x => x.Slug == slug);
+        var serviceProvider = await EnsureProviderAsync(provider);
 
         if (service == null)
         {
@@ -261,8 +263,9 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
             {
                 Id = Guid.NewGuid(),
                 CategoryId = category.Id,
+                ProviderId = serviceProvider.Id,
                 Name = name,
-                Provider = provider,
+                Provider = serviceProvider,
                 Slug = slug,
                 Description = description,
                 CurrencyCode = "USD",
@@ -278,8 +281,9 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
         else
         {
             service.CategoryId = category.Id;
+            service.ProviderId = serviceProvider.Id;
+            service.Provider = serviceProvider;
             service.Name = name;
-            service.Provider = provider;
             service.Description = description;
             service.CurrencyCode = "USD";
             service.BasePrice = basePrice;
@@ -297,6 +301,33 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
         {
             await AddServicePlanIfMissingAsync(service, plan);
         }
+    }
+
+    private async Task<Provider> EnsureProviderAsync(string name)
+    {
+        var providerName = ProviderSlugNormalizer.NormalizeName(name);
+        var slug = ProviderSlugNormalizer.NormalizeSlug(providerName);
+        var provider = await _context.Providers
+            .FirstOrDefaultAsync(x => x.Slug == slug);
+
+        if (provider != null)
+        {
+            provider.Name = providerName;
+            provider.IsActive = true;
+            provider.UpdatedAt = DateTime.UtcNow;
+            return provider;
+        }
+
+        provider = new Provider
+        {
+            Id = Guid.NewGuid(),
+            Name = providerName,
+            Slug = slug,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        await _context.Providers.AddAsync(provider);
+        return provider;
     }
 
     private async Task AddServicePlanIfMissingAsync(
