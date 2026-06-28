@@ -15,6 +15,10 @@ namespace ServiceBridge.Infrastructure.Migrations
                 name: "FK_Orders_ServicePlans_ServicePlanId",
                 table: "Orders");
 
+            migrationBuilder.DropForeignKey(
+                name: "FK_ServicePlans_DigitalServices_ServiceId",
+                table: "ServicePlans");
+
             migrationBuilder.DropIndex(
                 name: "IX_Orders_ServicePlanId",
                 table: "Orders");
@@ -86,6 +90,14 @@ namespace ServiceBridge.Infrastructure.Migrations
                 column: "ServiceVariantId");
 
             migrationBuilder.AddForeignKey(
+                name: "FK_ServiceVariants_DigitalServices_ServiceId",
+                table: "ServiceVariants",
+                column: "ServiceId",
+                principalTable: "DigitalServices",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
                 name: "FK_Orders_ServiceVariants_ServiceVariantId",
                 table: "Orders",
                 column: "ServiceVariantId",
@@ -100,6 +112,10 @@ namespace ServiceBridge.Infrastructure.Migrations
             migrationBuilder.DropForeignKey(
                 name: "FK_Orders_ServiceVariants_ServiceVariantId",
                 table: "Orders");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_ServiceVariants_DigitalServices_ServiceId",
+                table: "ServiceVariants");
 
             migrationBuilder.DropIndex(
                 name: "IX_Orders_ServiceVariantId",
@@ -170,6 +186,14 @@ namespace ServiceBridge.Infrastructure.Migrations
                 name: "IX_Orders_ServicePlanId",
                 table: "Orders",
                 column: "ServicePlanId");
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_ServicePlans_DigitalServices_ServiceId",
+                table: "ServicePlans",
+                column: "ServiceId",
+                principalTable: "DigitalServices",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Orders_ServicePlans_ServicePlanId",
