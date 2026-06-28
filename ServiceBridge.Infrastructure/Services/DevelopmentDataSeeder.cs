@@ -297,9 +297,9 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
         await AddServiceFieldsIfMissingAsync(service, ExistingAccountCustomerFields());
         await AddServiceFieldsIfMissingAsync(service, NewAccountCustomerFields());
         await AddServiceFieldsIfMissingAsync(service, NewAccountAgentDeliveryFields());
-        foreach (var plan in DefaultServicePlans(basePrice))
+        foreach (var plan in DefaultServiceVariants(basePrice))
         {
-            await AddServicePlanIfMissingAsync(service, plan);
+            await AddServiceVariantIfMissingAsync(service, plan);
         }
     }
 
@@ -330,18 +330,18 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
         return provider;
     }
 
-    private async Task AddServicePlanIfMissingAsync(
+    private async Task AddServiceVariantIfMissingAsync(
         DigitalService service,
-        SeedServicePlan seedPlan)
+        SeedServiceVariant seedPlan)
     {
-        var plan = await _context.ServicePlans
+        var plan = await _context.ServiceVariants
             .FirstOrDefaultAsync(x =>
                 x.ServiceId == service.Id &&
                 x.Slug == seedPlan.Slug);
 
         if (plan == null)
         {
-            await _context.ServicePlans.AddAsync(new ServicePlan
+            await _context.ServiceVariants.AddAsync(new ServiceVariant
             {
                 Id = Guid.NewGuid(),
                 ServiceId = service.Id,
@@ -370,7 +370,7 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
         plan.UpdatedAt = DateTime.UtcNow;
     }
 
-    private static IReadOnlyCollection<SeedServicePlan> DefaultServicePlans(decimal basePrice)
+    private static IReadOnlyCollection<SeedServiceVariant> DefaultServiceVariants(decimal basePrice)
     {
         return
         [
@@ -641,7 +641,7 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
         bool VisibleToCustomerAfterCompletion,
         int DisplayOrder);
 
-    private sealed record SeedServicePlan(
+    private sealed record SeedServiceVariant(
         string Name,
         string Slug,
         int? DurationDays,

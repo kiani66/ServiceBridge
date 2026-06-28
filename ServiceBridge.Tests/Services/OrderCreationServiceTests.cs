@@ -150,10 +150,10 @@ public class OrderCreationServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_WhenServiceHasPlansAndPlanIsMissing_ReturnsValidationErrors()
+    public async Task CreateAsync_WhenServiceHasvariantsAndvariantIsMissing_ReturnsValidationErrors()
     {
         var setup = CreateSetup();
-        setup.OrderRepository.ServiceDefinition!.HasActivePlans = true;
+        setup.OrderRepository.ServiceDefinition!.HasActiveVariants = true;
 
         var result = await setup.Service.CreateAsync(Guid.NewGuid(), ValidRequest(setup));
 
@@ -166,33 +166,33 @@ public class OrderCreationServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_WhenPlanIsSelected_UsesPlanPriceAndSnapshots()
+    public async Task CreateAsync_WhenvariantIsSelected_UsesvariantPriceAndSnapshots()
     {
         var setup = CreateSetup();
-        var planId = Guid.NewGuid();
-        setup.OrderRepository.ServiceDefinition!.HasActivePlans = true;
-        setup.OrderRepository.ServiceDefinition.PlanId = planId;
-        setup.OrderRepository.ServiceDefinition.PlanName = "Monthly / Global";
-        setup.OrderRepository.ServiceDefinition.PlanDurationDays = 30;
-        setup.OrderRepository.ServiceDefinition.PlanRegionCode = "GLOBAL";
+        var variantId = Guid.NewGuid();
+        setup.OrderRepository.ServiceDefinition!.HasActiveVariants = true;
+        setup.OrderRepository.ServiceDefinition.VariantId = variantId;
+        setup.OrderRepository.ServiceDefinition.VariantName = "Monthly / Global";
+        setup.OrderRepository.ServiceDefinition.VariantDurationDays = 30;
+        setup.OrderRepository.ServiceDefinition.VariantRegionCode = "GLOBAL";
         setup.OrderRepository.ServiceDefinition.BasePrice = 25m;
 
         var request = ValidRequest(setup);
-        request.PlanId = planId;
+        request.PlanId = variantId;
 
         var result = await setup.Service.CreateAsync(Guid.NewGuid(), request);
 
         Assert.True(result.Success);
-        Assert.Equal(planId, result.Data?.PlanId);
+        Assert.Equal(variantId, result.Data?.PlanId);
         Assert.Equal("Monthly / Global", result.Data?.PlanName);
         Assert.Equal(4_125_000m, result.Data?.FinalAmountIrr);
 
         var order = Assert.IsType<Domain.Entities.Order>(
             setup.OrderRepository.AddedOrder);
-        Assert.Equal(planId, order.ServicePlanId);
-        Assert.Equal("Monthly / Global", order.PlanNameSnapshot);
-        Assert.Equal(30, order.PlanDurationDaysSnapshot);
-        Assert.Equal("GLOBAL", order.PlanRegionCodeSnapshot);
+        Assert.Equal(variantId, order.ServiceVariantId);
+        Assert.Equal("Monthly / Global", order.VariantNameSnapshot);
+        Assert.Equal(30, order.VariantDurationDaysSnapshot);
+        Assert.Equal("GLOBAL", order.VariantRegionCodeSnapshot);
         Assert.Equal(25m, order.ForeignPrice);
     }
 

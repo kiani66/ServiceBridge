@@ -58,10 +58,10 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .HasPrecision(18, 0)
             .IsRequired();
 
-        entity.Property(x => x.PlanNameSnapshot)
+        entity.Property(x => x.VariantNameSnapshot)
             .HasMaxLength(150);
 
-        entity.Property(x => x.PlanRegionCodeSnapshot)
+        entity.Property(x => x.VariantRegionCodeSnapshot)
             .HasMaxLength(20);
 
         entity.Property(x => x.CreatedAt)
@@ -87,9 +87,9 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .HasForeignKey(x => x.ServiceId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        entity.HasOne(x => x.ServicePlan)
+        entity.HasOne(x => x.ServiceVariant)
             .WithMany()
-            .HasForeignKey(x => x.ServicePlanId)
+            .HasForeignKey(x => x.ServiceVariantId)
             .OnDelete(DeleteBehavior.Restrict);
 
         entity.HasOne(x => x.AssignedAgent)

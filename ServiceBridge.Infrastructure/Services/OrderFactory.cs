@@ -30,7 +30,7 @@ public class OrderFactory : IOrderFactory
             OrderNumber = context.OrderNumber,
             UserId = context.UserId,
             ServiceId = context.Service.ServiceId,
-            ServicePlanId = context.Service.PlanId,
+            ServiceVariantId = context.Service.VariantId,
             OrderType = context.Request.OrderType,
             FulfillmentMode = context.Request.FulfillmentMode,
             Status = OrderStatus.Created,
@@ -41,9 +41,9 @@ public class OrderFactory : IOrderFactory
             BaseAmountIrr = context.Pricing.BaseAmountIrr,
             ProfitAmountIrr = context.Pricing.ProfitAmountIrr,
             FinalAmountIrr = context.Pricing.FinalAmountIrr,
-            PlanNameSnapshot = context.Service.PlanName,
-            PlanDurationDaysSnapshot = context.Service.PlanDurationDays,
-            PlanRegionCodeSnapshot = context.Service.PlanRegionCode,
+            VariantNameSnapshot = context.Service.VariantName,
+            VariantDurationDaysSnapshot = context.Service.VariantDurationDays,
+            VariantRegionCodeSnapshot = context.Service.VariantRegionCode,
             CreatedAt = context.CreatedAtUtc
         };
 

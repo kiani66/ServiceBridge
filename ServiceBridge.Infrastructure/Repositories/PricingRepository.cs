@@ -38,7 +38,7 @@ public class PricingRepository : IPricingRepository
             return serviceContext;
         }
 
-        var planContext = await _context.ServicePlans
+        var planContext = await _context.ServiceVariants
             .AsNoTracking()
             .Where(x =>
                 x.Id == planId.Value &&

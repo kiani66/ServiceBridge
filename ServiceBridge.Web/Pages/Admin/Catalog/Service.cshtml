@@ -171,36 +171,36 @@
             <div class="pb-section-heading">
                 <div>
                     <p class="pb-eyebrow">Pricing variants</p>
-                    <h2>Plans, duration and region</h2>
+                    <h2>Variants, duration and region</h2>
                 </div>
             </div>
 
             @if (Model.Service.Plans.Count == 0)
             {
                 <p class="pb-muted-copy">
-                    No plans are configured. Add at least one plan before scaling this service.
+                    No variants are configured. Add at least one variant before scaling this service.
                 </p>
             }
 
-            @foreach (var plan in Model.Service.Plans.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name))
+            @foreach (var variant in Model.Service.Plans.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name))
             {
                 <form method="post"
-                      asp-page-handler="UpdatePlan"
+                      asp-page-handler="UpdateVariant"
                       asp-route-id="@Model.Service.Id"
                       class="pb-field-editor">
-                    <input type="hidden" name="planId" value="@plan.Id" />
+                    <input type="hidden" name="variantId" value="@variant.Id" />
                     <div>
                         <label class="form-label">Name</label>
-                        <input name="plan.Name"
-                               value="@plan.Name"
+                        <input name="variant.Name"
+                               value="@variant.Name"
                                class="form-control form-control-sm"
                                maxlength="150"
                                required />
                     </div>
                     <div>
                         <label class="form-label">Slug</label>
-                        <input name="plan.Slug"
-                               value="@plan.Slug"
+                        <input name="variant.Slug"
+                               value="@variant.Slug"
                                class="form-control form-control-sm"
                                maxlength="170"
                                pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
@@ -208,24 +208,24 @@
                     </div>
                     <div>
                         <label class="form-label">Duration days</label>
-                        <input name="plan.DurationDays"
-                               value="@plan.DurationDays"
+                        <input name="variant.DurationDays"
+                               value="@variant.DurationDays"
                                type="number"
                                min="1"
                                class="form-control form-control-sm" />
                     </div>
                     <div>
                         <label class="form-label">Region</label>
-                        <input name="plan.RegionCode"
-                               value="@plan.RegionCode"
+                        <input name="variant.RegionCode"
+                               value="@variant.RegionCode"
                                class="form-control form-control-sm"
                                maxlength="20"
                                placeholder="GLOBAL" />
                     </div>
                     <div>
                         <label class="form-label">Price</label>
-                        <input name="plan.BasePrice"
-                               value="@plan.BasePrice"
+                        <input name="variant.BasePrice"
+                               value="@variant.BasePrice"
                                type="number"
                                min="0.0001"
                                step="0.0001"
@@ -234,8 +234,8 @@
                     </div>
                     <div>
                         <label class="form-label">Currency</label>
-                        <input name="plan.CurrencyCode"
-                               value="@plan.CurrencyCode"
+                        <input name="variant.CurrencyCode"
+                               value="@variant.CurrencyCode"
                                minlength="3"
                                maxlength="3"
                                class="form-control form-control-sm"
@@ -243,50 +243,50 @@
                     </div>
                     <div>
                         <label class="form-label">Order</label>
-                        <input name="plan.DisplayOrder"
-                               value="@plan.DisplayOrder"
+                        <input name="variant.DisplayOrder"
+                               value="@variant.DisplayOrder"
                                type="number"
                                min="0"
                                class="form-control form-control-sm" />
                     </div>
                     <div>
                         <label class="form-label">Processing</label>
-                        <input name="plan.ProcessingTimeDescription"
-                               value="@plan.ProcessingTimeDescription"
+                        <input name="variant.ProcessingTimeDescription"
+                               value="@variant.ProcessingTimeDescription"
                                class="form-control form-control-sm"
                                maxlength="250" />
                     </div>
                     <div class="pb-field-flags-editor">
                         <label class="form-check">
-                            <input name="plan.IsActive"
+                            <input name="variant.IsActive"
                                    type="checkbox"
                                    value="true"
-                                   checked="@plan.IsActive"
+                                   checked="@variant.IsActive"
                                    class="form-check-input" />
                             <span class="form-check-label">Active</span>
                         </label>
                     </div>
-                    <button type="submit" class="btn btn-sm btn-outline-primary">Save plan</button>
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Save variant</button>
                 </form>
             }
 
             <form method="post"
-                  asp-page-handler="CreatePlan"
+                  asp-page-handler="CreateVariant"
                   asp-route-id="@Model.Service.Id"
                   class="pb-field-editor pb-field-editor-new">
                 <div>
-                    <label for="plan-name" class="form-label">Name</label>
-                    <input id="plan-name"
-                           name="plan.Name"
+                    <label for="variant-name" class="form-label">Name</label>
+                    <input id="variant-name"
+                           name="variant.Name"
                            class="form-control form-control-sm"
                            maxlength="150"
                            placeholder="Monthly / Global"
                            required />
                 </div>
                 <div>
-                    <label for="plan-slug" class="form-label">Slug</label>
-                    <input id="plan-slug"
-                           name="plan.Slug"
+                    <label for="variant-slug" class="form-label">Slug</label>
+                    <input id="variant-slug"
+                           name="variant.Slug"
                            class="form-control form-control-sm"
                            maxlength="170"
                            pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
@@ -294,26 +294,26 @@
                            required />
                 </div>
                 <div>
-                    <label for="plan-duration" class="form-label">Duration days</label>
-                    <input id="plan-duration"
-                           name="plan.DurationDays"
+                    <label for="variant-duration" class="form-label">Duration days</label>
+                    <input id="variant-duration"
+                           name="variant.DurationDays"
                            type="number"
                            min="1"
                            value="30"
                            class="form-control form-control-sm" />
                 </div>
                 <div>
-                    <label for="plan-region" class="form-label">Region</label>
-                    <input id="plan-region"
-                           name="plan.RegionCode"
+                    <label for="variant-region" class="form-label">Region</label>
+                    <input id="variant-region"
+                           name="variant.RegionCode"
                            value="GLOBAL"
                            class="form-control form-control-sm"
                            maxlength="20" />
                 </div>
                 <div>
-                    <label for="plan-price" class="form-label">Price</label>
-                    <input id="plan-price"
-                           name="plan.BasePrice"
+                    <label for="variant-price" class="form-label">Price</label>
+                    <input id="variant-price"
+                           name="variant.BasePrice"
                            type="number"
                            min="0.0001"
                            step="0.0001"
@@ -322,9 +322,9 @@
                            required />
                 </div>
                 <div>
-                    <label for="plan-currency" class="form-label">Currency</label>
-                    <input id="plan-currency"
-                           name="plan.CurrencyCode"
+                    <label for="variant-currency" class="form-label">Currency</label>
+                    <input id="variant-currency"
+                           name="variant.CurrencyCode"
                            value="@Model.Service.CurrencyCode"
                            minlength="3"
                            maxlength="3"
@@ -332,25 +332,25 @@
                            required />
                 </div>
                 <div>
-                    <label for="plan-order" class="form-label">Order</label>
-                    <input id="plan-order"
-                           name="plan.DisplayOrder"
+                    <label for="variant-order" class="form-label">Order</label>
+                    <input id="variant-order"
+                           name="variant.DisplayOrder"
                            type="number"
                            min="0"
                            value="@Model.Service.Plans.Count"
                            class="form-control form-control-sm" />
                 </div>
                 <div>
-                    <label for="plan-processing" class="form-label">Processing</label>
-                    <input id="plan-processing"
-                           name="plan.ProcessingTimeDescription"
+                    <label for="variant-processing" class="form-label">Processing</label>
+                    <input id="variant-processing"
+                           name="variant.ProcessingTimeDescription"
                            value="@Model.Service.ProcessingTimeDescription"
                            class="form-control form-control-sm"
                            maxlength="250" />
                 </div>
                 <div class="pb-field-flags-editor">
                     <label class="form-check">
-                        <input name="plan.IsActive"
+                        <input name="variant.IsActive"
                                type="checkbox"
                                value="true"
                                checked
@@ -358,7 +358,7 @@
                         <span class="form-check-label">Active</span>
                     </label>
                 </div>
-                <button type="submit" class="btn btn-sm btn-pb-primary">Add plan</button>
+                <button type="submit" class="btn btn-sm btn-pb-primary">Add variant</button>
             </form>
         </section>
 

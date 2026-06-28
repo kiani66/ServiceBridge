@@ -69,18 +69,18 @@ public class OrderCreationService : IOrderCreationService
         {
             return ServiceResult<OrderCreatedResponse>.Fail(
                 request.PlanId.HasValue
-                    ? "The selected service plan was not found."
+                    ? "The selected service variant was not found."
                     : AppMessages.ServiceNotFound,
                 AppConstants.ErrorCodes.NotFound,
                 404);
         }
 
-        if (service.HasActivePlans && service.PlanId == null)
+        if (service.HasActiveVariants && service.VariantId == null)
         {
             return ValidationFailed(new Dictionary<string, string[]>
             {
                 [nameof(request.PlanId)] =
-                    ["A service plan must be selected for this service."]
+                    ["A service variant must be selected for this service."]
             });
         }
 
@@ -112,10 +112,10 @@ public class OrderCreationService : IOrderCreationService
         {
             ServiceId = service.ServiceId,
             CategoryId = service.CategoryId,
-            PlanId = service.PlanId,
-            PlanName = service.PlanName,
-            PlanDurationDays = service.PlanDurationDays,
-            PlanRegionCode = service.PlanRegionCode,
+            PlanId = service.VariantId,
+            PlanName = service.VariantName,
+            PlanDurationDays = service.VariantDurationDays,
+            PlanRegionCode = service.VariantRegionCode,
             CurrencyCode = service.CurrencyCode,
             BasePrice = service.BasePrice
         };
@@ -162,10 +162,10 @@ public class OrderCreationService : IOrderCreationService
                 OrderNumber = order.OrderNumber,
                 Status = order.Status.ToString(),
                 FulfillmentMode = order.FulfillmentMode,
-                PlanId = order.ServicePlanId,
-                PlanName = order.PlanNameSnapshot,
-                PlanDurationDays = order.PlanDurationDaysSnapshot,
-                PlanRegionCode = order.PlanRegionCodeSnapshot,
+                PlanId = order.ServiceVariantId,
+                PlanName = order.VariantNameSnapshot,
+                PlanDurationDays = order.VariantDurationDaysSnapshot,
+                PlanRegionCode = order.VariantRegionCodeSnapshot,
                 ForeignPrice = order.ForeignPrice,
                 CurrencyCode = order.CurrencyCode,
                 ExchangeRate = order.ExchangeRateSnapshot,

@@ -64,8 +64,8 @@
                 }
                 @if (Model.Quote?.PlanName != null)
                 {
-                    <small id="quote-plan-summary" class="pb-processing-time">
-                        Plan: @Model.Quote.PlanName
+                    <small id="quote-variant-summary" class="pb-processing-time">
+                        variant: @Model.Quote.PlanName
                         @if (Model.Quote.PlanDurationDays.HasValue)
                         {
                             <span> / @Model.Quote.PlanDurationDays.Value days</span>
@@ -78,62 +78,62 @@
                 }
                 else
                 {
-                    <small id="quote-plan-summary" class="pb-processing-time" hidden></small>
+                    <small id="quote-variant-summary" class="pb-processing-time" hidden></small>
                 }
             </div>
         </section>
 
         @if (Model.Service.Plans.Count > 0)
         {
-            <section class="pb-required-fields-section js-plan-selection"
+            <section class="pb-required-fields-section js-variant-selection"
                      data-service-id="@Model.Service.Id">
                 <div class="pb-section-heading">
                     <div>
-                        <p class="pb-eyebrow">Plan selection</p>
+                        <p class="pb-eyebrow">variant selection</p>
                         <h2>Choose duration, region and price</h2>
                     </div>
                 </div>
 
                 <form method="get" class="pb-order-create-form">
-                    <div class="pb-plan-grid">
-                        @foreach (var plan in Model.Service.Plans.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name))
+                    <div class="pb-variant-grid">
+                        @foreach (var variant in Model.Service.Plans.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name))
                         {
-                            var isSelected = Model.SelectedPlanId == plan.Id;
-                            <label class="pb-plan-card @(isSelected ? "pb-plan-card-selected" : null)" for="plan-@plan.Id">
-                                <div class="pb-plan-card-head">
-                                    <strong>@plan.Name</strong>
-                                    <span class="pb-flag pb-flag-required js-plan-selected-badge" hidden="@(!isSelected)">Selected</span>
+                            var isSelected = Model.SelectedPlanId == variant.Id;
+                            <label class="pb-variant-card @(isSelected ? "pb-variant-card-selected" : null)" for="variant-@variant.Id">
+                                <div class="pb-variant-card-head">
+                                    <strong>@variant.Name</strong>
+                                    <span class="pb-flag pb-flag-required js-variant-selected-badge" hidden="@(!isSelected)">Selected</span>
                                 </div>
-                                <div class="pb-plan-price">
-                                    <span>@plan.BasePrice.ToString("0.##")</span>
-                                    <small>@plan.CurrencyCode</small>
+                                <div class="pb-variant-price">
+                                    <span>@variant.BasePrice.ToString("0.##")</span>
+                                    <small>@variant.CurrencyCode</small>
                                 </div>
-                                <dl class="pb-plan-meta">
+                                <dl class="pb-variant-meta">
                                     <div>
                                         <dt>Duration</dt>
-                                        <dd>@(plan.DurationDays.HasValue ? $"{plan.DurationDays.Value} days" : "Custom")</dd>
+                                        <dd>@(variant.DurationDays.HasValue ? $"{variant.DurationDays.Value} days" : "Custom")</dd>
                                     </div>
                                     <div>
                                         <dt>Region</dt>
-                                        <dd>@(string.IsNullOrWhiteSpace(plan.RegionCode) ? "Any" : plan.RegionCode)</dd>
+                                        <dd>@(string.IsNullOrWhiteSpace(variant.RegionCode) ? "Any" : variant.RegionCode)</dd>
                                     </div>
                                 </dl>
-                                @if (!string.IsNullOrWhiteSpace(plan.ProcessingTimeDescription))
+                                @if (!string.IsNullOrWhiteSpace(variant.ProcessingTimeDescription))
                                 {
-                                    <p>@plan.ProcessingTimeDescription</p>
+                                    <p>@variant.ProcessingTimeDescription</p>
                                 }
-                                <input id="plan-@plan.Id"
+                                <input id="variant-@variant.Id"
                                        class="form-check-input"
                                        type="radio"
                                        name="SelectedPlanId"
-                                       value="@plan.Id"
+                                       value="@variant.Id"
                                        checked="@isSelected"
-                                       data-plan-name="@plan.Name"
-                                       data-plan-duration="@plan.DurationDays"
-                                       data-plan-region="@plan.RegionCode"
-                                       data-plan-price="@plan.BasePrice"
-                                       data-plan-currency="@plan.CurrencyCode"
-                                       data-plan-option />
+                                       data-variant-name="@variant.Name"
+                                       data-variant-duration="@variant.DurationDays"
+                                       data-variant-region="@variant.RegionCode"
+                                       data-variant-price="@variant.BasePrice"
+                                       data-variant-currency="@variant.CurrencyCode"
+                                       data-variant-option />
                             </label>
                         }
                     </div>
@@ -154,7 +154,7 @@
             <div class="pb-service-guide-grid">
                 <article class="pb-guide-card">
                     <span>1</span>
-                    <h3>Choose the exact plan</h3>
+                    <h3>Choose the exact variant</h3>
                     <p>Select duration and region before submitting the order so pricing is locked correctly.</p>
                 </article>
                 <article class="pb-guide-card">
@@ -178,7 +178,7 @@
             </details>
             <details class="pb-service-faq">
                 <summary>Can the final amount change?</summary>
-                <p>The final IRR amount is calculated from the selected plan, active exchange rate and configured margin at order creation time.</p>
+                <p>The final IRR amount is calculated from the selected variant, active exchange rate and configured margin at order creation time.</p>
             </details>
         </section>
 
@@ -244,7 +244,7 @@
             {
                 <form method="post" class="pb-order-create-form">
                     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-                    <input asp-for="SelectedPlanId" id="selected-plan-id" type="hidden" />
+                    <input asp-for="SelectedPlanId" id="selected-variant-id" type="hidden" />
 
                     @if (Model.Service.SupportedFulfillmentModes.Count > 1)
                     {
@@ -367,8 +367,8 @@
 <script>
     (() => {
         document.documentElement.classList.add('js-enabled');
-        const planInputs = document.querySelectorAll('[data-plan-option]');
-        const selectedPlanInput = document.getElementById('selected-plan-id');
+        const variantInputs = document.querySelectorAll('[data-variant-option]');
+        const selectedVariantInput = document.getElementById('selected-variant-id');
         const numberFormatter = new Intl.NumberFormat('en-US');
 
         function readQuotePayload(payload) {
@@ -381,19 +381,19 @@
             }).format(Number(value ?? 0));
         }
 
-        function updateSelectedPlanUi(selectedInput) {
-            planInputs.forEach(input => {
-                const card = input.closest('.pb-plan-card');
+        function updateSelectedVariantUi(selectedInput) {
+            variantInputs.forEach(input => {
+                const card = input.closest('.pb-variant-card');
                 const badge = card
-                    ?.querySelector('.js-plan-selected-badge');
-                card?.classList.toggle('pb-plan-card-selected', input === selectedInput);
+                    ?.querySelector('.js-variant-selected-badge');
+                card?.classList.toggle('pb-variant-card-selected', input === selectedInput);
                 if (badge) {
                     badge.hidden = input !== selectedInput;
                 }
             });
 
-            if (selectedPlanInput) {
-                selectedPlanInput.value = selectedInput.value;
+            if (selectedVariantInput) {
+                selectedVariantInput.value = selectedInput.value;
             }
         }
 
@@ -405,9 +405,9 @@
             const baseAmount = quote?.baseAmountIrr ?? quote?.BaseAmountIrr;
             const margin = quote?.marginPercentage ?? quote?.MarginPercentage;
             const profit = quote?.profitAmountIrr ?? quote?.ProfitAmountIrr;
-            const planName = quote?.planName ?? quote?.PlanName;
-            const planDuration = quote?.planDurationDays ?? quote?.PlanDurationDays;
-            const planRegion = quote?.planRegionCode ?? quote?.PlanRegionCode;
+            const variantName = quote?.planName ?? quote?.PlanName;
+            const variantDuration = quote?.planDurationDays ?? quote?.PlanDurationDays;
+            const variantRegion = quote?.planRegionCode ?? quote?.PlanRegionCode;
 
             const finalText = `${numberFormatter.format(finalAmount ?? 0)} IRR`;
             const finalEl = document.getElementById('quote-final-amount');
@@ -427,18 +427,18 @@
             if (marginEl) marginEl.textContent = formatAmount(margin, 2);
             if (profitEl) profitEl.textContent = numberFormatter.format(profit ?? 0);
 
-            const planSummary = document.getElementById('quote-plan-summary');
-            if (planSummary && planName) {
-                const parts = [`Plan: ${planName}`];
-                if (planDuration) parts.push(`${planDuration} days`);
-                if (planRegion) parts.push(planRegion);
-                planSummary.textContent = parts.join(' / ');
-                planSummary.hidden = false;
+            const variantSummary = document.getElementById('quote-variant-summary');
+            if (variantSummary && variantName) {
+                const parts = [`variant: ${variantName}`];
+                if (variantDuration) parts.push(`${variantDuration} days`);
+                if (variantRegion) parts.push(variantRegion);
+                variantSummary.textContent = parts.join(' / ');
+                variantSummary.hidden = false;
             }
         }
 
-        async function refreshPlanQuote(input) {
-            updateSelectedPlanUi(input);
+        async function refreshVariantQuote(input) {
+            updateSelectedVariantUi(input);
             const url = `${window.location.pathname}?handler=Quote&planId=${encodeURIComponent(input.value)}`;
             const response = await fetch(url, {
                 headers: { 'Accept': 'application/json' }
@@ -456,9 +456,9 @@
             updateQuoteUi(quote);
         }
 
-        planInputs.forEach(input => {
+        variantInputs.forEach(input => {
             input.addEventListener('change', () => {
-                refreshPlanQuote(input).catch(() => input.form?.submit());
+                refreshVariantQuote(input).catch(() => input.form?.submit());
             });
         });
 

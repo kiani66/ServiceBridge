@@ -9,7 +9,7 @@ internal class FakeServiceCatalogRepository : IServiceCatalogRepository
     private readonly Dictionary<Guid, ServiceCategory> _categories = new();
     private readonly Dictionary<Guid, Provider> _providers = new();
     private readonly Dictionary<Guid, DigitalService> _services = new();
-    private readonly Dictionary<Guid, ServicePlan> _plans = new();
+    private readonly Dictionary<Guid, ServiceVariant> _plans = new();
     private readonly Dictionary<Guid, ServiceRequiredField> _fields = new();
 
     public void SeedCategory(ServiceCategory category)
@@ -38,7 +38,7 @@ internal class FakeServiceCatalogRepository : IServiceCatalogRepository
             _fields[field.Id] = field;
         }
 
-        foreach (var plan in service.Plans)
+        foreach (var plan in service.Variants)
         {
             _plans[plan.Id] = plan;
         }
@@ -91,7 +91,7 @@ internal class FakeServiceCatalogRepository : IServiceCatalogRepository
         return Task.FromResult(_fields.GetValueOrDefault(id));
     }
 
-    public Task<ServicePlan?> GetPlanByIdAsync(Guid id)
+    public Task<ServiceVariant?> GetVariantByIdAsync(Guid id)
     {
         return Task.FromResult(_plans.GetValueOrDefault(id));
     }
@@ -110,7 +110,7 @@ internal class FakeServiceCatalogRepository : IServiceCatalogRepository
             (!excludingId.HasValue || x.Id != excludingId.Value)));
     }
 
-    public Task<bool> PlanSlugExistsAsync(
+    public Task<bool> VariantSlugExistsAsync(
         Guid serviceId,
         string slug,
         Guid? excludingId = null)
@@ -155,10 +155,10 @@ internal class FakeServiceCatalogRepository : IServiceCatalogRepository
         return Task.CompletedTask;
     }
 
-    public Task AddPlanAsync(ServicePlan plan)
+    public Task AddVariantAsync(ServiceVariant plan)
     {
         _plans[plan.Id] = plan;
-        plan.Service.Plans.Add(plan);
+        plan.Service.Variants.Add(plan);
         return Task.CompletedTask;
     }
 
@@ -181,7 +181,7 @@ internal class FakeServiceCatalogRepository : IServiceCatalogRepository
         return Task.CompletedTask;
     }
 
-    public Task UpdatePlanAsync(ServicePlan plan)
+    public Task UpdateVariantAsync(ServiceVariant plan)
     {
         plan.UpdatedAt = DateTime.UtcNow;
         return Task.CompletedTask;

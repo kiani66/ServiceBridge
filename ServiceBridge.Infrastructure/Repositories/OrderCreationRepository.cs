@@ -34,7 +34,7 @@ public class OrderCreationRepository : IOrderCreationRepository
             {
                 ServiceId = x.Id,
                 CategoryId = x.CategoryId,
-                HasActivePlans = x.Plans.Any(plan => plan.IsActive),
+                HasActiveVariants = x.Variants.Any(plan => plan.IsActive),
                 CurrencyCode = x.CurrencyCode,
                 BasePrice = x.BasePrice,
                 SupportsUseExistingAccount = x.SupportsUseExistingAccount,
@@ -63,7 +63,7 @@ public class OrderCreationRepository : IOrderCreationRepository
             return service;
         }
 
-        var plan = await _context.ServicePlans
+        var plan = await _context.ServiceVariants
             .AsNoTracking()
             .Where(x =>
                 x.Id == planId.Value &&
@@ -85,10 +85,10 @@ public class OrderCreationRepository : IOrderCreationRepository
             return null;
         }
 
-        service.PlanId = plan.Id;
-        service.PlanName = plan.Name;
-        service.PlanDurationDays = plan.DurationDays;
-        service.PlanRegionCode = plan.RegionCode;
+        service.VariantId = plan.Id;
+        service.VariantName = plan.Name;
+        service.VariantDurationDays = plan.DurationDays;
+        service.VariantRegionCode = plan.RegionCode;
         service.CurrencyCode = plan.CurrencyCode;
         service.BasePrice = plan.BasePrice;
         return service;

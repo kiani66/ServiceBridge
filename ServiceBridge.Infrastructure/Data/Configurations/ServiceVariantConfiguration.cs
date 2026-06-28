@@ -4,9 +4,9 @@ using ServiceBridge.Domain.Entities;
 
 namespace ServiceBridge.Infrastructure.Data.Configurations;
 
-public class ServicePlanConfiguration : IEntityTypeConfiguration<ServicePlan>
+public class ServiceVariantConfiguration : IEntityTypeConfiguration<ServiceVariant>
 {
-    public void Configure(EntityTypeBuilder<ServicePlan> entity)
+    public void Configure(EntityTypeBuilder<ServiceVariant> entity)
     {
         entity.HasKey(x => x.Id);
 
@@ -48,18 +48,18 @@ public class ServicePlanConfiguration : IEntityTypeConfiguration<ServicePlan>
         entity.HasIndex(x => new { x.ServiceId, x.IsActive, x.DisplayOrder });
 
         entity.HasOne(x => x.Service)
-            .WithMany(x => x.Plans)
+            .WithMany(x => x.Variants)
             .HasForeignKey(x => x.ServiceId)
             .OnDelete(DeleteBehavior.Cascade);
 
         entity.ToTable(table =>
         {
             table.HasCheckConstraint(
-                "CK_ServicePlans_BasePrice_NonNegative",
+                "CK_ServiceVariants_BasePrice_NonNegative",
                 "[BasePrice] >= 0");
 
             table.HasCheckConstraint(
-                "CK_ServicePlans_DurationDays_Positive",
+                "CK_ServiceVariants_DurationDays_Positive",
                 "[DurationDays] IS NULL OR [DurationDays] > 0");
         });
     }

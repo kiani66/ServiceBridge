@@ -586,13 +586,15 @@ main {
     border-top: 1px solid var(--pb-border);
 }
 
-.pb-plan-grid {
+.pb-plan-grid,
+.pb-variant-grid {
     display: grid;
     gap: 1rem;
     grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 
-.pb-plan-card {
+.pb-plan-card,
+.pb-variant-card {
     background: linear-gradient(180deg, #fff, #faf9fd);
     border: 1px solid var(--pb-border);
     border-radius: 0.85rem;
@@ -606,23 +608,28 @@ main {
 }
 
 .pb-plan-card:hover,
-.pb-plan-card-selected {
+.pb-plan-card-selected,
+.pb-variant-card:hover,
+.pb-variant-card-selected {
     border-color: var(--pb-primary);
     box-shadow: 0 0.45rem 1rem rgba(90, 50, 183, 0.13);
     transform: translateY(-1px);
 }
 
-.pb-plan-card-selected {
+.pb-plan-card-selected,
+.pb-variant-card-selected {
     background: linear-gradient(180deg, #fff, var(--pb-primary-light));
 }
 
-.pb-plan-card input[type="radio"] {
+.pb-plan-card input[type="radio"],
+.pb-variant-card input[type="radio"] {
     position: absolute;
     right: 1rem;
     top: 1rem;
 }
 
-.pb-plan-card-head {
+.pb-plan-card-head,
+.pb-variant-card-head {
     align-items: center;
     display: flex;
     gap: 0.5rem;
@@ -630,52 +637,62 @@ main {
     padding-right: 1.75rem;
 }
 
-.pb-plan-card-head strong {
+.pb-plan-card-head strong,
+.pb-variant-card-head strong {
     font-size: 0.98rem;
 }
 
-.pb-plan-price {
+.pb-plan-price,
+.pb-variant-price {
     align-items: baseline;
     display: flex;
     gap: 0.4rem;
 }
 
-.pb-plan-price span {
+.pb-plan-price span,
+.pb-variant-price span {
     color: var(--pb-text-dark);
     font-size: 1.6rem;
     font-weight: 800;
 }
 
 .pb-plan-price small,
-.pb-plan-card p {
+.pb-plan-card p,
+.pb-variant-price small,
+.pb-variant-card p {
     color: var(--pb-text-muted);
 }
 
-.pb-plan-meta {
+.pb-plan-meta,
+.pb-variant-meta {
     display: grid;
     gap: 0.4rem;
     margin: 0;
 }
 
-.pb-plan-meta div {
+.pb-plan-meta div,
+.pb-variant-meta div {
     align-items: center;
     display: flex;
     justify-content: space-between;
 }
 
-.pb-plan-meta dt {
+.pb-plan-meta dt,
+.pb-variant-meta dt {
     color: var(--pb-text-muted);
     font-size: 0.76rem;
     font-weight: 600;
 }
 
-.pb-plan-meta dd {
+.pb-plan-meta dd,
+.pb-variant-meta dd {
     font-size: 0.84rem;
     font-weight: 700;
     margin: 0;
 }
 
-.pb-plan-card p {
+.pb-plan-card p,
+.pb-variant-card p {
     font-size: 0.82rem;
     line-height: 1.45;
     margin: 0;

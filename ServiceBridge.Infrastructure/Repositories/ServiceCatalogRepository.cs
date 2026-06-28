@@ -21,7 +21,7 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
             .AsNoTracking()
             .Include(x => x.Category)
             .Include(x => x.Provider)
-            .Include(x => x.Plans.Where(plan => plan.IsActive).OrderBy(plan => plan.DisplayOrder))
+            .Include(x => x.Variants.Where(plan => plan.IsActive).OrderBy(plan => plan.DisplayOrder))
             .Where(x => x.IsActive && x.Category.IsActive)
             .OrderBy(x => x.Category.DisplayOrder)
             .ThenBy(x => x.Name)
@@ -34,7 +34,7 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
             .AsNoTracking()
             .Include(x => x.Category)
             .Include(x => x.Provider)
-            .Include(x => x.Plans.Where(plan => plan.IsActive).OrderBy(plan => plan.DisplayOrder))
+            .Include(x => x.Variants.Where(plan => plan.IsActive).OrderBy(plan => plan.DisplayOrder))
             .Include(x => x.RequiredFields.OrderBy(field => field.DisplayOrder))
             .FirstOrDefaultAsync(x =>
                 x.Id == id &&
@@ -57,7 +57,7 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
             .AsNoTracking()
             .Include(x => x.Category)
             .Include(x => x.Provider)
-            .Include(x => x.Plans.OrderBy(plan => plan.DisplayOrder))
+            .Include(x => x.Variants.OrderBy(plan => plan.DisplayOrder))
             .OrderBy(x => x.Category.DisplayOrder)
             .ThenBy(x => x.Name)
             .ToListAsync();
@@ -80,7 +80,7 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
         return await _context.DigitalServices
             .Include(x => x.Category)
             .Include(x => x.Provider)
-            .Include(x => x.Plans.OrderBy(plan => plan.DisplayOrder))
+            .Include(x => x.Variants.OrderBy(plan => plan.DisplayOrder))
             .Include(x => x.RequiredFields.OrderBy(field => field.DisplayOrder))
             .FirstOrDefaultAsync(x => x.Id == id);
     }
@@ -91,9 +91,9 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
             .FirstOrDefaultAsync(x => x.Id == id);
     }
 
-    public async Task<ServicePlan?> GetPlanByIdAsync(Guid id)
+    public async Task<ServiceVariant?> GetVariantByIdAsync(Guid id)
     {
-        return await _context.ServicePlans
+        return await _context.ServiceVariants
             .Include(x => x.Service)
             .ThenInclude(x => x.Category)
             .FirstOrDefaultAsync(x => x.Id == id);
@@ -113,12 +113,12 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
             (!excludingId.HasValue || x.Id != excludingId.Value));
     }
 
-    public async Task<bool> PlanSlugExistsAsync(
+    public async Task<bool> VariantSlugExistsAsync(
         Guid serviceId,
         string slug,
         Guid? excludingId = null)
     {
-        return await _context.ServicePlans.AnyAsync(x =>
+        return await _context.ServiceVariants.AnyAsync(x =>
             x.ServiceId == serviceId &&
             x.Slug == slug &&
             (!excludingId.HasValue || x.Id != excludingId.Value));
@@ -157,9 +157,9 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
         await _context.SaveChangesAsync();
     }
 
-    public async Task AddPlanAsync(ServicePlan plan)
+    public async Task AddVariantAsync(ServiceVariant plan)
     {
-        await _context.ServicePlans.AddAsync(plan);
+        await _context.ServiceVariants.AddAsync(plan);
         await _context.SaveChangesAsync();
     }
 
@@ -181,7 +181,7 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
         await _context.SaveChangesAsync();
     }
 
-    public async Task UpdatePlanAsync(ServicePlan plan)
+    public async Task UpdateVariantAsync(ServiceVariant plan)
     {
         plan.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();

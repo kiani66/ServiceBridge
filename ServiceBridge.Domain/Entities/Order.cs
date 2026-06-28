@@ -13,7 +13,7 @@ public class Order : BaseEntity
     public string OrderNumber { get; set; } = string.Empty;
     public Guid UserId { get; set; }
     public Guid ServiceId { get; set; }
-    public Guid? ServicePlanId { get; set; }
+    public Guid? ServiceVariantId { get; set; }
     public Guid? AssignedAgentId { get; set; }
     public OrderType OrderType { get; set; }
     public OrderFulfillmentMode FulfillmentMode { get; internal set; } =
@@ -26,9 +26,9 @@ public class Order : BaseEntity
     public decimal BaseAmountIrr { get; internal set; }
     public decimal ProfitAmountIrr { get; internal set; }
     public decimal FinalAmountIrr { get; internal set; }
-    public string? PlanNameSnapshot { get; internal set; }
-    public int? PlanDurationDaysSnapshot { get; internal set; }
-    public string? PlanRegionCodeSnapshot { get; internal set; }
+    public string? VariantNameSnapshot { get; internal set; }
+    public int? VariantDurationDaysSnapshot { get; internal set; }
+    public string? VariantRegionCodeSnapshot { get; internal set; }
     public DateTime? PaidAt { get; set; }
     public DateTime? AssignedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
@@ -36,7 +36,7 @@ public class Order : BaseEntity
 
     public User User { get; set; } = null!;
     public DigitalService Service { get; set; } = null!;
-    public ServicePlan? ServicePlan { get; set; }
+    public ServiceVariant? ServiceVariant { get; set; }
     public User? AssignedAgent { get; set; }
     public ICollection<OrderFieldValue> FieldValues { get; set; } =
         new List<OrderFieldValue>();

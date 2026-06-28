@@ -8,8 +8,8 @@ public class ServiceDetailResponse : ServiceSummaryResponse
     public bool SupportsCreateNewAccount { get; set; }
     public IReadOnlyCollection<OrderFulfillmentMode> SupportedFulfillmentModes { get; set; } =
         Array.Empty<OrderFulfillmentMode>();
-    public IReadOnlyCollection<ServicePlanResponse> Plans { get; set; } =
-        Array.Empty<ServicePlanResponse>();
+    public IReadOnlyCollection<ServiceVariantResponse> Plans { get; set; } =
+        Array.Empty<ServiceVariantResponse>();
     public IReadOnlyCollection<ServiceRequiredFieldResponse> RequiredFields { get; set; } =
         Array.Empty<ServiceRequiredFieldResponse>();
 }

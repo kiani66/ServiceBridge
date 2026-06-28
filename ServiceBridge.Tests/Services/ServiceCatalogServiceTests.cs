@@ -33,6 +33,23 @@ public class ServiceCatalogServiceTests
     }
 
     [Fact]
+    public async Task GetActiveServiceByIdAsync_ReturnsVariantDataThroughPlansCompatibilityProperty()
+    {
+        var repository = new FakeServiceCatalogRepository();
+        var service = CreateDigitalService();
+        service.Variants.Add(CreateVariant(service, "monthly-global"));
+        repository.SeedService(service);
+        var catalogService = CreateQueryService(repository);
+
+        var result = await catalogService.GetActiveServiceByIdAsync(service.Id);
+
+        Assert.True(result.Success);
+        var variant = Assert.Single(result.Data!.Plans);
+        Assert.Equal("Monthly / Global", variant.Name);
+        Assert.Equal("monthly-global", variant.Slug);
+    }
+
+    [Fact]
     public async Task GetActiveServiceByIdAsync_WhenServiceIsInactive_ReturnsNotFound()
     {
         var repository = new FakeServiceCatalogRepository();
@@ -190,16 +207,16 @@ public class ServiceCatalogServiceTests
     }
 
     [Fact]
-    public async Task CreatePlanAsync_WhenValid_NormalizesSlugRegionAndCurrency()
+    public async Task CreateVariantAsync_WhenValid_NormalizesSlugRegionAndCurrency()
     {
         var repository = new FakeServiceCatalogRepository();
         var service = CreateDigitalService();
         repository.SeedService(service);
         var catalogService = CreateAdminService(repository);
 
-        var result = await catalogService.CreatePlanAsync(
+        var result = await catalogService.CreateVariantAsync(
             service.Id,
-            new CreateServicePlanRequest
+            new CreateServiceVariantRequest
             {
                 Name = "Monthly / Global",
                 Slug = "Monthly-Global",
@@ -216,21 +233,21 @@ public class ServiceCatalogServiceTests
         Assert.Equal("monthly-global", result.Data?.Slug);
         Assert.Equal("GLOBAL", result.Data?.RegionCode);
         Assert.Equal("USD", result.Data?.CurrencyCode);
-        Assert.Single(service.Plans);
+        Assert.Single(service.Variants);
     }
 
     [Fact]
-    public async Task CreatePlanAsync_WhenSlugExistsForService_ReturnsConflict()
+    public async Task CreateVariantAsync_WhenSlugExistsForService_ReturnsConflict()
     {
         var repository = new FakeServiceCatalogRepository();
         var service = CreateDigitalService();
-        service.Plans.Add(CreatePlan(service, "monthly-global"));
+        service.Variants.Add(CreateVariant(service, "monthly-global"));
         repository.SeedService(service);
         var catalogService = CreateAdminService(repository);
 
-        var result = await catalogService.CreatePlanAsync(
+        var result = await catalogService.CreateVariantAsync(
             service.Id,
-            new CreateServicePlanRequest
+            new CreateServiceVariantRequest
             {
                 Name = "Monthly",
                 Slug = "MONTHLY-GLOBAL",
@@ -287,9 +304,9 @@ public class ServiceCatalogServiceTests
     }
 
     [Fact]
-    public void ServicePlan_RemainsCurrentCatalogPlanType()
+    public void ServiceVariant_RemainsCurrentCatalogVariantType()
     {
-        Assert.Equal("ServicePlan", typeof(ServicePlan).Name);
+        Assert.Equal("ServiceVariant", typeof(ServiceVariant).Name);
     }
 
     private static ServiceRequiredField CreateField(
@@ -311,9 +328,9 @@ public class ServiceCatalogServiceTests
         };
     }
 
-    private static ServicePlan CreatePlan(DigitalService service, string slug)
+    private static ServiceVariant CreateVariant(DigitalService service, string slug)
     {
-        return new ServicePlan
+        return new ServiceVariant
         {
             ServiceId = service.Id,
             Service = service,
