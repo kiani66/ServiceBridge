@@ -239,6 +239,18 @@
                         </select>
                     </div>
                     <div>
+                        <label class="form-label">Fulfillment</label>
+                        <select name="variant.FulfillmentMode" class="form-select form-select-sm">
+                            @foreach (var fulfillmentMode in Enum.GetValues<FulfillmentMode>())
+                            {
+                                <option value="@fulfillmentMode"
+                                        selected="@(variant.FulfillmentMode == fulfillmentMode)">
+                                    @fulfillmentMode
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div>
                         <label class="form-label">Region</label>
                         <input name="variant.RegionCode"
                                value="@variant.RegionCode"
@@ -345,6 +357,17 @@
                         @foreach (var deliveryType in Enum.GetValues<AccountDeliveryType>())
                         {
                             <option value="@deliveryType">@deliveryType</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="variant-fulfillment" class="form-label">Fulfillment</label>
+                    <select id="variant-fulfillment"
+                            name="variant.FulfillmentMode"
+                            class="form-select form-select-sm">
+                        @foreach (var fulfillmentMode in Enum.GetValues<FulfillmentMode>())
+                        {
+                            <option value="@fulfillmentMode">@fulfillmentMode</option>
                         }
                     </select>
                 </div>

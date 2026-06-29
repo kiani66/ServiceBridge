@@ -201,6 +201,12 @@ public class AdminCatalogService : IAdminCatalogService
         Guid serviceId,
         CreateServiceVariantRequest request)
     {
+        var variantValidation = ValidateVariantRequest(request);
+        if (variantValidation != null)
+        {
+            return variantValidation;
+        }
+
         var service = await _repository.GetServiceByIdAsync(serviceId);
         if (service == null)
         {
@@ -211,6 +217,8 @@ public class AdminCatalogService : IAdminCatalogService
         }
 
         var slug = NormalizeSlug(request.Slug);
+        var currencyCode = NormalizeRequiredCode(request.CurrencyCode);
+        var regionCode = NormalizeRequiredCode(request.RegionCode);
         if (await _repository.VariantSlugExistsAsync(serviceId, slug))
         {
             return ServiceResult<ServiceVariantResponse>.Fail(
@@ -228,8 +236,9 @@ public class AdminCatalogService : IAdminCatalogService
             DurationDays = request.DurationDays,
             BillingCycle = request.BillingCycle,
             AccountDeliveryType = request.AccountDeliveryType,
-            RegionCode = NormalizeOptional(request.RegionCode)?.ToUpperInvariant(),
-            CurrencyCode = request.CurrencyCode.Trim().ToUpperInvariant(),
+            RegionCode = regionCode,
+            CurrencyCode = currencyCode,
+            FulfillmentMode = request.FulfillmentMode,
             BasePrice = request.BasePrice,
             IsActive = request.IsActive,
             DisplayOrder = request.DisplayOrder,
@@ -252,6 +261,12 @@ public class AdminCatalogService : IAdminCatalogService
         Guid id,
         UpdateServiceVariantRequest request)
     {
+        var variantValidation = ValidateVariantRequest(request);
+        if (variantValidation != null)
+        {
+            return variantValidation;
+        }
+
         var variant = await _repository.GetVariantByIdAsync(id);
         if (variant == null)
         {
@@ -262,6 +277,8 @@ public class AdminCatalogService : IAdminCatalogService
         }
 
         var slug = NormalizeSlug(request.Slug);
+        var currencyCode = NormalizeRequiredCode(request.CurrencyCode);
+        var regionCode = NormalizeRequiredCode(request.RegionCode);
         if (await _repository.VariantSlugExistsAsync(variant.ServiceId, slug, id))
         {
             return ServiceResult<ServiceVariantResponse>.Fail(
@@ -275,8 +292,9 @@ public class AdminCatalogService : IAdminCatalogService
         variant.DurationDays = request.DurationDays;
         variant.BillingCycle = request.BillingCycle;
         variant.AccountDeliveryType = request.AccountDeliveryType;
-        variant.RegionCode = NormalizeOptional(request.RegionCode)?.ToUpperInvariant();
-        variant.CurrencyCode = request.CurrencyCode.Trim().ToUpperInvariant();
+        variant.RegionCode = regionCode;
+        variant.CurrencyCode = currencyCode;
+        variant.FulfillmentMode = request.FulfillmentMode;
         variant.BasePrice = request.BasePrice;
         variant.IsActive = request.IsActive;
         variant.DisplayOrder = request.DisplayOrder;
@@ -430,9 +448,54 @@ public class AdminCatalogService : IAdminCatalogService
         };
     }
 
+    private static ServiceResult<ServiceVariantResponse>? ValidateVariantRequest(
+        CreateServiceVariantRequest request)
+    {
+        var currencyCode = NormalizeRequiredCode(request.CurrencyCode);
+        var regionCode = NormalizeRequiredCode(request.RegionCode);
+        var validationErrors = new Dictionary<string, string[]>();
+
+        if (string.IsNullOrWhiteSpace(currencyCode))
+        {
+            validationErrors[nameof(request.CurrencyCode)] =
+                ["Currency code is required."];
+        }
+
+        if (string.IsNullOrWhiteSpace(regionCode))
+        {
+            validationErrors[nameof(request.RegionCode)] =
+                ["Region code is required."];
+        }
+
+        if (request.IsActive && request.BasePrice > 0 && currencyCode != "USD")
+        {
+            validationErrors[nameof(request.CurrencyCode)] =
+                ["v1.0 checkout supports USD to IRR pricing only."];
+        }
+
+        if (validationErrors.Count > 0)
+        {
+            return new ServiceResult<ServiceVariantResponse>
+            {
+                Success = false,
+                Message = AppMessages.ValidationFailed,
+                ErrorCode = AppConstants.ErrorCodes.ValidationFailed,
+                StatusCode = 400,
+                ValidationErrors = validationErrors
+            };
+        }
+
+        return null;
+    }
+
     private static string NormalizeFieldKey(string fieldKey)
     {
         return fieldKey.Trim().ToLowerInvariant();
+    }
+
+    private static string NormalizeRequiredCode(string? value)
+    {
+        return value?.Trim().ToUpperInvariant() ?? string.Empty;
     }
 
     private static string? NormalizeOptional(string? value)

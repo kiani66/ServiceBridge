@@ -31,12 +31,20 @@ public class ServiceVariantConfiguration : IEntityTypeConfiguration<ServiceVaria
             .HasDefaultValue(AccountDeliveryType.NotApplicable);
 
         entity.Property(x => x.RegionCode)
-            .HasMaxLength(20);
+            .IsRequired()
+            .HasMaxLength(20)
+            .HasDefaultValue("GLOBAL");
 
         entity.Property(x => x.CurrencyCode)
             .IsRequired()
             .HasMaxLength(3)
-            .IsFixedLength();
+            .IsFixedLength()
+            .HasDefaultValue("USD");
+
+        entity.Property(x => x.FulfillmentMode)
+            .HasConversion<int>()
+            .IsRequired()
+            .HasDefaultValue(FulfillmentMode.ManualAgent);
 
         entity.Property(x => x.BasePrice)
             .HasPrecision(18, 4)
@@ -78,6 +86,10 @@ public class ServiceVariantConfiguration : IEntityTypeConfiguration<ServiceVaria
             table.HasCheckConstraint(
                 "CK_ServiceVariants_AccountDeliveryType_Valid",
                 "[AccountDeliveryType] IN (0, 1, 2, 3, 4, 5)");
+
+            table.HasCheckConstraint(
+                "CK_ServiceVariants_FulfillmentMode_Valid",
+                "[FulfillmentMode] IN (1, 2, 3, 4)");
         });
     }
 }
