@@ -70,6 +70,14 @@ public class ServiceVariantConfiguration : IEntityTypeConfiguration<ServiceVaria
             table.HasCheckConstraint(
                 "CK_ServiceVariants_DurationDays_Positive",
                 "[DurationDays] IS NULL OR [DurationDays] > 0");
+
+            table.HasCheckConstraint(
+                "CK_ServiceVariants_BillingCycle_Valid",
+                "[BillingCycle] IN (0, 1, 2, 3, 4, 5, 6)");
+
+            table.HasCheckConstraint(
+                "CK_ServiceVariants_AccountDeliveryType_Valid",
+                "[AccountDeliveryType] IN (0, 1, 2, 3, 4, 5)");
         });
     }
 }

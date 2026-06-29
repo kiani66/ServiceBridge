@@ -783,6 +783,10 @@ namespace ServiceBridge.Infrastructure.Migrations
                             t.HasCheckConstraint("CK_ServiceVariants_BasePrice_NonNegative", "[BasePrice] >= 0");
 
                             t.HasCheckConstraint("CK_ServiceVariants_DurationDays_Positive", "[DurationDays] IS NULL OR [DurationDays] > 0");
+
+                            t.HasCheckConstraint("CK_ServiceVariants_BillingCycle_Valid", "[BillingCycle] IN (0, 1, 2, 3, 4, 5, 6)");
+
+                            t.HasCheckConstraint("CK_ServiceVariants_AccountDeliveryType_Valid", "[AccountDeliveryType] IN (0, 1, 2, 3, 4, 5)");
                         });
                 });
 

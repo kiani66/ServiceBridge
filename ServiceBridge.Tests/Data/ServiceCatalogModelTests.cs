@@ -132,6 +132,24 @@ public class ServiceCatalogModelTests
     }
 
     [Fact]
+    public void ServiceVariantStructuredFields_HaveValidValueCheckConstraints()
+    {
+        var designTimeModel = _context.GetService<IDesignTimeModel>().Model;
+        var variantType = designTimeModel.FindEntityType(typeof(ServiceVariant))!;
+        var constraintNames = variantType
+            .GetCheckConstraints()
+            .Select(x => x.Name)
+            .ToArray();
+
+        Assert.Contains(
+            "CK_ServiceVariants_BillingCycle_Valid",
+            constraintNames);
+        Assert.Contains(
+            "CK_ServiceVariants_AccountDeliveryType_Valid",
+            constraintNames);
+    }
+
+    [Fact]
     public void RequiredFieldKey_IsUniquePerService()
     {
         var fieldType = _context.Model.FindEntityType(typeof(ServiceRequiredField))!;

@@ -24,11 +24,29 @@ namespace ServiceBridge.Infrastructure.Migrations
                 type: "int",
                 nullable: false,
                 defaultValue: 0);
+
+            migrationBuilder.AddCheckConstraint(
+                name: "CK_ServiceVariants_BillingCycle_Valid",
+                table: "ServiceVariants",
+                sql: "[BillingCycle] IN (0, 1, 2, 3, 4, 5, 6)");
+
+            migrationBuilder.AddCheckConstraint(
+                name: "CK_ServiceVariants_AccountDeliveryType_Valid",
+                table: "ServiceVariants",
+                sql: "[AccountDeliveryType] IN (0, 1, 2, 3, 4, 5)");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropCheckConstraint(
+                name: "CK_ServiceVariants_AccountDeliveryType_Valid",
+                table: "ServiceVariants");
+
+            migrationBuilder.DropCheckConstraint(
+                name: "CK_ServiceVariants_BillingCycle_Valid",
+                table: "ServiceVariants");
+
             migrationBuilder.DropColumn(
                 name: "AccountDeliveryType",
                 table: "ServiceVariants");
