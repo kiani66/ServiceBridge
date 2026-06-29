@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using ServiceBridge.Domain.Entities;
+using ServiceBridge.Domain.Enums;
 using ServiceBridge.Infrastructure.Data;
 using Xunit;
 
@@ -106,10 +107,46 @@ public class ServiceCatalogModelTests
             index => index.IsUnique &&
                      index.Properties.Select(x => x.Name)
                          .SequenceEqual(new[]
-                         {
-                             nameof(ServiceVariant.ServiceId),
-                             nameof(ServiceVariant.Slug)
+                          {
+                              nameof(ServiceVariant.ServiceId),
+                              nameof(ServiceVariant.Slug)
                          }));
+    }
+
+    [Fact]
+    public void ServiceVariant_HasBasicStructuredFields()
+    {
+        var variantType = _context.Model.FindEntityType(typeof(ServiceVariant))!;
+        var billingCycle = variantType.FindProperty(nameof(ServiceVariant.BillingCycle))!;
+        var accountDeliveryType =
+            variantType.FindProperty(nameof(ServiceVariant.AccountDeliveryType))!;
+
+        Assert.NotNull(typeof(ServiceVariant).GetProperty(nameof(ServiceVariant.BillingCycle)));
+        Assert.NotNull(typeof(ServiceVariant).GetProperty(nameof(ServiceVariant.AccountDeliveryType)));
+        Assert.False(billingCycle.IsNullable);
+        Assert.False(accountDeliveryType.IsNullable);
+        Assert.Equal(BillingCycle.None, billingCycle.GetDefaultValue());
+        Assert.Equal(
+            AccountDeliveryType.NotApplicable,
+            accountDeliveryType.GetDefaultValue());
+    }
+
+    [Fact]
+    public void ServiceVariantStructuredFields_HaveValidValueCheckConstraints()
+    {
+        var designTimeModel = _context.GetService<IDesignTimeModel>().Model;
+        var variantType = designTimeModel.FindEntityType(typeof(ServiceVariant))!;
+        var constraintNames = variantType
+            .GetCheckConstraints()
+            .Select(x => x.Name)
+            .ToArray();
+
+        Assert.Contains(
+            "CK_ServiceVariants_BillingCycle_Valid",
+            constraintNames);
+        Assert.Contains(
+            "CK_ServiceVariants_AccountDeliveryType_Valid",
+            constraintNames);
     }
 
     [Fact]

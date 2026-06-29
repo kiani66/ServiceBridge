@@ -4,9 +4,14 @@
 
 `ServicePlan` was renamed to `ServiceVariant`.
 
-This PR is a mechanical/domain rename only. It does not add structured variant
-fields such as `BillingCycle`, `AccountDeliveryType`, or fulfillment-mode
-fields to the entity. Those fields are intentionally deferred to a later PR.
+PR4C2A adds the first minimal structured variant fields:
+
+- `BillingCycle`
+- `AccountDeliveryType`
+
+Both fields reuse the PR4A catalog vocabulary enums. `FulfillmentMode`,
+structured currency storage, structured region storage, pricing behavior, order
+creation behavior, and payment behavior remain intentionally unchanged.
 
 ## Renamed model surface
 
@@ -18,6 +23,7 @@ fields to the entity. Those fields are intentionally deferred to a later PR.
 - Order navigation: `ServiceVariant`
 - Order snapshots: `VariantNameSnapshot`, `VariantDurationDaysSnapshot`,
   `VariantRegionCodeSnapshot`
+- Structured fields: `BillingCycle`, `AccountDeliveryType`
 
 ## Data preservation strategy
 
@@ -28,6 +34,13 @@ regenerated, and order references continue to point at the same IDs.
 
 The migration recreates affected SQL Server constraint, index, primary-key, and
 foreign-key names under the new variant terminology.
+
+The migration `AddServiceVariantBasicStructuredFields` adds non-null
+`BillingCycle` and `AccountDeliveryType` integer columns to `ServiceVariants`.
+Existing rows are preserved and receive safe compatibility defaults:
+
+- `BillingCycle.None`
+- `AccountDeliveryType.NotApplicable`
 
 ## Compatibility notes
 

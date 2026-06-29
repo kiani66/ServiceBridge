@@ -221,6 +221,8 @@ public class ServiceCatalogServiceTests
                 Name = "Monthly / Global",
                 Slug = "Monthly-Global",
                 DurationDays = 30,
+                BillingCycle = BillingCycle.Monthly,
+                AccountDeliveryType = AccountDeliveryType.UseExistingAccount,
                 RegionCode = "global",
                 CurrencyCode = "usd",
                 BasePrice = 20,
@@ -231,9 +233,48 @@ public class ServiceCatalogServiceTests
         Assert.True(result.Success);
         Assert.Equal(201, result.StatusCode);
         Assert.Equal("monthly-global", result.Data?.Slug);
+        Assert.Equal(BillingCycle.Monthly, result.Data?.BillingCycle);
+        Assert.Equal(
+            AccountDeliveryType.UseExistingAccount,
+            result.Data?.AccountDeliveryType);
         Assert.Equal("GLOBAL", result.Data?.RegionCode);
         Assert.Equal("USD", result.Data?.CurrencyCode);
         Assert.Single(service.Variants);
+    }
+
+    [Fact]
+    public async Task UpdateVariantAsync_WhenValid_UpdatesBasicStructuredFields()
+    {
+        var repository = new FakeServiceCatalogRepository();
+        var service = CreateDigitalService();
+        var variant = CreateVariant(service, "monthly-global");
+        service.Variants.Add(variant);
+        repository.SeedService(service);
+        var catalogService = CreateAdminService(repository);
+
+        var result = await catalogService.UpdateVariantAsync(
+            variant.Id,
+            new UpdateServiceVariantRequest
+            {
+                Name = "Annual / Global",
+                Slug = "annual-global",
+                DurationDays = 365,
+                BillingCycle = BillingCycle.Annual,
+                AccountDeliveryType = AccountDeliveryType.ActivationCode,
+                RegionCode = "global",
+                CurrencyCode = "usd",
+                BasePrice = 200,
+                IsActive = true,
+                DisplayOrder = 2
+            });
+
+        Assert.True(result.Success);
+        Assert.Equal(BillingCycle.Annual, result.Data?.BillingCycle);
+        Assert.Equal(
+            AccountDeliveryType.ActivationCode,
+            result.Data?.AccountDeliveryType);
+        Assert.Equal(BillingCycle.Annual, variant.BillingCycle);
+        Assert.Equal(AccountDeliveryType.ActivationCode, variant.AccountDeliveryType);
     }
 
     [Fact]

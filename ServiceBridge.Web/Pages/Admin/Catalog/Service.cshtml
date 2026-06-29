@@ -215,6 +215,30 @@
                                class="form-control form-control-sm" />
                     </div>
                     <div>
+                        <label class="form-label">Billing</label>
+                        <select name="variant.BillingCycle" class="form-select form-select-sm">
+                            @foreach (var billingCycle in Enum.GetValues<BillingCycle>())
+                            {
+                                <option value="@billingCycle"
+                                        selected="@(variant.BillingCycle == billingCycle)">
+                                    @billingCycle
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Delivery</label>
+                        <select name="variant.AccountDeliveryType" class="form-select form-select-sm">
+                            @foreach (var deliveryType in Enum.GetValues<AccountDeliveryType>())
+                            {
+                                <option value="@deliveryType"
+                                        selected="@(variant.AccountDeliveryType == deliveryType)">
+                                    @deliveryType
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div>
                         <label class="form-label">Region</label>
                         <input name="variant.RegionCode"
                                value="@variant.RegionCode"
@@ -301,6 +325,28 @@
                            min="1"
                            value="30"
                            class="form-control form-control-sm" />
+                </div>
+                <div>
+                    <label for="variant-billing" class="form-label">Billing</label>
+                    <select id="variant-billing"
+                            name="variant.BillingCycle"
+                            class="form-select form-select-sm">
+                        @foreach (var billingCycle in Enum.GetValues<BillingCycle>())
+                        {
+                            <option value="@billingCycle">@billingCycle</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="variant-delivery" class="form-label">Delivery</label>
+                    <select id="variant-delivery"
+                            name="variant.AccountDeliveryType"
+                            class="form-select form-select-sm">
+                        @foreach (var deliveryType in Enum.GetValues<AccountDeliveryType>())
+                        {
+                            <option value="@deliveryType">@deliveryType</option>
+                        }
+                    </select>
                 </div>
                 <div>
                     <label for="variant-region" class="form-label">Region</label>
