@@ -226,6 +226,8 @@ public class AdminCatalogService : IAdminCatalogService
             Name = request.Name.Trim(),
             Slug = slug,
             DurationDays = request.DurationDays,
+            BillingCycle = request.BillingCycle,
+            AccountDeliveryType = request.AccountDeliveryType,
             RegionCode = NormalizeOptional(request.RegionCode)?.ToUpperInvariant(),
             CurrencyCode = request.CurrencyCode.Trim().ToUpperInvariant(),
             BasePrice = request.BasePrice,
@@ -271,6 +273,8 @@ public class AdminCatalogService : IAdminCatalogService
         variant.Name = request.Name.Trim();
         variant.Slug = slug;
         variant.DurationDays = request.DurationDays;
+        variant.BillingCycle = request.BillingCycle;
+        variant.AccountDeliveryType = request.AccountDeliveryType;
         variant.RegionCode = NormalizeOptional(request.RegionCode)?.ToUpperInvariant();
         variant.CurrencyCode = request.CurrencyCode.Trim().ToUpperInvariant();
         variant.BasePrice = request.BasePrice;

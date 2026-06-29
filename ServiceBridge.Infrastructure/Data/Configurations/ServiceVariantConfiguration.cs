@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ServiceBridge.Domain.Entities;
+using ServiceBridge.Domain.Enums;
 
 namespace ServiceBridge.Infrastructure.Data.Configurations;
 
@@ -20,6 +21,14 @@ public class ServiceVariantConfiguration : IEntityTypeConfiguration<ServiceVaria
         entity.Property(x => x.Slug)
             .IsRequired()
             .HasMaxLength(170);
+
+        entity.Property(x => x.BillingCycle)
+            .IsRequired()
+            .HasDefaultValue(BillingCycle.None);
+
+        entity.Property(x => x.AccountDeliveryType)
+            .IsRequired()
+            .HasDefaultValue(AccountDeliveryType.NotApplicable);
 
         entity.Property(x => x.RegionCode)
             .HasMaxLength(20);

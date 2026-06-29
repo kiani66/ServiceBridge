@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ServiceBridge.Domain.Enums;
 
 namespace ServiceBridge.Application.DTOs;
 
@@ -16,6 +17,15 @@ public class CreateServiceVariantRequest
 
     [Range(1, int.MaxValue, ErrorMessage = "Duration must be greater than zero.")]
     public int? DurationDays { get; set; }
+
+    [EnumDataType(typeof(BillingCycle), ErrorMessage = "Invalid billing cycle.")]
+    public BillingCycle BillingCycle { get; set; } = BillingCycle.None;
+
+    [EnumDataType(
+        typeof(AccountDeliveryType),
+        ErrorMessage = "Invalid account delivery type.")]
+    public AccountDeliveryType AccountDeliveryType { get; set; } =
+        AccountDeliveryType.NotApplicable;
 
     [MaxLength(20, ErrorMessage = "Region code cannot exceed 20 characters.")]
     public string? RegionCode { get; set; }

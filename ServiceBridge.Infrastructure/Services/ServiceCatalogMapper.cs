@@ -141,6 +141,8 @@ internal static class ServiceCatalogMapper
             Name = plan.Name,
             Slug = plan.Slug,
             DurationDays = plan.DurationDays,
+            BillingCycle = plan.BillingCycle,
+            AccountDeliveryType = plan.AccountDeliveryType,
             RegionCode = plan.RegionCode,
             CurrencyCode = plan.CurrencyCode,
             BasePrice = plan.BasePrice,
