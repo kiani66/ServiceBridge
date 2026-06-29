@@ -29,9 +29,15 @@ public class ProfitMarginConfiguration : IEntityTypeConfiguration<ProfitMargin>
         entity.Property(x => x.UpdatedAt)
             .IsRequired(false);
 
+        entity.HasIndex(x => new { x.ServiceVariantId, x.IsActive, x.EffectiveFrom });
         entity.HasIndex(x => new { x.ServiceId, x.IsActive, x.EffectiveFrom });
         entity.HasIndex(x => new { x.CategoryId, x.IsActive, x.EffectiveFrom });
         entity.HasIndex(x => new { x.IsActive, x.EffectiveFrom });
+
+        entity.HasOne(x => x.ServiceVariant)
+            .WithMany()
+            .HasForeignKey(x => x.ServiceVariantId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         entity.HasOne(x => x.Category)
             .WithMany(x => x.ProfitMargins)
@@ -51,7 +57,10 @@ public class ProfitMarginConfiguration : IEntityTypeConfiguration<ProfitMargin>
 
             table.HasCheckConstraint(
                 "CK_ProfitMargins_SingleScope",
-                "NOT ([CategoryId] IS NOT NULL AND [ServiceId] IS NOT NULL)");
+                "([ServiceVariantId] IS NULL AND [ServiceId] IS NULL AND [CategoryId] IS NULL) OR " +
+                "([ServiceVariantId] IS NOT NULL AND [ServiceId] IS NULL AND [CategoryId] IS NULL) OR " +
+                "([ServiceVariantId] IS NULL AND [ServiceId] IS NOT NULL AND [CategoryId] IS NULL) OR " +
+                "([ServiceVariantId] IS NULL AND [ServiceId] IS NULL AND [CategoryId] IS NOT NULL)");
         });
     }
 }

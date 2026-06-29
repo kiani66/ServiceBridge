@@ -23,11 +23,14 @@ internal static class PricingResponseMapper
         return new ProfitMarginResponse
         {
             Id = margin.Id,
+            ServiceVariantId = margin.ServiceVariantId,
             CategoryId = margin.CategoryId,
             ServiceId = margin.ServiceId,
-            Scope = margin.ServiceId.HasValue
-                ? "Service"
-                : margin.CategoryId.HasValue
+            Scope = margin.ServiceVariantId.HasValue
+                ? "ServiceVariant"
+                : margin.ServiceId.HasValue
+                    ? "Service"
+                    : margin.CategoryId.HasValue
                     ? "Category"
                     : "Global",
             Percentage = margin.Percentage,

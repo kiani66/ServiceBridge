@@ -216,11 +216,14 @@ public class ServiceCatalogModelTests
 
         var rate = exchangeRateType.FindProperty(nameof(ExchangeRate.RateToIrr))!;
         var percentage = profitMarginType.FindProperty(nameof(ProfitMargin.Percentage))!;
+        var serviceVariantId =
+            profitMarginType.FindProperty(nameof(ProfitMargin.ServiceVariantId))!;
 
         Assert.Equal(18, rate.GetPrecision());
         Assert.Equal(4, rate.GetScale());
         Assert.Equal(5, percentage.GetPrecision());
         Assert.Equal(2, percentage.GetScale());
+        Assert.True(serviceVariantId.IsNullable);
     }
 
     [Fact]
@@ -238,6 +241,9 @@ public class ServiceCatalogModelTests
         Assert.All(
             profitMarginType.GetForeignKeys(),
             foreignKey => Assert.Equal(DeleteBehavior.Restrict, foreignKey.DeleteBehavior));
+        Assert.Contains(profitMarginType.GetForeignKeys(), foreignKey =>
+            foreignKey.Properties.Select(x => x.Name)
+                .SequenceEqual(new[] { nameof(ProfitMargin.ServiceVariantId) }));
     }
 
     private void AssertClientGeneratedId<TEntity>()

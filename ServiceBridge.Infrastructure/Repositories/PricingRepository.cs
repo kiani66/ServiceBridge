@@ -23,7 +23,8 @@ public class PricingRepository : IPricingRepository
             .Where(x =>
                 x.Id == serviceId &&
                 x.IsActive &&
-                x.Category.IsActive)
+                x.Category.IsActive &&
+                x.Provider.IsActive)
             .Select(x => new ServicePricingContext
             {
                 ServiceId = x.Id,
@@ -45,7 +46,8 @@ public class PricingRepository : IPricingRepository
                 x.ServiceId == serviceId &&
                 x.IsActive &&
                 x.Service.IsActive &&
-                x.Service.Category.IsActive)
+                x.Service.Category.IsActive &&
+                x.Service.Provider.IsActive)
             .Select(x => new
             {
                 x.Id,
@@ -71,6 +73,30 @@ public class PricingRepository : IPricingRepository
         return serviceContext;
     }
 
+    public async Task<ServicePricingContext?> GetVariantPricingContextAsync(
+        Guid serviceVariantId)
+    {
+        return await _context.ServiceVariants
+            .AsNoTracking()
+            .Where(x => x.Id == serviceVariantId)
+            .Select(x => new ServicePricingContext
+            {
+                ServiceId = x.ServiceId,
+                CategoryId = x.Service.CategoryId,
+                ServiceVariantId = x.Id,
+                PlanName = x.Name,
+                PlanDurationDays = x.DurationDays,
+                PlanRegionCode = x.RegionCode,
+                CurrencyCode = x.CurrencyCode,
+                BasePrice = x.BasePrice,
+                IsVariantActive = x.IsActive,
+                IsServiceActive = x.Service.IsActive,
+                IsCategoryActive = x.Service.Category.IsActive,
+                IsProviderActive = x.Service.Provider.IsActive
+            })
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<decimal?> GetEffectiveExchangeRateAsync(
         string currencyCode,
         DateTime asOfUtc)
@@ -87,12 +113,23 @@ public class PricingRepository : IPricingRepository
             .FirstOrDefaultAsync();
     }
 
+    public Task<decimal?> GetEffectiveVariantMarginAsync(
+        Guid serviceVariantId,
+        DateTime asOfUtc)
+    {
+        return GetLatestMarginAsync(
+            query => query.Where(x => x.ServiceVariantId == serviceVariantId),
+            asOfUtc);
+    }
+
     public Task<decimal?> GetEffectiveServiceMarginAsync(
         Guid serviceId,
         DateTime asOfUtc)
     {
         return GetLatestMarginAsync(
-            query => query.Where(x => x.ServiceId == serviceId),
+            query => query.Where(x =>
+                x.ServiceVariantId == null &&
+                x.ServiceId == serviceId),
             asOfUtc);
     }
 
@@ -102,6 +139,7 @@ public class PricingRepository : IPricingRepository
     {
         return GetLatestMarginAsync(
             query => query.Where(x =>
+                x.ServiceVariantId == null &&
                 x.ServiceId == null &&
                 x.CategoryId == categoryId),
             asOfUtc);
@@ -111,6 +149,7 @@ public class PricingRepository : IPricingRepository
     {
         return GetLatestMarginAsync(
             query => query.Where(x =>
+                x.ServiceVariantId == null &&
                 x.ServiceId == null &&
                 x.CategoryId == null),
             asOfUtc);

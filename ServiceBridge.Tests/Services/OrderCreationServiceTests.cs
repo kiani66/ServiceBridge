@@ -437,8 +437,7 @@ public class OrderCreationServiceTests
 
         var service = new OrderCreationService(
             orderRepository,
-            new PricingResolver(pricingRepository),
-            new PricingCalculator(),
+            new PricingResolver(pricingRepository, new PricingCalculator()),
             new OrderFieldValidator(),
             numberGenerator,
             new OrderFactory(new FakeOrderFieldProtector()));

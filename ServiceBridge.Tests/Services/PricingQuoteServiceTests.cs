@@ -25,11 +25,10 @@ public class PricingQuoteServiceTests
             ExchangeRate = 150_000m,
             ServiceMargin = 10m
         };
-        var resolver = new PricingResolver(repository);
+        var resolver = new PricingResolver(repository, new PricingCalculator());
         var service = new PricingQuoteService(
             repository,
-            resolver,
-            new PricingCalculator());
+            resolver);
 
         var result = await service.GetQuoteAsync(
             repository.ServiceContext.ServiceId,
@@ -46,11 +45,10 @@ public class PricingQuoteServiceTests
     public async Task GetQuoteAsync_WhenServiceDoesNotExist_ReturnsNotFound()
     {
         var repository = new FakePricingRepository();
-        var resolver = new PricingResolver(repository);
+        var resolver = new PricingResolver(repository, new PricingCalculator());
         var service = new PricingQuoteService(
             repository,
-            resolver,
-            new PricingCalculator());
+            resolver);
 
         var result = await service.GetQuoteAsync(Guid.NewGuid(), null, QuotedAtUtc);
 
@@ -78,11 +76,10 @@ public class PricingQuoteServiceTests
             ExchangeRate = 150_000m,
             ServiceMargin = 10m
         };
-        var resolver = new PricingResolver(repository);
+        var resolver = new PricingResolver(repository, new PricingCalculator());
         var service = new PricingQuoteService(
             repository,
-            resolver,
-            new PricingCalculator());
+            resolver);
 
         var result = await service.GetQuoteAsync(
             repository.ServiceContext.ServiceId,

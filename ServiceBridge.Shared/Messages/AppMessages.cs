@@ -39,7 +39,8 @@ public static class AppMessages
     public const string ProfitMarginRecordNotFound = "Profit margin record not found.";
     public const string ExchangeRateStatusUpdated = "Exchange rate status updated successfully.";
     public const string ProfitMarginStatusUpdated = "Profit margin status updated successfully.";
-    public const string InvalidProfitMarginScope = "Specify either a category or a service, not both.";
+    public const string InvalidProfitMarginScope =
+        "Specify a service variant, service or category, not more than one.";
     public const string OrderCreated = "Order created successfully.";
     public const string OrderNumberGenerationFailed = "Unable to generate a unique order number.";
     public const string OrderNotFound = "Order not found.";

@@ -13,7 +13,6 @@ public class OrderCreationService : IOrderCreationService
 
     private readonly IOrderCreationRepository _repository;
     private readonly IPricingResolver _pricingResolver;
-    private readonly IPricingCalculator _pricingCalculator;
     private readonly IOrderFieldValidator _fieldValidator;
     private readonly IOrderNumberGenerator _orderNumberGenerator;
     private readonly IOrderFactory _orderFactory;
@@ -21,14 +20,12 @@ public class OrderCreationService : IOrderCreationService
     public OrderCreationService(
         IOrderCreationRepository repository,
         IPricingResolver pricingResolver,
-        IPricingCalculator pricingCalculator,
         IOrderFieldValidator fieldValidator,
         IOrderNumberGenerator orderNumberGenerator,
         IOrderFactory orderFactory)
     {
         _repository = repository;
         _pricingResolver = pricingResolver;
-        _pricingCalculator = pricingCalculator;
         _fieldValidator = fieldValidator;
         _orderNumberGenerator = orderNumberGenerator;
         _orderFactory = orderFactory;
@@ -131,11 +128,6 @@ public class OrderCreationService : IOrderCreationService
                 resolution.StatusCode);
         }
 
-        var pricing = _pricingCalculator.Calculate(
-            service.BasePrice,
-            resolution.Data.ExchangeRate,
-            resolution.Data.MarginPercentage);
-
         var orderNumber = await GenerateUniqueOrderNumberAsync(now);
         if (orderNumber == null)
         {
@@ -150,7 +142,15 @@ public class OrderCreationService : IOrderCreationService
             UserId = userId,
             Request = request,
             Service = service,
-            Pricing = pricing,
+            Pricing = new PricingCalculation
+            {
+                ForeignPrice = resolution.Data.ForeignPrice,
+                ExchangeRate = resolution.Data.ExchangeRate,
+                MarginPercent = resolution.Data.MarginPercent,
+                BaseAmountIrr = resolution.Data.BaseAmountIrr,
+                ProfitAmountIrr = resolution.Data.ProfitAmountIrr,
+                FinalAmountIrr = resolution.Data.FinalAmountIrr
+            },
             OrderNumber = orderNumber,
             CreatedAtUtc = now
         });

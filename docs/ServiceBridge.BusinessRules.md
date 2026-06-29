@@ -7,7 +7,8 @@ This file records the highest-priority product rules that future PRs must preser
 ## Pricing
 
 - FinalPriceIRR = BaseForeignPrice * ExchangeRate * (1 + MarginPercent / 100).
-- Pricing scope must evolve to ServiceVariant > DigitalService > Category > Global.
+- Pricing resolves margin scope in this order:
+  ServiceVariant > DigitalService > Category > Global.
 - Order creation uses ServiceVariant as the selected purchasable item and must
   snapshot foreign price, currency code, region code, exchange rate, margin
   percent, and final IRR amount.

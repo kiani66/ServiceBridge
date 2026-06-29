@@ -614,6 +614,9 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Property<Guid?>("ServiceId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ServiceVariantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -625,11 +628,13 @@ namespace ServiceBridge.Infrastructure.Migrations
 
                     b.HasIndex("ServiceId", "IsActive", "EffectiveFrom");
 
+                    b.HasIndex("ServiceVariantId", "IsActive", "EffectiveFrom");
+
                     b.ToTable("ProfitMargins", t =>
                         {
                             t.HasCheckConstraint("CK_ProfitMargins_Percentage_Range", "[Percentage] >= 0 AND [Percentage] <= 100");
 
-                            t.HasCheckConstraint("CK_ProfitMargins_SingleScope", "NOT ([CategoryId] IS NOT NULL AND [ServiceId] IS NOT NULL)");
+                            t.HasCheckConstraint("CK_ProfitMargins_SingleScope", "([ServiceVariantId] IS NULL AND [ServiceId] IS NULL AND [CategoryId] IS NULL) OR ([ServiceVariantId] IS NOT NULL AND [ServiceId] IS NULL AND [CategoryId] IS NULL) OR ([ServiceVariantId] IS NULL AND [ServiceId] IS NOT NULL AND [CategoryId] IS NULL) OR ([ServiceVariantId] IS NULL AND [ServiceId] IS NULL AND [CategoryId] IS NOT NULL)");
                         });
                 });
 
@@ -1100,9 +1105,16 @@ namespace ServiceBridge.Infrastructure.Migrations
                         .HasForeignKey("ServiceId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ServiceBridge.Domain.Entities.ServiceVariant", "ServiceVariant")
+                        .WithMany()
+                        .HasForeignKey("ServiceVariantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Category");
 
                     b.Navigation("Service");
+
+                    b.Navigation("ServiceVariant");
                 });
 
             modelBuilder.Entity("ServiceBridge.Domain.Entities.ServiceRequiredField", b =>

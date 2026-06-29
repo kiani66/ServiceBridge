@@ -5,6 +5,10 @@ namespace ServiceBridge.Application.Interfaces;
 
 public interface IPricingResolver
 {
+    Task<ServiceResult<PricingResolutionResult>> ResolveVariantAsync(
+        Guid serviceVariantId,
+        DateTime asOfUtc);
+
     Task<ServiceResult<PricingResolutionResult>> ResolveAsync(
         Guid serviceId,
         DateTime asOfUtc);

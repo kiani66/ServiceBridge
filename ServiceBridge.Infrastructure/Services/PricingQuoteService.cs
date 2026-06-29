@@ -10,16 +10,13 @@ public class PricingQuoteService : IPricingQuoteService
 {
     private readonly IPricingRepository _repository;
     private readonly IPricingResolver _resolver;
-    private readonly IPricingCalculator _calculator;
 
     public PricingQuoteService(
         IPricingRepository repository,
-        IPricingResolver resolver,
-        IPricingCalculator calculator)
+        IPricingResolver resolver)
     {
         _repository = repository;
         _resolver = resolver;
-        _calculator = calculator;
     }
 
     public async Task<ServiceResult<PricingQuoteResponse>> GetQuoteAsync(
@@ -57,27 +54,22 @@ public class PricingQuoteService : IPricingQuoteService
                 resolution.StatusCode);
         }
 
-        var calculation = _calculator.Calculate(
-            context.BasePrice,
-            resolution.Data.ExchangeRate,
-            resolution.Data.MarginPercentage);
-
         return ServiceResult<PricingQuoteResponse>.Ok(
             new PricingQuoteResponse
             {
                 ServiceId = context.ServiceId,
-                ServiceVariantId = context.ServiceVariantId,
-                PlanId = context.PlanId,
+                ServiceVariantId = resolution.Data.ServiceVariantId,
+                PlanId = resolution.Data.ServiceVariantId,
                 PlanName = context.PlanName,
                 PlanDurationDays = context.PlanDurationDays,
                 PlanRegionCode = context.PlanRegionCode,
-                CurrencyCode = context.CurrencyCode,
-                ForeignPrice = calculation.ForeignPrice,
-                ExchangeRate = calculation.ExchangeRate,
-                MarginPercentage = calculation.MarginPercent,
-                BaseAmountIrr = calculation.BaseAmountIrr,
-                ProfitAmountIrr = calculation.ProfitAmountIrr,
-                FinalAmountIrr = calculation.FinalAmountIrr,
+                CurrencyCode = resolution.Data.CurrencyCode,
+                ForeignPrice = resolution.Data.ForeignPrice,
+                ExchangeRate = resolution.Data.ExchangeRate,
+                MarginPercentage = resolution.Data.MarginPercent,
+                BaseAmountIrr = resolution.Data.BaseAmountIrr,
+                ProfitAmountIrr = resolution.Data.ProfitAmountIrr,
+                FinalAmountIrr = resolution.Data.FinalAmountIrr,
                 QuotedAtUtc = quotedAtUtc
             });
     }

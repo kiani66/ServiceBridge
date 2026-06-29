@@ -4,6 +4,7 @@ namespace ServiceBridge.Application.DTOs;
 
 public class CreateProfitMarginRequest : IValidatableObject
 {
+    public Guid? ServiceVariantId { get; set; }
     public Guid? CategoryId { get; set; }
     public Guid? ServiceId { get; set; }
 
@@ -18,11 +19,18 @@ public class CreateProfitMarginRequest : IValidatableObject
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (CategoryId.HasValue && ServiceId.HasValue)
+        var scopeCount = new[]
+        {
+            ServiceVariantId,
+            ServiceId,
+            CategoryId
+        }.Count(x => x.HasValue);
+
+        if (scopeCount > 1)
         {
             yield return new ValidationResult(
-                "Specify either a category or a service, not both.",
-                new[] { nameof(CategoryId), nameof(ServiceId) });
+                "Specify a service variant, service or category, not more than one.",
+                new[] { nameof(ServiceVariantId), nameof(ServiceId), nameof(CategoryId) });
         }
     }
 }

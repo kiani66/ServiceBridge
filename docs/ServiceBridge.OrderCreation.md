@@ -24,8 +24,8 @@ does not throw generic exceptions for expected catalog availability failures.
 ## Pricing snapshots
 
 At creation time, the selected variant supplies the foreign price, currency and
-region. Pricing then resolves the active exchange rate and margin for the same
-point in time.
+region. Pricing then resolves the active exchange rate by variant currency and
+the first active margin in this order: variant, service, category, global.
 
 The order snapshots these values:
 

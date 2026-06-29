@@ -6,16 +6,21 @@ namespace ServiceBridge.Tests.TestDoubles;
 internal class FakePricingRepository : IPricingRepository
 {
     public ServicePricingContext? ServiceContext { get; set; }
+    public ServicePricingContext? VariantContext { get; set; }
     public decimal? ExchangeRate { get; set; }
+    public decimal? VariantMargin { get; set; }
     public decimal? ServiceMargin { get; set; }
     public decimal? CategoryMargin { get; set; }
     public decimal? GlobalMargin { get; set; }
 
     public int ServiceContextCallCount { get; private set; }
+    public int VariantContextCallCount { get; private set; }
     public int ExchangeRateCallCount { get; private set; }
+    public int VariantMarginCallCount { get; private set; }
     public int ServiceMarginCallCount { get; private set; }
     public int CategoryMarginCallCount { get; private set; }
     public int GlobalMarginCallCount { get; private set; }
+    public string? RequestedCurrencyCode { get; private set; }
 
     public Task<ServicePricingContext?> GetActiveServiceContextAsync(
         Guid serviceId,
@@ -30,12 +35,28 @@ internal class FakePricingRepository : IPricingRepository
         return Task.FromResult(ServiceContext);
     }
 
+    public Task<ServicePricingContext?> GetVariantPricingContextAsync(
+        Guid serviceVariantId)
+    {
+        VariantContextCallCount++;
+        return Task.FromResult(VariantContext);
+    }
+
     public Task<decimal?> GetEffectiveExchangeRateAsync(
         string currencyCode,
         DateTime asOfUtc)
     {
         ExchangeRateCallCount++;
+        RequestedCurrencyCode = currencyCode;
         return Task.FromResult(ExchangeRate);
+    }
+
+    public Task<decimal?> GetEffectiveVariantMarginAsync(
+        Guid serviceVariantId,
+        DateTime asOfUtc)
+    {
+        VariantMarginCallCount++;
+        return Task.FromResult(VariantMargin);
     }
 
     public Task<decimal?> GetEffectiveServiceMarginAsync(

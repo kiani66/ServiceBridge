@@ -1,3 +1,4 @@
+using System.Reflection;
 using ServiceBridge.Infrastructure.Services;
 using Xunit;
 
@@ -31,6 +32,17 @@ public class PricingCalculatorTests
         Assert.Equal(101m, result.BaseAmountIrr);
         Assert.Equal(3m, result.ProfitAmountIrr);
         Assert.Equal(104m, result.FinalAmountIrr);
+    }
+
+    [Fact]
+    public void PricingCalculator_HasNoInstanceDependencies()
+    {
+        var fields = typeof(PricingCalculator).GetFields(
+            BindingFlags.Instance |
+            BindingFlags.NonPublic |
+            BindingFlags.Public);
+
+        Assert.Empty(fields);
     }
 
     [Theory]
