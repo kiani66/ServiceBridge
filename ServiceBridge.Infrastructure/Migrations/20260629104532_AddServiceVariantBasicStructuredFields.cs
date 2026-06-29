@@ -1,10 +1,13 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using ServiceBridge.Infrastructure.Data;
 
 #nullable disable
 
 namespace ServiceBridge.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(ServiceBridgeDbContext))]
     [Migration("20260629104532_AddServiceVariantBasicStructuredFields")]
     public partial class AddServiceVariantBasicStructuredFields : Migration
     {

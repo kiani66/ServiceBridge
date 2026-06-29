@@ -171,7 +171,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("ServiceBridgeWebPolicy", policy =>
     {
-        policy.WithOrigins("https://localhost:7067")
+        policy.WithOrigins("https://localhost:7077")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -196,6 +196,7 @@ var app = builder.Build();
 // ===================================================
 // 5. DATABASE MIGRATION (Step 9 - Hardening)
 // ===================================================
+/*
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ServiceBridgeDbContext>();
@@ -217,7 +218,7 @@ using (var scope = app.Services.CreateScope())
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "An error occurred while migrating the database.");
     }
-}
+}*/
 
 // ===================================================
 // 6. PIPELINE CONFIGURATION
