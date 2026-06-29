@@ -24,7 +24,7 @@ public class PricingQuoteService : IPricingQuoteService
 
     public async Task<ServiceResult<PricingQuoteResponse>> GetQuoteAsync(
         Guid serviceId,
-        Guid? planId,
+        Guid? serviceVariantId,
         DateTime quotedAtUtc)
     {
         if (quotedAtUtc.Kind != DateTimeKind.Utc)
@@ -35,11 +35,15 @@ public class PricingQuoteService : IPricingQuoteService
                 400);
         }
 
-        var context = await _repository.GetActiveServiceContextAsync(serviceId, planId);
+        var context = await _repository.GetActiveServiceContextAsync(
+            serviceId,
+            serviceVariantId);
         if (context == null)
         {
             return ServiceResult<PricingQuoteResponse>.Fail(
-                planId.HasValue ? "The selected service plan was not found." : AppMessages.ServiceNotFound,
+                serviceVariantId.HasValue
+                    ? "The selected service variant was not found."
+                    : AppMessages.ServiceNotFound,
                 AppConstants.ErrorCodes.NotFound,
                 404);
         }
@@ -62,6 +66,7 @@ public class PricingQuoteService : IPricingQuoteService
             new PricingQuoteResponse
             {
                 ServiceId = context.ServiceId,
+                ServiceVariantId = context.ServiceVariantId,
                 PlanId = context.PlanId,
                 PlanName = context.PlanName,
                 PlanDurationDays = context.PlanDurationDays,

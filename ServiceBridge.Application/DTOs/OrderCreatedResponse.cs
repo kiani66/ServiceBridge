@@ -8,6 +8,7 @@ public class OrderCreatedResponse
     public string OrderNumber { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public OrderFulfillmentMode FulfillmentMode { get; set; }
+    public Guid? ServiceVariantId { get; set; }
     public Guid? PlanId { get; set; }
     public string? PlanName { get; set; }
     public int? PlanDurationDays { get; set; }

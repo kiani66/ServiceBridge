@@ -62,7 +62,7 @@ public class PricingRepository : IPricingRepository
             return null;
         }
 
-        serviceContext.PlanId = planContext.Id;
+        serviceContext.ServiceVariantId = planContext.Id;
         serviceContext.PlanName = planContext.Name;
         serviceContext.PlanDurationDays = planContext.DurationDays;
         serviceContext.PlanRegionCode = planContext.RegionCode;

@@ -26,6 +26,9 @@ public class DetailsModel : PageModel
     public string? PricingMessage { get; private set; }
 
     [BindProperty(SupportsGet = true)]
+    public Guid? SelectedServiceVariantId { get; set; }
+
+    [BindProperty(SupportsGet = true)]
     public Guid? SelectedPlanId { get; set; }
 
     [BindProperty]
@@ -61,10 +64,11 @@ public class DetailsModel : PageModel
             if (result?.Success == true && result.Data != null)
             {
                 Service = result.Data;
-                SelectedPlanId = GetDefaultPlanId();
+                SelectedServiceVariantId = GetDefaultServiceVariantId();
+                SelectedPlanId = SelectedServiceVariantId;
                 SelectedFulfillmentMode = GetDefaultFulfillmentMode();
                 InitializeOrderFields();
-                await LoadQuoteAsync(client, id, SelectedPlanId);
+                await LoadQuoteAsync(client, id, SelectedServiceVariantId);
                 return Page();
             }
 
@@ -86,7 +90,10 @@ public class DetailsModel : PageModel
         return Page();
     }
 
-    public async Task<IActionResult> OnGetQuoteAsync(Guid id, Guid? planId)
+    public async Task<IActionResult> OnGetQuoteAsync(
+        Guid id,
+        Guid? serviceVariantId,
+        Guid? planId)
     {
         if (id == Guid.Empty)
         {
@@ -98,7 +105,7 @@ public class DetailsModel : PageModel
         }
 
         var client = _httpClientFactory.CreateClient(AppConstants.Api.HttpClientName);
-        var result = await ReadQuoteAsync(client, id, planId);
+        var result = await ReadQuoteAsync(client, id, serviceVariantId ?? planId);
         return new JsonResult(new
         {
             success = result.Quote != null,
@@ -127,7 +134,7 @@ public class DetailsModel : PageModel
             var request = new CreateOrderRequest
             {
                 ServiceId = id,
-                PlanId = SelectedPlanId,
+                ServiceVariantId = SelectedServiceVariantId ?? SelectedPlanId,
                 OrderType = OrderType.Purchase,
                 FulfillmentMode = SelectedFulfillmentMode,
                 Credentials = OrderFields.Select(x => new CreateOrderFieldRequest
@@ -180,11 +187,11 @@ public class DetailsModel : PageModel
     private async Task LoadQuoteAsync(
         HttpClient client,
         Guid serviceId,
-        Guid? planId)
+        Guid? serviceVariantId)
     {
         try
         {
-            var result = await ReadQuoteAsync(client, serviceId, planId);
+            var result = await ReadQuoteAsync(client, serviceId, serviceVariantId);
             if (result.Quote != null)
             {
                 Quote = result.Quote;
@@ -210,10 +217,10 @@ public class DetailsModel : PageModel
     private static async Task<(PricingQuoteResponse? Quote, string? Message)> ReadQuoteAsync(
         HttpClient client,
         Guid serviceId,
-        Guid? planId)
+        Guid? serviceVariantId)
     {
-        var quoteUrl = planId.HasValue
-            ? $"api/services/{serviceId}/quote?planId={planId.Value}"
+        var quoteUrl = serviceVariantId.HasValue
+            ? $"api/services/{serviceId}/quote?serviceVariantId={serviceVariantId.Value}"
             : $"api/services/{serviceId}/quote";
         var response = await client.GetAsync(quoteUrl);
         var result = await response.Content
@@ -234,9 +241,10 @@ public class DetailsModel : PageModel
             if (result?.Success == true && result.Data != null)
             {
                 Service = result.Data;
-                SelectedPlanId = GetDefaultPlanId();
+                SelectedServiceVariantId = GetDefaultServiceVariantId();
+                SelectedPlanId = SelectedServiceVariantId;
                 MergeOrderFields();
-                await LoadQuoteAsync(client, id, SelectedPlanId);
+                await LoadQuoteAsync(client, id, SelectedServiceVariantId);
                 return;
             }
 
@@ -291,17 +299,18 @@ public class DetailsModel : PageModel
             OrderFulfillmentMode.UseExistingAccount;
     }
 
-    private Guid? GetDefaultPlanId()
+    private Guid? GetDefaultServiceVariantId()
     {
         if (Service?.Plans.Count > 0 != true)
         {
             return null;
         }
 
-        if (SelectedPlanId.HasValue &&
-            Service.Plans.Any(x => x.Id == SelectedPlanId.Value))
+        var selectedVariantId = SelectedServiceVariantId ?? SelectedPlanId;
+        if (selectedVariantId.HasValue &&
+            Service.Plans.Any(x => x.Id == selectedVariantId.Value))
         {
-            return SelectedPlanId;
+            return selectedVariantId;
         }
 
         return Service.Plans

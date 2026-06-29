@@ -10,6 +10,7 @@ public class AgentOrderDetailDto
     public string CustomerEmail { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string FulfillmentMode { get; set; } = string.Empty;
+    public Guid? ServiceVariantId { get; set; }
     public string? PlanName { get; set; }
     public int? PlanDurationDays { get; set; }
     public string? PlanRegionCode { get; set; }

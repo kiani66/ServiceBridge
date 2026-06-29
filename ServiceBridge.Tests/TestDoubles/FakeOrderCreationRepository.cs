@@ -10,22 +10,37 @@ internal class FakeOrderCreationRepository : IOrderCreationRepository
     public OrderServiceDefinition? ServiceDefinition { get; set; }
     public HashSet<string> ExistingOrderNumbers { get; } = new();
     public Order? AddedOrder { get; private set; }
+    public Guid? RequestedServiceVariantId { get; private set; }
+    public Guid? RequestedServiceId { get; private set; }
 
     public Task<bool> UserExistsAsync(Guid userId)
     {
         return Task.FromResult(UserExists);
     }
 
-    public Task<OrderServiceDefinition?> GetActiveServiceDefinitionAsync(
-        Guid serviceId,
-        Guid? planId)
+    public Task<OrderServiceDefinition?> GetServiceVariantOrderDefinitionAsync(
+        Guid serviceVariantId,
+        Guid? serviceId)
     {
-        if (ServiceDefinition != null && planId.HasValue)
+        RequestedServiceVariantId = serviceVariantId;
+        RequestedServiceId = serviceId;
+
+        if (ServiceDefinition == null)
         {
-            ServiceDefinition.VariantId = planId;
+            return Task.FromResult<OrderServiceDefinition?>(null);
         }
 
-        return Task.FromResult(ServiceDefinition);
+        if (ServiceDefinition.ServiceVariantId != serviceVariantId)
+        {
+            return Task.FromResult<OrderServiceDefinition?>(null);
+        }
+
+        if (serviceId.HasValue && ServiceDefinition.ServiceId != serviceId.Value)
+        {
+            return Task.FromResult<OrderServiceDefinition?>(null);
+        }
+
+        return Task.FromResult<OrderServiceDefinition?>(ServiceDefinition);
     }
 
     public Task<bool> OrderNumberExistsAsync(string orderNumber)

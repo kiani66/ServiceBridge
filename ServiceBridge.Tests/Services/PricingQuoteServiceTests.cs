@@ -90,6 +90,7 @@ public class PricingQuoteServiceTests
             QuotedAtUtc);
 
         Assert.True(result.Success);
+        Assert.Equal(planId, result.Data?.ServiceVariantId);
         Assert.Equal(planId, result.Data?.PlanId);
         Assert.Equal("Monthly / Global", result.Data?.PlanName);
         Assert.Equal(30, result.Data?.PlanDurationDays);

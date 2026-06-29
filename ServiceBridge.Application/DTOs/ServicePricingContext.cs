@@ -4,7 +4,13 @@ public class ServicePricingContext
 {
     public Guid ServiceId { get; set; }
     public Guid CategoryId { get; set; }
-    public Guid? PlanId { get; set; }
+    public Guid? ServiceVariantId { get; set; }
+    public Guid? PlanId
+    {
+        get => ServiceVariantId;
+        set => ServiceVariantId = value;
+    }
+
     public string? PlanName { get; set; }
     public int? PlanDurationDays { get; set; }
     public string? PlanRegionCode { get; set; }

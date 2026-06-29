@@ -38,6 +38,13 @@ public class OrderCreationService : IOrderCreationService
         Guid userId,
         CreateOrderRequest request)
     {
+        var selectedVariantId = request.ServiceVariantId ?? request.PlanId;
+        var selectedVariantValidation = ValidateSelectedVariant(request, selectedVariantId);
+        if (selectedVariantValidation != null)
+        {
+            return selectedVariantValidation;
+        }
+
         if (!Enum.IsDefined(request.OrderType))
         {
             return ValidationFailed(new Dictionary<string, string[]>
@@ -62,26 +69,21 @@ public class OrderCreationService : IOrderCreationService
                 404);
         }
 
-        var service = await _repository.GetActiveServiceDefinitionAsync(
-            request.ServiceId,
-            request.PlanId);
+        var service = await _repository.GetServiceVariantOrderDefinitionAsync(
+            selectedVariantId!.Value,
+            request.ServiceId == Guid.Empty ? null : request.ServiceId);
         if (service == null)
         {
             return ServiceResult<OrderCreatedResponse>.Fail(
-                request.PlanId.HasValue
-                    ? "The selected service variant was not found."
-                    : AppMessages.ServiceNotFound,
+                "The selected service variant was not found.",
                 AppConstants.ErrorCodes.NotFound,
                 404);
         }
 
-        if (service.HasActiveVariants && service.VariantId == null)
+        var availabilityValidation = ValidateVariantAvailability(request, service);
+        if (availabilityValidation != null)
         {
-            return ValidationFailed(new Dictionary<string, string[]>
-            {
-                [nameof(request.PlanId)] =
-                    ["A service variant must be selected for this service."]
-            });
+            return availabilityValidation;
         }
 
         if (!service.SupportsFulfillmentMode(request.FulfillmentMode))
@@ -112,7 +114,7 @@ public class OrderCreationService : IOrderCreationService
         {
             ServiceId = service.ServiceId,
             CategoryId = service.CategoryId,
-            PlanId = service.VariantId,
+            ServiceVariantId = service.ServiceVariantId,
             PlanName = service.VariantName,
             PlanDurationDays = service.VariantDurationDays,
             PlanRegionCode = service.VariantRegionCode,
@@ -162,6 +164,7 @@ public class OrderCreationService : IOrderCreationService
                 OrderNumber = order.OrderNumber,
                 Status = order.Status.ToString(),
                 FulfillmentMode = order.FulfillmentMode,
+                ServiceVariantId = order.ServiceVariantId,
                 PlanId = order.ServiceVariantId,
                 PlanName = order.VariantNameSnapshot,
                 PlanDurationDays = order.VariantDurationDaysSnapshot,
@@ -182,6 +185,55 @@ public class OrderCreationService : IOrderCreationService
         return request.Credentials.Count > 0
             ? request.Credentials
             : request.Fields;
+    }
+
+    private static ServiceResult<OrderCreatedResponse>? ValidateSelectedVariant(
+        CreateOrderRequest request,
+        Guid? selectedVariantId)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (request.ServiceVariantId.HasValue &&
+            request.PlanId.HasValue &&
+            request.ServiceVariantId.Value != request.PlanId.Value)
+        {
+            errors[nameof(request.ServiceVariantId)] =
+                ["ServiceVariantId and legacy PlanId must refer to the same variant."];
+        }
+
+        if (!selectedVariantId.HasValue || selectedVariantId.Value == Guid.Empty)
+        {
+            errors[nameof(request.ServiceVariantId)] =
+                ["A service variant must be selected."];
+            errors[nameof(request.PlanId)] =
+                ["A service variant must be selected."];
+        }
+
+        return errors.Count == 0 ? null : ValidationFailed(errors);
+    }
+
+    private static ServiceResult<OrderCreatedResponse>? ValidateVariantAvailability(
+        CreateOrderRequest request,
+        OrderServiceDefinition service)
+    {
+        if (!service.IsVariantActive)
+        {
+            return ValidationFailed(new Dictionary<string, string[]>
+            {
+                [nameof(request.ServiceVariantId)] =
+                    ["The selected service variant is not active."]
+            });
+        }
+
+        if (!service.IsServiceActive || !service.IsCategoryActive || !service.IsProviderActive)
+        {
+            return ServiceResult<OrderCreatedResponse>.Fail(
+                AppMessages.ServiceNotFound,
+                AppConstants.ErrorCodes.NotFound,
+                404);
+        }
+
+        return null;
     }
 
     private async Task<string?> GenerateUniqueOrderNumberAsync(DateTime now)

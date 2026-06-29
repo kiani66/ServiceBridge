@@ -20,26 +20,32 @@ public class OrderCreationRepository : IOrderCreationRepository
         return _context.Users.AnyAsync(x => x.Id == userId && x.IsActive);
     }
 
-    public async Task<OrderServiceDefinition?> GetActiveServiceDefinitionAsync(
-        Guid serviceId,
-        Guid? planId)
+    public async Task<OrderServiceDefinition?> GetServiceVariantOrderDefinitionAsync(
+        Guid serviceVariantId,
+        Guid? serviceId)
     {
-        var service = await _context.DigitalServices
+        return await _context.ServiceVariants
             .AsNoTracking()
             .Where(x =>
-                x.Id == serviceId &&
-                x.IsActive &&
-                x.Category.IsActive)
+                x.Id == serviceVariantId &&
+                (!serviceId.HasValue || x.ServiceId == serviceId.Value))
             .Select(x => new OrderServiceDefinition
             {
-                ServiceId = x.Id,
-                CategoryId = x.CategoryId,
-                HasActiveVariants = x.Variants.Any(plan => plan.IsActive),
+                ServiceId = x.ServiceId,
+                CategoryId = x.Service.CategoryId,
+                ServiceVariantId = x.Id,
+                IsVariantActive = x.IsActive,
+                IsServiceActive = x.Service.IsActive,
+                IsCategoryActive = x.Service.Category.IsActive,
+                IsProviderActive = x.Service.Provider.IsActive,
+                VariantName = x.Name,
+                VariantDurationDays = x.DurationDays,
+                VariantRegionCode = x.RegionCode,
                 CurrencyCode = x.CurrencyCode,
                 BasePrice = x.BasePrice,
-                SupportsUseExistingAccount = x.SupportsUseExistingAccount,
-                SupportsCreateNewAccount = x.SupportsCreateNewAccount,
-                RequiredFields = x.RequiredFields
+                SupportsUseExistingAccount = x.Service.SupportsUseExistingAccount,
+                SupportsCreateNewAccount = x.Service.SupportsCreateNewAccount,
+                RequiredFields = x.Service.RequiredFields
                     .OrderBy(field => field.DisplayOrder)
                     .Select(field => new OrderFieldDefinition
                     {
@@ -57,41 +63,6 @@ public class OrderCreationRepository : IOrderCreationRepository
                     .ToList()
             })
             .FirstOrDefaultAsync();
-
-        if (service == null || !planId.HasValue)
-        {
-            return service;
-        }
-
-        var plan = await _context.ServiceVariants
-            .AsNoTracking()
-            .Where(x =>
-                x.Id == planId.Value &&
-                x.ServiceId == serviceId &&
-                x.IsActive)
-            .Select(x => new
-            {
-                x.Id,
-                x.Name,
-                x.DurationDays,
-                x.RegionCode,
-                x.CurrencyCode,
-                x.BasePrice
-            })
-            .FirstOrDefaultAsync();
-
-        if (plan == null)
-        {
-            return null;
-        }
-
-        service.VariantId = plan.Id;
-        service.VariantName = plan.Name;
-        service.VariantDurationDays = plan.DurationDays;
-        service.VariantRegionCode = plan.RegionCode;
-        service.CurrencyCode = plan.CurrencyCode;
-        service.BasePrice = plan.BasePrice;
-        return service;
     }
 
     public Task<bool> OrderNumberExistsAsync(string orderNumber)

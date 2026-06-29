@@ -98,7 +98,8 @@
                     <div class="pb-variant-grid">
                         @foreach (var variant in Model.Service.Plans.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name))
                         {
-                            var isSelected = Model.SelectedPlanId == variant.Id;
+                            var isSelected =
+                                (Model.SelectedServiceVariantId ?? Model.SelectedPlanId) == variant.Id;
                             <label class="pb-variant-card @(isSelected ? "pb-variant-card-selected" : null)" for="variant-@variant.Id">
                                 <div class="pb-variant-card-head">
                                     <strong>@variant.Name</strong>
@@ -125,7 +126,7 @@
                                 <input id="variant-@variant.Id"
                                        class="form-check-input"
                                        type="radio"
-                                       name="SelectedPlanId"
+                                       name="SelectedServiceVariantId"
                                        value="@variant.Id"
                                        checked="@isSelected"
                                        data-variant-name="@variant.Name"
@@ -244,7 +245,7 @@
             {
                 <form method="post" class="pb-order-create-form">
                     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-                    <input asp-for="SelectedPlanId" id="selected-variant-id" type="hidden" />
+                    <input asp-for="SelectedServiceVariantId" id="selected-variant-id" type="hidden" />
 
                     @if (Model.Service.SupportedFulfillmentModes.Count > 1)
                     {
@@ -439,7 +440,7 @@
 
         async function refreshVariantQuote(input) {
             updateSelectedVariantUi(input);
-            const url = `${window.location.pathname}?handler=Quote&planId=${encodeURIComponent(input.value)}`;
+            const url = `${window.location.pathname}?handler=Quote&serviceVariantId=${encodeURIComponent(input.value)}`;
             const response = await fetch(url, {
                 headers: { 'Accept': 'application/json' }
             });

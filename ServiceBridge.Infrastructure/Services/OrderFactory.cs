@@ -30,7 +30,7 @@ public class OrderFactory : IOrderFactory
             OrderNumber = context.OrderNumber,
             UserId = context.UserId,
             ServiceId = context.Service.ServiceId,
-            ServiceVariantId = context.Service.VariantId,
+            ServiceVariantId = context.Service.ServiceVariantId,
             OrderType = context.Request.OrderType,
             FulfillmentMode = context.Request.FulfillmentMode,
             Status = OrderStatus.Created,

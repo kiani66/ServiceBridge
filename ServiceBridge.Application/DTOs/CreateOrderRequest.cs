@@ -8,6 +8,8 @@ public class CreateOrderRequest
     [Required(ErrorMessage = "Service is required.")]
     public Guid ServiceId { get; set; }
 
+    public Guid? ServiceVariantId { get; set; }
+
     public Guid? PlanId { get; set; }
 
     [EnumDataType(typeof(OrderType), ErrorMessage = "Invalid order type.")]

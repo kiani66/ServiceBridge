@@ -16,27 +16,20 @@ public class OrderCreationServiceTests
         var setup = CreateSetup();
         var userId = Guid.NewGuid();
 
-        var result = await setup.Service.CreateAsync(userId, new CreateOrderRequest
-        {
-            ServiceId = setup.OrderRepository.ServiceDefinition!.ServiceId,
-            OrderType = OrderType.Purchase,
-            Fields =
-            [
-                new CreateOrderFieldRequest
-                {
-                    FieldKey = "email",
-                    Value = "user@example.com"
-                },
-                new CreateOrderFieldRequest
-                {
-                    FieldKey = "password",
-                    Value = "secret-password"
-                }
-            ]
-        });
+        var request = ValidRequest(setup);
+        request.Fields[1].Value = "secret-password";
+
+        var result = await setup.Service.CreateAsync(userId, request);
 
         Assert.True(result.Success);
         Assert.Equal(201, result.StatusCode);
+        Assert.Equal(
+            setup.OrderRepository.ServiceDefinition!.ServiceVariantId,
+            setup.OrderRepository.RequestedServiceVariantId);
+        Assert.Equal(
+            setup.OrderRepository.ServiceDefinition.ServiceVariantId,
+            result.Data?.ServiceVariantId);
+        Assert.Equal(result.Data?.ServiceVariantId, result.Data?.PlanId);
 
         var order = Assert.IsType<Domain.Entities.Order>(
             setup.OrderRepository.AddedOrder);
@@ -66,6 +59,7 @@ public class OrderCreationServiceTests
         var result = await setup.Service.CreateAsync(Guid.NewGuid(), new CreateOrderRequest
         {
             ServiceId = setup.OrderRepository.ServiceDefinition!.ServiceId,
+            ServiceVariantId = setup.OrderRepository.ServiceDefinition.ServiceVariantId,
             OrderType = OrderType.Purchase
         });
 
@@ -85,6 +79,7 @@ public class OrderCreationServiceTests
         var result = await setup.Service.CreateAsync(Guid.NewGuid(), new CreateOrderRequest
         {
             ServiceId = setup.OrderRepository.ServiceDefinition!.ServiceId,
+            ServiceVariantId = setup.OrderRepository.ServiceDefinition.ServiceVariantId,
             OrderType = OrderType.Purchase,
             FulfillmentMode = OrderFulfillmentMode.CreateNewAccount,
             Credentials = []
@@ -128,6 +123,7 @@ public class OrderCreationServiceTests
         var result = await setup.Service.CreateAsync(Guid.NewGuid(), new CreateOrderRequest
         {
             ServiceId = setup.OrderRepository.ServiceDefinition.ServiceId,
+            ServiceVariantId = setup.OrderRepository.ServiceDefinition.ServiceVariantId,
             OrderType = OrderType.Purchase,
             FulfillmentMode = OrderFulfillmentMode.CreateNewAccount,
             Credentials =
@@ -150,39 +146,42 @@ public class OrderCreationServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_WhenServiceHasvariantsAndvariantIsMissing_ReturnsValidationErrors()
+    public async Task CreateAsync_WhenServiceVariantIsMissing_ReturnsValidationErrors()
     {
         var setup = CreateSetup();
-        setup.OrderRepository.ServiceDefinition!.HasActiveVariants = true;
+        var request = ValidRequest(setup);
+        request.ServiceVariantId = null;
 
-        var result = await setup.Service.CreateAsync(Guid.NewGuid(), ValidRequest(setup));
+        var result = await setup.Service.CreateAsync(Guid.NewGuid(), request);
 
         Assert.False(result.Success);
         Assert.Equal(400, result.StatusCode);
         Assert.NotNull(result.ValidationErrors);
+        Assert.Contains(nameof(CreateOrderRequest.ServiceVariantId), result.ValidationErrors.Keys);
         Assert.Contains(nameof(CreateOrderRequest.PlanId), result.ValidationErrors.Keys);
         Assert.Null(setup.OrderRepository.AddedOrder);
         Assert.Equal(0, setup.PricingRepository.ExchangeRateCallCount);
     }
 
     [Fact]
-    public async Task CreateAsync_WhenvariantIsSelected_UsesvariantPriceAndSnapshots()
+    public async Task CreateAsync_WhenServiceVariantIsSelected_UsesVariantPriceAndSnapshots()
     {
         var setup = CreateSetup();
         var variantId = Guid.NewGuid();
-        setup.OrderRepository.ServiceDefinition!.HasActiveVariants = true;
-        setup.OrderRepository.ServiceDefinition.VariantId = variantId;
+        setup.OrderRepository.ServiceDefinition!.ServiceVariantId = variantId;
         setup.OrderRepository.ServiceDefinition.VariantName = "Monthly / Global";
         setup.OrderRepository.ServiceDefinition.VariantDurationDays = 30;
-        setup.OrderRepository.ServiceDefinition.VariantRegionCode = "GLOBAL";
+        setup.OrderRepository.ServiceDefinition.VariantRegionCode = "US";
+        setup.OrderRepository.ServiceDefinition.CurrencyCode = "USD";
         setup.OrderRepository.ServiceDefinition.BasePrice = 25m;
 
         var request = ValidRequest(setup);
-        request.PlanId = variantId;
+        request.ServiceVariantId = variantId;
 
         var result = await setup.Service.CreateAsync(Guid.NewGuid(), request);
 
         Assert.True(result.Success);
+        Assert.Equal(variantId, result.Data?.ServiceVariantId);
         Assert.Equal(variantId, result.Data?.PlanId);
         Assert.Equal("Monthly / Global", result.Data?.PlanName);
         Assert.Equal(4_125_000m, result.Data?.FinalAmountIrr);
@@ -192,8 +191,118 @@ public class OrderCreationServiceTests
         Assert.Equal(variantId, order.ServiceVariantId);
         Assert.Equal("Monthly / Global", order.VariantNameSnapshot);
         Assert.Equal(30, order.VariantDurationDaysSnapshot);
-        Assert.Equal("GLOBAL", order.VariantRegionCodeSnapshot);
+        Assert.Equal("US", order.VariantRegionCodeSnapshot);
         Assert.Equal(25m, order.ForeignPrice);
+        Assert.Equal("USD", order.CurrencyCode);
+        Assert.Equal(150_000m, order.ExchangeRateSnapshot);
+        Assert.Equal(10m, order.MarginPercentSnapshot);
+        Assert.Equal(3_750_000m, order.BaseAmountIrr);
+        Assert.Equal(375_000m, order.ProfitAmountIrr);
+        Assert.Equal(4_125_000m, order.FinalAmountIrr);
+
+        setup.OrderRepository.ServiceDefinition.BasePrice = 50m;
+        setup.PricingRepository.ExchangeRate = 200_000m;
+        setup.PricingRepository.ServiceMargin = 20m;
+
+        Assert.Equal(25m, order.ForeignPrice);
+        Assert.Equal(150_000m, order.ExchangeRateSnapshot);
+        Assert.Equal(10m, order.MarginPercentSnapshot);
+        Assert.Equal(4_125_000m, order.FinalAmountIrr);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenLegacyPlanIdIsProvided_UsesSameServiceVariantFlow()
+    {
+        var setup = CreateSetup();
+        var variantId = setup.OrderRepository.ServiceDefinition!.ServiceVariantId;
+        var request = ValidRequest(setup);
+        request.ServiceVariantId = null;
+        request.PlanId = variantId;
+
+        var result = await setup.Service.CreateAsync(Guid.NewGuid(), request);
+
+        Assert.True(result.Success);
+        Assert.Equal(variantId, setup.OrderRepository.RequestedServiceVariantId);
+        Assert.Equal(variantId, result.Data?.ServiceVariantId);
+        Assert.Equal(variantId, result.Data?.PlanId);
+        var order = Assert.IsType<Domain.Entities.Order>(
+            setup.OrderRepository.AddedOrder);
+        Assert.Equal(variantId, order.ServiceVariantId);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenOnlyServiceVariantIdIsProvided_CreatesOrder()
+    {
+        var setup = CreateSetup();
+        var request = ValidRequest(setup);
+        request.ServiceId = Guid.Empty;
+
+        var result = await setup.Service.CreateAsync(Guid.NewGuid(), request);
+
+        Assert.True(result.Success);
+        Assert.Null(setup.OrderRepository.RequestedServiceId);
+        Assert.Equal(
+            setup.OrderRepository.ServiceDefinition!.ServiceVariantId,
+            setup.OrderRepository.RequestedServiceVariantId);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenServiceVariantDoesNotExist_ReturnsNotFound()
+    {
+        var setup = CreateSetup();
+        var request = ValidRequest(setup);
+        request.ServiceVariantId = Guid.NewGuid();
+
+        var result = await setup.Service.CreateAsync(Guid.NewGuid(), request);
+
+        Assert.False(result.Success);
+        Assert.Equal(404, result.StatusCode);
+        Assert.Equal(AppConstants.ErrorCodes.NotFound, result.ErrorCode);
+        Assert.Null(setup.OrderRepository.AddedOrder);
+        Assert.Equal(0, setup.PricingRepository.ExchangeRateCallCount);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenServiceVariantIsInactive_ReturnsValidationFailure()
+    {
+        var setup = CreateSetup();
+        setup.OrderRepository.ServiceDefinition!.IsVariantActive = false;
+
+        var result = await setup.Service.CreateAsync(Guid.NewGuid(), ValidRequest(setup));
+
+        Assert.False(result.Success);
+        Assert.Equal(400, result.StatusCode);
+        Assert.Equal(AppConstants.ErrorCodes.ValidationFailed, result.ErrorCode);
+        Assert.Null(setup.OrderRepository.AddedOrder);
+        Assert.Equal(0, setup.PricingRepository.ExchangeRateCallCount);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenProviderIsInactive_ReturnsNotFound()
+    {
+        var setup = CreateSetup();
+        setup.OrderRepository.ServiceDefinition!.IsProviderActive = false;
+
+        var result = await setup.Service.CreateAsync(Guid.NewGuid(), ValidRequest(setup));
+
+        Assert.False(result.Success);
+        Assert.Equal(404, result.StatusCode);
+        Assert.Null(setup.OrderRepository.AddedOrder);
+        Assert.Equal(0, setup.PricingRepository.ExchangeRateCallCount);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenParentServiceIsInactive_ReturnsNotFound()
+    {
+        var setup = CreateSetup();
+        setup.OrderRepository.ServiceDefinition!.IsServiceActive = false;
+
+        var result = await setup.Service.CreateAsync(Guid.NewGuid(), ValidRequest(setup));
+
+        Assert.False(result.Success);
+        Assert.Equal(404, result.StatusCode);
+        Assert.Null(setup.OrderRepository.AddedOrder);
+        Assert.Equal(0, setup.PricingRepository.ExchangeRateCallCount);
     }
 
     [Fact]
@@ -205,6 +314,7 @@ public class OrderCreationServiceTests
         var result = await setup.Service.CreateAsync(Guid.NewGuid(), new CreateOrderRequest
         {
             ServiceId = setup.OrderRepository.ServiceDefinition!.ServiceId,
+            ServiceVariantId = setup.OrderRepository.ServiceDefinition.ServiceVariantId,
             OrderType = OrderType.Purchase
         });
 
@@ -221,6 +331,7 @@ public class OrderCreationServiceTests
         var result = await setup.Service.CreateAsync(Guid.NewGuid(), new CreateOrderRequest
         {
             ServiceId = setup.OrderRepository.ServiceDefinition!.ServiceId,
+            ServiceVariantId = setup.OrderRepository.ServiceDefinition.ServiceVariantId,
             OrderType = (OrderType)999,
             Fields = []
         });
@@ -253,6 +364,7 @@ public class OrderCreationServiceTests
         return new CreateOrderRequest
         {
             ServiceId = setup.OrderRepository.ServiceDefinition!.ServiceId,
+            ServiceVariantId = setup.OrderRepository.ServiceDefinition.ServiceVariantId,
             OrderType = OrderType.Purchase,
             Fields =
             [
@@ -274,12 +386,17 @@ public class OrderCreationServiceTests
     {
         var serviceId = Guid.NewGuid();
         var categoryId = Guid.NewGuid();
+        var serviceVariantId = Guid.NewGuid();
         var orderRepository = new FakeOrderCreationRepository
         {
             ServiceDefinition = new OrderServiceDefinition
             {
                 ServiceId = serviceId,
                 CategoryId = categoryId,
+                ServiceVariantId = serviceVariantId,
+                VariantName = "Monthly / Global",
+                VariantDurationDays = 30,
+                VariantRegionCode = "GLOBAL",
                 CurrencyCode = "USD",
                 BasePrice = 20m,
                 RequiredFields =

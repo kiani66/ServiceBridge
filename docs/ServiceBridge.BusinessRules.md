@@ -8,7 +8,9 @@ This file records the highest-priority product rules that future PRs must preser
 
 - FinalPriceIRR = BaseForeignPrice * ExchangeRate * (1 + MarginPercent / 100).
 - Pricing scope must evolve to ServiceVariant > DigitalService > Category > Global.
-- Order creation must snapshot foreign price, currency code, exchange rate, margin percent, and final IRR amount.
+- Order creation uses ServiceVariant as the selected purchasable item and must
+  snapshot foreign price, currency code, region code, exchange rate, margin
+  percent, and final IRR amount.
 - Future pricing changes must not mutate existing orders.
 - ServiceBridge v1.0 active purchasable variants use USD to IRR pricing.
 
