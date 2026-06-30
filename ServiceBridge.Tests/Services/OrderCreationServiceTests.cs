@@ -188,6 +188,7 @@ public class OrderCreationServiceTests
 
         var order = Assert.IsType<Domain.Entities.Order>(
             setup.OrderRepository.AddedOrder);
+        Assert.Equal(setup.OrderRepository.ServiceDefinition.ServiceId, order.ServiceId);
         Assert.Equal(variantId, order.ServiceVariantId);
         Assert.Equal("Monthly / Global", order.VariantNameSnapshot);
         Assert.Equal(30, order.VariantDurationDaysSnapshot);
@@ -199,6 +200,8 @@ public class OrderCreationServiceTests
         Assert.Equal(3_750_000m, order.BaseAmountIrr);
         Assert.Equal(375_000m, order.ProfitAmountIrr);
         Assert.Equal(4_125_000m, order.FinalAmountIrr);
+        Assert.Equal("USD", setup.PricingRepository.RequestedCurrencyCode);
+        Assert.Equal(1, setup.PricingRepository.VariantMarginCallCount);
 
         setup.OrderRepository.ServiceDefinition.BasePrice = 50m;
         setup.PricingRepository.ExchangeRate = 200_000m;
@@ -207,7 +210,32 @@ public class OrderCreationServiceTests
         Assert.Equal(25m, order.ForeignPrice);
         Assert.Equal(150_000m, order.ExchangeRateSnapshot);
         Assert.Equal(10m, order.MarginPercentSnapshot);
+        Assert.Equal(3_750_000m, order.BaseAmountIrr);
+        Assert.Equal(375_000m, order.ProfitAmountIrr);
         Assert.Equal(4_125_000m, order.FinalAmountIrr);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenVariantMarginExists_SnapshotsVariantScopePricing()
+    {
+        var setup = CreateSetup();
+        setup.PricingRepository.VariantMargin = 12m;
+        setup.PricingRepository.ServiceMargin = 10m;
+
+        var result = await setup.Service.CreateAsync(
+            Guid.NewGuid(),
+            ValidRequest(setup));
+
+        Assert.True(result.Success);
+
+        var order = Assert.IsType<Domain.Entities.Order>(
+            setup.OrderRepository.AddedOrder);
+        Assert.Equal(12m, order.MarginPercentSnapshot);
+        Assert.Equal(3_000_000m, order.BaseAmountIrr);
+        Assert.Equal(360_000m, order.ProfitAmountIrr);
+        Assert.Equal(3_360_000m, order.FinalAmountIrr);
+        Assert.Equal(1, setup.PricingRepository.VariantMarginCallCount);
+        Assert.Equal(0, setup.PricingRepository.ServiceMarginCallCount);
     }
 
     [Fact]
