@@ -41,8 +41,8 @@ else if (_service is not null)
                 Title="@_service.Name"
                 Description="@_service.Description">
         <Actions>
-            <MudButton Href="/Account/Login" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Lock">
-                Sign in to continue
+            <MudButton Href="@($"/ui/checkout/{_service.Slug}")" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.AssignmentTurnedIn">
+                Start checkout
             </MudButton>
         </Actions>
     </PageHeader>
