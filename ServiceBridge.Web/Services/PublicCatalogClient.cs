@@ -1,7 +1,9 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Results;
+using ServiceBridge.Domain.Enums;
 using ServiceBridge.Shared.Constants;
 using ServiceBridge.Web.Components.Shared;
 
@@ -233,15 +235,27 @@ public sealed class PublicCatalogClient
             variants,
             service.RequiredFields
                 .OrderBy(field => field.DisplayOrder)
-                .Select(field => new PublicRequiredField(
-                    field.Label,
-                    field.FieldType,
-                    field.IsRequired,
-                    field.IsSensitive))
+                .Select(MapField)
                 .ToArray(),
             service.ProcessingTimeDescription ?? variants.FirstOrDefault()?.ProcessingTime ?? "Confirmed after payment",
+            service.SupportedFulfillmentModes.ToArray(),
             service.SupportsUseExistingAccount,
             service.SupportsCreateNewAccount);
+    }
+
+    private static PublicRequiredField MapField(ServiceRequiredFieldResponse field)
+    {
+        return new PublicRequiredField(
+            field.FieldKey,
+            field.Label,
+            field.FieldType,
+            field.FulfillmentMode,
+            field.Actor,
+            field.IsRequired,
+            field.IsSensitive,
+            field.DisplayOrder,
+            field.OptionsJson,
+            ParseFieldOptions(field.OptionsJson));
     }
 
     private static PublicCatalogVariant MapVariant(ServiceVariantResponse variant)
@@ -289,6 +303,70 @@ public sealed class PublicCatalogClient
     private static string FormatIrr(decimal amount)
     {
         return $"{amount:N0} IRR";
+    }
+
+    private static IReadOnlyList<PublicFieldOption> ParseFieldOptions(string? optionsJson)
+    {
+        if (string.IsNullOrWhiteSpace(optionsJson))
+        {
+            return [];
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(optionsJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            var options = new List<PublicFieldOption>();
+            foreach (var item in document.RootElement.EnumerateArray())
+            {
+                var option = item.ValueKind switch
+                {
+                    JsonValueKind.String => BuildOption(item.GetString(), item.GetString()),
+                    JsonValueKind.Object => BuildOption(
+                        ReadString(item, "value") ?? ReadString(item, "id") ?? ReadString(item, "key"),
+                        ReadString(item, "label") ?? ReadString(item, "name") ?? ReadString(item, "text")),
+                    _ => null
+                };
+
+                if (option is not null)
+                {
+                    options.Add(option);
+                }
+            }
+
+            return options;
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static PublicFieldOption? BuildOption(string? value, string? label)
+    {
+        var normalizedValue = value?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedValue))
+        {
+            return null;
+        }
+
+        var normalizedLabel = string.IsNullOrWhiteSpace(label)
+            ? normalizedValue
+            : label.Trim();
+
+        return new PublicFieldOption(normalizedValue, normalizedLabel);
+    }
+
+    private static string? ReadString(JsonElement item, string propertyName)
+    {
+        return item.TryGetProperty(propertyName, out var property) &&
+            property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
     }
 
     private static string GetProviderShortName(string provider)
@@ -353,6 +431,7 @@ public sealed record PublicCatalogServiceDetail(
     IReadOnlyList<PublicCatalogVariant> Variants,
     IReadOnlyList<PublicRequiredField> RequiredFields,
     string ProcessingTime,
+    IReadOnlyList<OrderFulfillmentMode> SupportedFulfillmentModes,
     bool SupportsUseExistingAccount,
     bool SupportsCreateNewAccount) : IServiceCardModel
 {
@@ -376,10 +455,25 @@ public sealed record PublicCatalogVariant(
 }
 
 public sealed record PublicRequiredField(
+    string FieldKey,
     string Label,
     string FieldType,
+    OrderFulfillmentMode FulfillmentMode,
+    CredentialActor Actor,
     bool IsRequired,
-    bool IsSensitive);
+    bool IsSensitive,
+    int DisplayOrder,
+    string? OptionsJson,
+    IReadOnlyList<PublicFieldOption> Options)
+{
+    public bool IsCustomerFieldFor(OrderFulfillmentMode fulfillmentMode)
+    {
+        return Actor == CredentialActor.Customer &&
+            FulfillmentMode == fulfillmentMode;
+    }
+}
+
+public sealed record PublicFieldOption(string Value, string Label);
 
 public sealed record PublicPricingQuote(
     Guid ServiceId,

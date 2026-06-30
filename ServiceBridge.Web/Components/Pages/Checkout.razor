@@ -1,11 +1,52 @@
 @page "/ui/checkout"
 @page "/ui/checkout/{ServiceSlug}"
-@inject ServiceBridgeMockDataProvider MockData
+@layout PublicLayout
+@using System.ComponentModel.DataAnnotations
+@using System.Globalization
+@using ServiceBridge.Application.DTOs
+@using ServiceBridge.Domain.Enums
+@inject PublicCatalogClient CatalogClient
+@inject CheckoutClient CheckoutClient
+@inject NavigationManager Navigation
 
-@if (Service is null)
+@if (_loading)
+{
+    <PageHeader Eyebrow="Checkout"
+                Title="Loading checkout"
+                Description="Fetching service details, credential fields, and live pricing." />
+    <PageSection MaxWidth="standard">
+        <LoadingSkeleton Lines="7" Label="Loading checkout" />
+    </PageSection>
+}
+else if (_notFound)
+{
+    <EmptyState Title="Service not found"
+                Description="The requested service is not active or is no longer available for checkout."
+                Icon="@Icons.Material.Outlined.SearchOff">
+        <Actions>
+            <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary">Back to catalog</MudButton>
+        </Actions>
+    </EmptyState>
+}
+else if (!string.IsNullOrWhiteSpace(_loadErrorMessage))
+{
+    <EmptyState Title="Unable to load checkout"
+                Description="@_loadErrorMessage"
+                Icon="@Icons.Material.Outlined.CloudOff">
+        <Actions>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">
+                Try again
+            </MudButton>
+            <MudButton Href="/ui/catalog" Variant="Variant.Outlined" Color="Color.Primary">
+                Browse catalog
+            </MudButton>
+        </Actions>
+    </EmptyState>
+}
+else if (_service is null)
 {
     <EmptyState Title="Checkout needs a service"
-                Description="Choose a mock service before opening checkout."
+                Description="Choose an active service before opening checkout."
                 Icon="@Icons.Material.Outlined.Apps">
         <Actions>
             <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary">Browse catalog</MudButton>
@@ -14,67 +55,517 @@
 }
 else
 {
-    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", "/ui/catalog"), (Service.Name, $"/ui/services/{Service.Slug}"), ("Checkout", null) })" />
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", "/ui/catalog"), (_service.Name, $"/ui/services/{_service.Slug}"), ("Checkout", null) })" />
 
     <PageHeader Eyebrow="Checkout"
-                Title="Create a mock service order"
-                Description="Collect service fields, credentials, and payment context without writing to backend systems."
-                MaxWidth="form" />
+                Title="Create service order"
+                Description="Submit the configured service information and create a real order with the current backend pricing snapshot." />
 
-    <PageSection MaxWidth="form">
-        <FormSection Title="Service variant" Description="Variant selection drives the mock pricing snapshot.">
-            <VariantSelector Variants="@Service.Variants" @bind-SelectedVariantId="_selectedVariantId" />
-        </FormSection>
+    <PageSection MaxWidth="wide">
+        <div class="sb-detail-grid">
+            <div class="sb-credential-form">
+                <FormSection Title="Service variant" Description="Choose the active variant before entering fulfillment details.">
+                    @if (_service.Variants.Count == 0)
+                    {
+                        <EmptyState Title="No active variants"
+                                    Description="This service is active, but no variant is available for checkout."
+                                    Icon="@Icons.Material.Outlined.Inventory2" />
+                    }
+                    else
+                    {
+                        <VariantSelector Variants="@_service.Variants"
+                                         SelectedVariantId="@_selectedVariantId"
+                                         SelectedVariantIdChanged="OnVariantChangedAsync" />
+                    }
+                </FormSection>
 
-        <FormSection Title="Order fields" Description="These fields represent shaped UI input contracts for future API integration.">
-            <MudTextField T="string" Label="Customer email" Variant="Variant.Outlined" FullWidth="true" Value="@("customer@example.com")" />
-            <MudTextField T="string" Label="Account identifier" Variant="Variant.Outlined" FullWidth="true" Value="@("customer-account")" />
-            <MudTextField T="string" Label="Fulfillment notes" Variant="Variant.Outlined" Lines="4" FullWidth="true" Value="@("Activate the selected plan on the listed account.")" />
-        </FormSection>
+                <FormSection Title="Fulfillment mode" Description="The selected mode controls which customer fields are required.">
+                    @if (_service.SupportedFulfillmentModes.Count <= 1)
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                            @FulfillmentModeLabel(_selectedFulfillmentMode)
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudRadioGroup T="OrderFulfillmentMode"
+                                       Value="@_selectedFulfillmentMode"
+                                       ValueChanged="OnFulfillmentModeChangedAsync">
+                            @foreach (var mode in _service.SupportedFulfillmentModes)
+                            {
+                                <MudRadio T="OrderFulfillmentMode"
+                                          Value="@mode"
+                                          Color="Color.Primary"
+                                          Disabled="@_submitting">
+                                    @FulfillmentModeLabel(mode)
+                                </MudRadio>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    @FulfillmentModeDescription(mode)
+                                </MudText>
+                            }
+                        </MudRadioGroup>
+                    }
+                </FormSection>
 
-        @if (Service.RequiresCredentials)
-        {
-            <FormSection Title="Sensitive credentials" Description="Credential inputs remain isolated and visibly sensitive.">
-                <CredentialForm />
-            </FormSection>
-        }
+                <FormSection Title="Required information" Description="Fields come from the configured service credential schema.">
+                    @if (CustomerFields.Count == 0)
+                    {
+                        <EmptyState Title="No customer fields"
+                                    Description="This fulfillment mode does not require customer-provided fields."
+                                    Icon="@Icons.Material.Outlined.CheckCircle" />
+                    }
+                    else
+                    {
+                        <CredentialForm Fields="@CustomerFields"
+                                        Values="@_fieldValues"
+                                        ValidationErrors="@_fieldErrors"
+                                        Disabled="@_submitting"
+                                        FieldChanged="ClearFieldError" />
+                    }
+                </FormSection>
 
-        <div class="sb-checkout-summary">
-            <div>
-                <span>Total snapshot</span>
-                <strong>@SelectedVariant?.FinalPriceIrr.ToString("N0") IRR</strong>
-                <p>@VariantCaption</p>
+                @if (_generalValidationErrors.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                        @foreach (var error in _generalValidationErrors)
+                        {
+                            <div>@error</div>
+                        }
+                    </MudAlert>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_submitErrorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                        @_submitErrorMessage
+                    </MudAlert>
+                }
             </div>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Payments" OnClick="OpenConfirmation">
-                Submit mock order
-            </MudButton>
+
+            <aside class="sb-detail-panel">
+                <h2>Order summary</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Service</dt><dd>@_service.Name</dd></div>
+                    <div><dt>Variant</dt><dd>@(SelectedVariant?.Name ?? "Not selected")</dd></div>
+                    <div><dt>Provider</dt><dd>@_service.ProviderName</dd></div>
+                    <div><dt>Billing period</dt><dd>@(SelectedVariant?.BillingPeriod ?? "-")</dd></div>
+                    <div><dt>Currency</dt><dd>@(_quote?.CurrencyCode ?? SelectedVariant?.Currency ?? "-")</dd></div>
+                </dl>
+
+                <h2>Live price summary</h2>
+                @if (_quoteLoading)
+                {
+                    <LoadingState Text="Refreshing price" />
+                }
+                else if (!string.IsNullOrWhiteSpace(_quoteErrorMessage))
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true">
+                        @_quoteErrorMessage
+                    </MudAlert>
+                }
+                else if (_quote is not null)
+                {
+                    <dl class="sb-fact-list">
+                        <div><dt>Foreign price</dt><dd>@_quote.ForeignPrice.ToString("N2") @_quote.CurrencyCode</dd></div>
+                        <div><dt>Exchange rate</dt><dd>@_quote.ExchangeRate.ToString("N0") IRR</dd></div>
+                        <div><dt>Margin</dt><dd>@_quote.MarginPercentage.ToString("N2")%</dd></div>
+                        <div><dt>Final IRR price</dt><dd>@_quote.FinalAmountIrr.ToString("N0") IRR</dd></div>
+                        <div><dt>Quoted at</dt><dd>@_quote.QuotedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</dd></div>
+                    </dl>
+                }
+
+                <div class="sb-checkout-action">
+                    <div>
+                        <span>Order total</span>
+                        <strong>@(_quote is null ? "-" : $"{_quote.FinalAmountIrr:N0} IRR")</strong>
+                        <p>Pricing is resolved again by the backend when the order is created.</p>
+                    </div>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.CheckCircle"
+                               Disabled="@SubmitDisabled"
+                               OnClick="SubmitAsync">
+                        @if (_submitting)
+                        {
+                            <MudProgressCircular Color="Color.Inherit" Indeterminate="true" Size="Size.Small" />
+                            <span>Creating</span>
+                        }
+                        else
+                        {
+                            <span>Create order</span>
+                        }
+                    </MudButton>
+                </div>
+            </aside>
         </div>
     </PageSection>
-
-    <ConfirmationDialog @bind-Open="_confirmOpen"
-                        Title="Submit mock order"
-                        Description="This prototype action does not call an API or create a database record."
-                        ConfirmText="Submit mock order" />
 }
 
 @code {
+    private static readonly EmailAddressAttribute EmailValidator = new();
+
     [Parameter] public string? ServiceSlug { get; set; }
 
-    private bool _confirmOpen;
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _quoteLoading;
+    private bool _submitting;
+    private string? _loadErrorMessage;
+    private string? _quoteErrorMessage;
+    private string? _submitErrorMessage;
     private string? _selectedVariantId;
-    private DigitalServiceModel? Service => MockData.FindService(ServiceSlug) ?? MockData.FeaturedService;
-    private ServiceVariantModel? SelectedVariant => Service?.Variants.FirstOrDefault(variant => variant.Id == _selectedVariantId) ?? Service?.PrimaryVariant;
-    private string VariantCaption => SelectedVariant is null
-        ? "No variant selected."
-        : $"{SelectedVariant.Currency} {SelectedVariant.ForeignPrice:N0} {SelectedVariant.BillingPeriod} with {SelectedVariant.MarginPercent:N0}% margin.";
+    private OrderFulfillmentMode _selectedFulfillmentMode =
+        OrderFulfillmentMode.UseExistingAccount;
+    private PublicCatalogServiceDetail? _service;
+    private PublicPricingQuote? _quote;
+    private readonly Dictionary<string, string> _fieldValues =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string[]> _fieldErrors =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<string> _generalValidationErrors = [];
 
-    protected override void OnParametersSet()
+    private PublicCatalogVariant? SelectedVariant => _service?.Variants.FirstOrDefault(variant =>
+        string.Equals(variant.Id, _selectedVariantId, StringComparison.OrdinalIgnoreCase));
+
+    private IReadOnlyList<PublicRequiredField> CustomerFields =>
+        _service?.RequiredFields
+            .Where(field => field.IsCustomerFieldFor(_selectedFulfillmentMode))
+            .OrderBy(field => field.DisplayOrder)
+            .ToArray() ?? [];
+
+    private bool SubmitDisabled =>
+        _submitting ||
+        _quoteLoading ||
+        _quote is null ||
+        _service?.Variants.Count == 0 ||
+        SelectedVariant is null;
+
+    protected override async Task OnParametersSetAsync()
     {
-        _selectedVariantId ??= Service?.PrimaryVariant.Id;
+        await LoadAsync();
     }
 
-    private void OpenConfirmation()
+    private async Task LoadAsync()
     {
-        _confirmOpen = true;
+        _loading = true;
+        _notFound = false;
+        _loadErrorMessage = null;
+        _quoteErrorMessage = null;
+        _submitErrorMessage = null;
+        _fieldErrors.Clear();
+        _generalValidationErrors.Clear();
+        _quote = null;
+
+        var result = await CatalogClient.GetServiceDetailAsync(ServiceSlug);
+        if (result.Success && result.Service is not null)
+        {
+            _service = result.Service;
+            _selectedVariantId = _service.Variants.FirstOrDefault()?.Id;
+            _selectedFulfillmentMode = GetDefaultFulfillmentMode();
+            SyncFieldValues();
+            _loading = false;
+            await RefreshQuoteAsync();
+            return;
+        }
+
+        _service = null;
+        _notFound = result.NotFound;
+        _loadErrorMessage = result.NotFound
+            ? null
+            : result.ErrorMessage ?? "Unable to load checkout for the requested service.";
+        _loading = false;
+    }
+
+    private async Task OnVariantChangedAsync(string variantId)
+    {
+        if (_submitting)
+        {
+            return;
+        }
+
+        _selectedVariantId = variantId;
+        _submitErrorMessage = null;
+        _generalValidationErrors.Clear();
+        await RefreshQuoteAsync();
+    }
+
+    private Task OnFulfillmentModeChangedAsync(OrderFulfillmentMode mode)
+    {
+        if (_submitting)
+        {
+            return Task.CompletedTask;
+        }
+
+        _selectedFulfillmentMode = mode;
+        _submitErrorMessage = null;
+        _fieldErrors.Clear();
+        _generalValidationErrors.Clear();
+        SyncFieldValues();
+        return Task.CompletedTask;
+    }
+
+    private async Task RefreshQuoteAsync()
+    {
+        if (_service is null)
+        {
+            return;
+        }
+
+        _quoteLoading = true;
+        _quoteErrorMessage = null;
+        _quote = null;
+
+        var selectedVariant = SelectedVariant;
+        if (selectedVariant is null)
+        {
+            _quoteErrorMessage = "Select an active service variant before creating an order.";
+            _quoteLoading = false;
+            return;
+        }
+
+        var result = await CatalogClient.GetQuoteAsync(_service.Id, selectedVariant.VariantId);
+        if (result.Success && result.Quote is not null)
+        {
+            _quote = result.Quote;
+        }
+        else
+        {
+            _quoteErrorMessage = result.ErrorMessage ?? "Live pricing is not available for this selection.";
+        }
+
+        _quoteLoading = false;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_submitting || _service is null)
+        {
+            return;
+        }
+
+        _submitErrorMessage = null;
+        if (!ValidateClientFields())
+        {
+            return;
+        }
+
+        var selectedVariant = SelectedVariant;
+        if (selectedVariant is null)
+        {
+            _generalValidationErrors.Add("Select a service variant before creating an order.");
+            return;
+        }
+
+        _submitting = true;
+        var request = new CreateOrderRequest
+        {
+            ServiceId = _service.Id,
+            ServiceVariantId = selectedVariant.VariantId,
+            PlanId = selectedVariant.VariantId,
+            OrderType = OrderType.Purchase,
+            FulfillmentMode = _selectedFulfillmentMode,
+            Credentials = CustomerFields.Select(field => new CreateOrderFieldRequest
+            {
+                FieldKey = field.FieldKey,
+                Value = GetFieldValue(field.FieldKey).Trim()
+            }).ToList()
+        };
+
+        var result = await CheckoutClient.CreateOrderAsync(request);
+        _submitting = false;
+
+        if (result.Success && result.Order is not null)
+        {
+            Navigation.NavigateTo($"/Orders/Details/{result.Order.OrderId}");
+            return;
+        }
+
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (ApplyServerValidationErrors(result.ValidationErrors))
+        {
+            _submitErrorMessage = result.ErrorMessage;
+            return;
+        }
+
+        NavigateToFailure("create");
+    }
+
+    private bool ValidateClientFields()
+    {
+        _fieldErrors.Clear();
+        _generalValidationErrors.Clear();
+
+        if (_quote is null)
+        {
+            _generalValidationErrors.Add(
+                "Live pricing is unavailable. Refresh the quote before creating an order.");
+        }
+
+        foreach (var field in CustomerFields)
+        {
+            var errors = ValidateField(field, GetFieldValue(field.FieldKey));
+            if (errors.Count > 0)
+            {
+                _fieldErrors[field.FieldKey] = errors.ToArray();
+            }
+        }
+
+        return _fieldErrors.Count == 0 && _generalValidationErrors.Count == 0;
+    }
+
+    private static List<string> ValidateField(PublicRequiredField field, string value)
+    {
+        var errors = new List<string>();
+        var trimmedValue = value.Trim();
+
+        if (field.IsRequired && string.IsNullOrWhiteSpace(trimmedValue))
+        {
+            errors.Add($"{field.Label} is required.");
+            return errors;
+        }
+
+        if (trimmedValue.Length == 0)
+        {
+            return errors;
+        }
+
+        if (trimmedValue.Length > 2000)
+        {
+            errors.Add($"{field.Label} cannot exceed 2000 characters.");
+        }
+
+        if (field.FieldType.Equals("Email", StringComparison.OrdinalIgnoreCase) &&
+            !EmailValidator.IsValid(trimmedValue))
+        {
+            errors.Add($"Enter a valid email address for {field.Label}.");
+        }
+
+        if (field.FieldType.Equals("Number", StringComparison.OrdinalIgnoreCase) &&
+            !decimal.TryParse(trimmedValue, NumberStyles.Number, CultureInfo.InvariantCulture, out _) &&
+            !decimal.TryParse(trimmedValue, NumberStyles.Number, CultureInfo.CurrentCulture, out _))
+        {
+            errors.Add($"Enter a valid number for {field.Label}.");
+        }
+
+        if (field.FieldType.Equals("Select", StringComparison.OrdinalIgnoreCase))
+        {
+            if (field.Options.Count == 0)
+            {
+                errors.Add($"{field.Label} options are not configured.");
+            }
+            else if (!field.Options.Any(option =>
+                string.Equals(option.Value, trimmedValue, StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add($"Choose a valid option for {field.Label}.");
+            }
+        }
+
+        return errors;
+    }
+
+    private bool ApplyServerValidationErrors(
+        Dictionary<string, string[]>? validationErrors)
+    {
+        if (validationErrors is null || validationErrors.Count == 0)
+        {
+            return false;
+        }
+
+        _fieldErrors.Clear();
+        _generalValidationErrors.Clear();
+        foreach (var (key, errors) in validationErrors)
+        {
+            var field = CustomerFields.FirstOrDefault(field =>
+                string.Equals(field.FieldKey, key, StringComparison.OrdinalIgnoreCase));
+
+            if (field is not null)
+            {
+                _fieldErrors[field.FieldKey] = errors;
+                continue;
+            }
+
+            foreach (var error in errors)
+            {
+                _generalValidationErrors.Add(error);
+            }
+        }
+
+        return true;
+    }
+
+    private void SyncFieldValues()
+    {
+        var fields = CustomerFields;
+        var expectedKeys = fields
+            .Select(field => field.FieldKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var key in _fieldValues.Keys.Where(key => !expectedKeys.Contains(key)).ToArray())
+        {
+            _fieldValues.Remove(key);
+        }
+
+        foreach (var field in fields)
+        {
+            _fieldValues.TryAdd(field.FieldKey, string.Empty);
+        }
+    }
+
+    private Task ClearFieldError(string fieldKey)
+    {
+        _fieldErrors.Remove(fieldKey);
+        _submitErrorMessage = null;
+        return Task.CompletedTask;
+    }
+
+    private string GetFieldValue(string fieldKey)
+    {
+        return _fieldValues.TryGetValue(fieldKey, out var value)
+            ? value
+            : string.Empty;
+    }
+
+    private OrderFulfillmentMode GetDefaultFulfillmentMode()
+    {
+        if (_service?.SupportedFulfillmentModes.Contains(_selectedFulfillmentMode) == true)
+        {
+            return _selectedFulfillmentMode;
+        }
+
+        return _service?.SupportedFulfillmentModes.FirstOrDefault() ??
+            OrderFulfillmentMode.UseExistingAccount;
+    }
+
+    private void NavigateToFailure(string reason)
+    {
+        var serviceQuery = string.IsNullOrWhiteSpace(ServiceSlug)
+            ? string.Empty
+            : $"&service={Uri.EscapeDataString(ServiceSlug)}";
+        Navigation.NavigateTo($"/ui/checkout/failure?reason={Uri.EscapeDataString(reason)}{serviceQuery}");
+    }
+
+    private static string FulfillmentModeLabel(OrderFulfillmentMode mode)
+    {
+        return mode switch
+        {
+            OrderFulfillmentMode.CreateNewAccount => "Create a new account",
+            _ => "Use an existing account"
+        };
+    }
+
+    private static string FulfillmentModeDescription(OrderFulfillmentMode mode)
+    {
+        return mode switch
+        {
+            OrderFulfillmentMode.CreateNewAccount =>
+                "ServiceBridge creates the account and delivers credentials after fulfillment.",
+            _ =>
+                "ServiceBridge uses the account details you provide for fulfillment."
+        };
     }
 }

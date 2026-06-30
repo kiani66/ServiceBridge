@@ -22,6 +22,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddMudServices();
 builder.Services.AddSingleton<ServiceBridgeMockDataProvider>();
 builder.Services.AddScoped<PublicCatalogClient>();
+builder.Services.AddScoped<CheckoutClient>();
 
 // Cookie Authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

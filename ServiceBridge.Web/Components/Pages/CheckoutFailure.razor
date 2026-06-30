@@ -1,0 +1,37 @@
+@page "/ui/checkout/failure"
+@layout PublicLayout
+
+<EmptyState Title="Order could not be created"
+            Description="@Description"
+            Icon="@Icons.Material.Outlined.ErrorOutline">
+    <Actions>
+        @if (!string.IsNullOrWhiteSpace(Service))
+        {
+            <MudButton Href="@($"/ui/checkout/{Service}")"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary">
+                Try checkout again
+            </MudButton>
+        }
+        <MudButton Href="/ui/catalog"
+                   Variant="Variant.Outlined"
+                   Color="Color.Primary">
+            Browse catalog
+        </MudButton>
+    </Actions>
+</EmptyState>
+
+@code {
+    [SupplyParameterFromQuery(Name = "reason")]
+    public string? Reason { get; set; }
+
+    [SupplyParameterFromQuery(Name = "service")]
+    public string? Service { get; set; }
+
+    private string Description => Reason switch
+    {
+        "pricing" => "Live pricing is not available for the selected service. Please try another variant or come back later.",
+        "auth" => "Your session could not be confirmed. Sign in and start checkout again.",
+        _ => "The order service did not accept the request. No order was created, and you can safely try again."
+    };
+}
