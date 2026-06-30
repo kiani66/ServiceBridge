@@ -10,8 +10,8 @@
                 <strong>@variant.Name</strong>
                 <small>@variant.Description</small>
             </span>
-            <b>@variant.FinalPriceIrr.ToString("N0") IRR</b>
-            <em>@variant.Currency @variant.ForeignPrice:N0 @variant.BillingPeriod</em>
+            <b>@variant.PriceText</b>
+            <em>@variant.MetaText</em>
             @if (variant.IsPopular)
             {
                 <StatusBadge Text="Recommended" Tone="success" />
@@ -21,7 +21,7 @@
 </div>
 
 @code {
-    [Parameter, EditorRequired] public IReadOnlyList<ServiceVariantModel> Variants { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<IServiceVariantOption> Variants { get; set; } = [];
     [Parameter] public string? SelectedVariantId { get; set; }
     [Parameter] public EventCallback<string> SelectedVariantIdChanged { get; set; }
 

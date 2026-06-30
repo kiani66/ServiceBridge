@@ -1,10 +1,32 @@
 @page "/ui/catalog/{CategorySlug}"
-@inject ServiceBridgeMockDataProvider MockData
+@layout PublicLayout
+@inject PublicCatalogClient CatalogClient
 
-@if (CurrentCategory is null)
+@if (_loading)
+{
+    <PageHeader Eyebrow="Category"
+                Title="Loading category"
+                Description="Fetching active services from the public catalog API." />
+    <PageSection MaxWidth="standard">
+        <LoadingSkeleton Lines="6" Label="Loading category services" />
+    </PageSection>
+}
+else if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+    <EmptyState Title="Unable to load category"
+                Description="@_errorMessage"
+                Icon="@Icons.Material.Outlined.CloudOff">
+        <Actions>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">
+                Try again
+            </MudButton>
+        </Actions>
+    </EmptyState>
+}
+else if (_category is null)
 {
     <EmptyState Title="Category not found"
-                Description="The requested mock category is not available."
+                Description="The requested category is not available in the active public catalog."
                 Icon="@Icons.Material.Outlined.SearchOff">
         <Actions>
             <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary">Back to catalog</MudButton>
@@ -13,25 +35,67 @@
 }
 else
 {
-    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", "/ui/catalog"), (CurrentCategory.Name, null) })" />
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", "/ui/catalog"), (_category.Name, null) })" />
 
     <PageHeader Eyebrow="Category"
-                Title="@CurrentCategory.Name"
-                Description="@CurrentCategory.Description" />
+                Title="@_category.Name"
+                Description="@_category.Description" />
 
     <PageSection MaxWidth="standard">
-        <div class="sb-service-grid">
-            @foreach (var service in Services)
-            {
-                <ServiceCard Service="@service" />
-            }
-        </div>
+        @if (Services.Count == 0)
+        {
+            <EmptyState Title="No active services"
+                        Description="This category has no active public services."
+                        Icon="@Icons.Material.Outlined.Inventory2" />
+        }
+        else
+        {
+            <div class="sb-service-grid">
+                @foreach (var service in Services)
+                {
+                    <ServiceCard Service="@service" />
+                }
+            </div>
+        }
     </PageSection>
 }
 
 @code {
     [Parameter] public string? CategorySlug { get; set; }
 
-    private ServiceCategoryModel? CurrentCategory => MockData.FindCategory(CategorySlug);
-    private IReadOnlyList<DigitalServiceModel> Services => MockData.ServicesForCategory(CategorySlug);
+    private bool _loading = true;
+    private string? _errorMessage;
+    private PublicCatalogCategory? _category;
+    private IReadOnlyList<PublicCatalogService> _services = [];
+
+    private IReadOnlyList<PublicCatalogService> Services => _services
+        .Where(service => string.Equals(service.CategorySlug, CategorySlug, StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await CatalogClient.GetCatalogAsync();
+        if (result.Success)
+        {
+            _category = result.Categories.FirstOrDefault(category =>
+                string.Equals(category.Slug, CategorySlug, StringComparison.OrdinalIgnoreCase));
+            _services = result.Services;
+        }
+        else
+        {
+            _category = null;
+            _services = [];
+            _errorMessage = result.ErrorMessage ?? "Unable to load active services.";
+        }
+
+        _loading = false;
+    }
 }

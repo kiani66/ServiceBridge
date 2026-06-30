@@ -4,6 +4,7 @@ using ServiceBridge.Web.Components;
 using ServiceBridge.Shared.Constants;
 using ServiceBridge.Web.Handlers;
 using ServiceBridge.Web.MockData;
+using ServiceBridge.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +21,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddMudServices();
 builder.Services.AddSingleton<ServiceBridgeMockDataProvider>();
+builder.Services.AddScoped<PublicCatalogClient>();
 
 // Cookie Authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

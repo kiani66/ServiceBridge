@@ -1,62 +1,150 @@
 @page "/ui"
-@inject ServiceBridgeMockDataProvider MockData
+@layout PublicLayout
+@inject PublicCatalogClient CatalogClient
 
-<PageHeader Eyebrow="Prototype"
-            Title="Service mediation from request to fulfillment"
-            Description="A Blazor prototype for digital-service selection, credential-safe checkout, payment visibility, and operational tracking. All data on these pages is mock data."
-            MaxWidth="public">
-    <Actions>
-        <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Apps">
-            Browse services
-        </MudButton>
-        <MudButton Href="/ui/orders" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.ReceiptLong">
-            Track orders
-        </MudButton>
-    </Actions>
-</PageHeader>
+@if (_loading)
+{
+    <PageHeader Eyebrow="ServiceBridge"
+                Title="Service mediation from request to fulfillment"
+                Description="Browse provider-backed digital services, request fulfillment, pay in IRR, and track the order timeline."
+                MaxWidth="public" />
 
-<PageSection MaxWidth="public">
-    <div class="sb-hero-grid">
-        <div class="sb-hero-panel">
-            <span class="sb-eyebrow">Featured service</span>
-            <h2>@MockData.FeaturedService.Name</h2>
-            <p>@MockData.FeaturedService.Description</p>
-            <div class="sb-hero-actions">
-                <MudButton Href="@($"/ui/services/{MockData.FeaturedService.Slug}")" Variant="Variant.Filled" Color="Color.Primary">
-                    View details
-                </MudButton>
-                <MudButton Href="@($"/ui/checkout/{MockData.FeaturedService.Slug}")" Variant="Variant.Text" Color="Color.Primary">
-                    Start checkout
-                </MudButton>
+    <PageSection MaxWidth="public">
+        <LoadingSkeleton Lines="5" Label="Loading public catalog" />
+    </PageSection>
+}
+else if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+    <EmptyState Title="Catalog unavailable"
+                Description="@_errorMessage"
+                Icon="@Icons.Material.Outlined.CloudOff">
+        <Actions>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">
+                Try again
+            </MudButton>
+        </Actions>
+    </EmptyState>
+}
+else
+{
+    <PageHeader Eyebrow="ServiceBridge"
+                Title="Service mediation from request to fulfillment"
+                Description="Browse provider-backed digital services, request fulfillment, pay in IRR, and track the order timeline."
+                MaxWidth="public">
+        <Actions>
+            <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Apps">
+                Browse services
+            </MudButton>
+            <MudButton Href="/Account/Login" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Login">
+                Sign in
+            </MudButton>
+        </Actions>
+    </PageHeader>
+
+    <PageSection MaxWidth="public">
+        <div class="sb-hero-grid">
+            <div class="sb-hero-panel">
+                <span class="sb-eyebrow">Featured service</span>
+                @if (FeaturedService is null)
+                {
+                    <h2>No active services yet</h2>
+                    <p>The public catalog is ready, but there are no active services to display.</p>
+                }
+                else
+                {
+                    <h2>@FeaturedService.Name</h2>
+                    <p>@FeaturedService.Description</p>
+                    <dl class="sb-fact-list">
+                        <div>
+                            <dt>Provider</dt>
+                            <dd>@FeaturedService.ProviderName</dd>
+                        </div>
+                        <div>
+                            <dt>Live price</dt>
+                            <dd>@FeaturedService.PriceLabel</dd>
+                        </div>
+                    </dl>
+                    <div class="sb-hero-actions">
+                        <MudButton Href="@FeaturedService.DetailHref" Variant="Variant.Filled" Color="Color.Primary">
+                            View details
+                        </MudButton>
+                        <MudButton Href="/ui/catalog" Variant="Variant.Text" Color="Color.Primary">
+                            Compare services
+                        </MudButton>
+                    </div>
+                }
+            </div>
+            <div class="sb-hero-steps" aria-label="ServiceBridge workflow">
+                <div><strong>1</strong><span>Select an active service and variant.</span></div>
+                <div><strong>2</strong><span>Review provider, billing period, currency, and live IRR price.</span></div>
+                <div><strong>3</strong><span>Submit order fields and credentials only during checkout.</span></div>
+                <div><strong>4</strong><span>Track payment and agent fulfillment through completion.</span></div>
             </div>
         </div>
-        <div class="sb-hero-steps" aria-label="ServiceBridge workflow">
-            <div><strong>1</strong><span>Select service and variant</span></div>
-            <div><strong>2</strong><span>Submit order fields and credentials when needed</span></div>
-            <div><strong>3</strong><span>Pay in IRR with a captured pricing snapshot</span></div>
-            <div><strong>4</strong><span>Track agent fulfillment through completion</span></div>
+    </PageSection>
+
+    <PageSection Title="Service categories" Description="Focused discovery for active digital-service workflows." MaxWidth="public">
+        @if (_categories.Count == 0)
+        {
+            <EmptyState Title="No active categories"
+                        Description="Active categories appear here when they have public services."
+                        Icon="@Icons.Material.Outlined.Category" />
+        }
+        else
+        {
+            <div class="sb-category-grid">
+                @foreach (var category in _categories)
+                {
+                    <a class="sb-category-card" href="@($"/ui/catalog/{category.Slug}")">
+                        <MudIcon Icon="@Icons.Material.Outlined.Category" Size="Size.Large" />
+                        <strong>@category.Name</strong>
+                        <span>@category.Description</span>
+                    </a>
+                }
+            </div>
+        }
+    </PageSection>
+
+    <PageSection Title="Trust and payment guidance" Description="Public browsing stays separate from checkout, order creation, and payment." MaxWidth="public">
+        <div class="sb-process-grid">
+            <div><strong>Live quotes</strong><span>Displayed IRR prices come from the pricing API at browsing time.</span></div>
+            <div><strong>Provider context</strong><span>Each service shows provider, description, currency, and fulfillment timing.</span></div>
+            <div><strong>Credential-aware checkout</strong><span>Sensitive order fields are collected only in the order flow.</span></div>
         </div>
-    </div>
-</PageSection>
+    </PageSection>
+}
 
-<PageSection Title="Service categories" Description="Focused discovery for the digital-service workflows ServiceBridge supports." MaxWidth="public">
-    <div class="sb-category-grid">
-        @foreach (var category in MockData.Categories)
-        {
-            <a class="sb-category-card" href="@($"/ui/catalog/{category.Slug}")">
-                <MudIcon Icon="@category.Icon" Size="Size.Large" />
-                <strong>@category.Name</strong>
-                <span>@category.Description</span>
-            </a>
-        }
-    </div>
-</PageSection>
+@code {
+    private bool _loading = true;
+    private string? _errorMessage;
+    private IReadOnlyList<PublicCatalogCategory> _categories = [];
+    private IReadOnlyList<PublicCatalogService> _services = [];
 
-<PageSection Title="Operational snapshot" Description="Prototype metrics use mock data but mirror the future dashboard contract." MaxWidth="public">
-    <div class="sb-stat-grid">
-        @foreach (var metric in MockData.DashboardMetrics)
+    private PublicCatalogService? FeaturedService => _services.FirstOrDefault();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await CatalogClient.GetCatalogAsync();
+        if (result.Success)
         {
-            <StatCard Label="@metric.Label" Value="@metric.Value" Description="@metric.Description" Tone="@metric.Tone" Icon="@metric.Icon" />
+            _categories = result.Categories;
+            _services = result.Services;
         }
-    </div>
-</PageSection>
+        else
+        {
+            _categories = [];
+            _services = [];
+            _errorMessage = result.ErrorMessage ?? "Unable to load the public catalog.";
+        }
+
+        _loading = false;
+    }
+}

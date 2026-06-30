@@ -1,53 +1,143 @@
 @page "/ui/services/{ServiceSlug}"
-@inject ServiceBridgeMockDataProvider MockData
+@layout PublicLayout
+@inject PublicCatalogClient CatalogClient
 
-@if (Service is null)
+@if (_loading)
+{
+    <PageHeader Eyebrow="Service"
+                Title="Loading service"
+                Description="Fetching active service details and live pricing." />
+    <PageSection MaxWidth="standard">
+        <LoadingSkeleton Lines="7" Label="Loading service details" />
+    </PageSection>
+}
+else if (_notFound)
 {
     <EmptyState Title="Service not found"
-                Description="The requested mock service is not available."
+                Description="The requested service is not active or is not available in the public catalog."
                 Icon="@Icons.Material.Outlined.SearchOff">
         <Actions>
             <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary">Back to catalog</MudButton>
         </Actions>
     </EmptyState>
 }
-else
+else if (!string.IsNullOrWhiteSpace(_errorMessage))
 {
-    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", "/ui/catalog"), (Service.CategoryName, $"/ui/catalog/{Service.CategorySlug}"), (Service.Name, null) })" />
-
-    <PageHeader Eyebrow="@Service.ProviderName"
-                Title="@Service.Name"
-                Description="@Service.Description">
+    <EmptyState Title="Unable to load service"
+                Description="@_errorMessage"
+                Icon="@Icons.Material.Outlined.CloudOff">
         <Actions>
-            <MudButton Href="@($"/ui/checkout/{Service.Slug}")" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Lock">
-                Continue to checkout
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">
+                Try again
+            </MudButton>
+        </Actions>
+    </EmptyState>
+}
+else if (_service is not null)
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", "/ui/catalog"), (_service.CategoryName, $"/ui/catalog/{_service.CategorySlug}"), (_service.Name, null) })" />
+
+    <PageHeader Eyebrow="@_service.ProviderName"
+                Title="@_service.Name"
+                Description="@_service.Description">
+        <Actions>
+            <MudButton Href="/Account/Login" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Lock">
+                Sign in to continue
             </MudButton>
         </Actions>
     </PageHeader>
 
-    <PageSection Title="Choose a variant" Description="Pricing is shown as an immutable snapshot preview for checkout." MaxWidth="standard">
+    <PageSection Title="Choose a variant" Description="Variant selection refreshes the live quote from the pricing API." MaxWidth="standard">
         <div class="sb-detail-grid">
-            <VariantSelector Variants="@Service.Variants" @bind-SelectedVariantId="_selectedVariantId" />
+            @if (_service.Variants.Count == 0)
+            {
+                <EmptyState Title="No active variants"
+                            Description="This service is active, but no active variants are available."
+                            Icon="@Icons.Material.Outlined.Inventory2" />
+            }
+            else
+            {
+                <VariantSelector Variants="@_service.Variants" SelectedVariantId="@_selectedVariantId" SelectedVariantIdChanged="OnVariantChangedAsync" />
+            }
+
             <div class="sb-detail-panel">
-                <h2>Required information</h2>
-                <ul class="sb-field-list">
-                    @foreach (var field in Service.RequiredFields)
-                    {
-                        <li>
-                            <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Color="Color.Success" Size="Size.Small" />
-                            <span>@field</span>
-                        </li>
-                    }
-                </ul>
-                <StatusBadge Text="Credential-aware flow" Tone="warning" Icon="@Icons.Material.Outlined.Security" />
+                <h2>Live price quote</h2>
+                @if (_quoteLoading)
+                {
+                    <LoadingState Text="Refreshing price" />
+                }
+                else if (!string.IsNullOrWhiteSpace(_quoteErrorMessage))
+                {
+                    <StatusBadge Text="Pricing unavailable" Tone="danger" Icon="@Icons.Material.Outlined.ErrorOutline" />
+                    <p>@_quoteErrorMessage</p>
+                }
+                else if (_quote is not null)
+                {
+                    <PriceCard Label="Final IRR price"
+                               Amount="@FormatIrr(_quote.FinalAmountIrr)"
+                               Caption="@($"{_quote.ForeignPrice:N0} {_quote.CurrencyCode} x {_quote.ExchangeRate:N0} + {_quote.MarginPercentage:N2}% margin")"
+                               Badge="Live quote"
+                               BadgeTone="success"
+                               Selected="true" />
+                }
+
+                <dl class="sb-fact-list">
+                    <div>
+                        <dt>Provider</dt>
+                        <dd>@_service.ProviderName</dd>
+                    </div>
+                    <div>
+                        <dt>Currency</dt>
+                        <dd>@SelectedVariant?.Currency</dd>
+                    </div>
+                    <div>
+                        <dt>Billing period</dt>
+                        <dd>@SelectedVariant?.BillingPeriod</dd>
+                    </div>
+                    <div>
+                        <dt>Fulfillment</dt>
+                        <dd>@(SelectedVariant?.ProcessingTime ?? _service.ProcessingTime)</dd>
+                    </div>
+                </dl>
             </div>
         </div>
     </PageSection>
 
+    <PageSection Title="Required information" Description="Checkout collects only the fields configured for this active service." MaxWidth="standard">
+        @if (_service.RequiredFields.Count == 0)
+        {
+            <EmptyState Title="No required fields"
+                        Description="This service does not currently require public order fields."
+                        Icon="@Icons.Material.Outlined.CheckCircle" />
+        }
+        else
+        {
+            <div class="sb-detail-panel">
+                <ul class="sb-field-list">
+                    @foreach (var field in _service.RequiredFields)
+                    {
+                        <li>
+                            <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                            <span>@field.Label</span>
+                            @if (field.IsRequired)
+                            {
+                                <StatusBadge Text="Required" Tone="warning" />
+                            }
+                            @if (field.IsSensitive)
+                            {
+                                <StatusBadge Text="Sensitive" Tone="danger" Icon="@Icons.Material.Outlined.Security" />
+                            }
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+    </PageSection>
+
     <PageSection Title="Fulfillment guidance" MaxWidth="standard">
         <div class="sb-process-grid">
-            <div><strong>Payment snapshot</strong><span>IRR amount is captured when the order is submitted.</span></div>
-            <div><strong>Admin review</strong><span>Paid orders are reviewed and assigned to an agent.</span></div>
+            <div><strong>Payment snapshot</strong><span>IRR amount is captured during order submission.</span></div>
+            <div><strong>Admin review</strong><span>Paid orders are reviewed and assigned to a fulfillment path.</span></div>
             <div><strong>Agent fulfillment</strong><span>Timeline events keep users informed until completion.</span></div>
         </div>
     </PageSection>
@@ -56,11 +146,82 @@ else
 @code {
     [Parameter] public string? ServiceSlug { get; set; }
 
-    private DigitalServiceModel? Service => MockData.FindService(ServiceSlug);
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _quoteLoading;
+    private string? _errorMessage;
+    private string? _quoteErrorMessage;
     private string? _selectedVariantId;
+    private PublicCatalogServiceDetail? _service;
+    private PublicPricingQuote? _quote;
 
-    protected override void OnParametersSet()
+    private PublicCatalogVariant? SelectedVariant => _service?.Variants.FirstOrDefault(variant =>
+        string.Equals(variant.Id, _selectedVariantId, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnParametersSetAsync()
     {
-        _selectedVariantId ??= Service?.PrimaryVariant.Id;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _notFound = false;
+        _errorMessage = null;
+        _quoteErrorMessage = null;
+        _quote = null;
+
+        var result = await CatalogClient.GetServiceDetailAsync(ServiceSlug);
+        if (result.Success && result.Service is not null)
+        {
+            _service = result.Service;
+            _selectedVariantId = _service.Variants.FirstOrDefault()?.Id;
+            _loading = false;
+            await RefreshQuoteAsync();
+            return;
+        }
+
+        _service = null;
+        _notFound = result.NotFound;
+        _errorMessage = result.NotFound
+            ? null
+            : result.ErrorMessage ?? "Unable to load the requested service.";
+        _loading = false;
+    }
+
+    private async Task OnVariantChangedAsync(string variantId)
+    {
+        _selectedVariantId = variantId;
+        await RefreshQuoteAsync();
+    }
+
+    private async Task RefreshQuoteAsync()
+    {
+        if (_service is null)
+        {
+            return;
+        }
+
+        _quoteLoading = true;
+        _quoteErrorMessage = null;
+        _quote = null;
+
+        var selectedVariant = SelectedVariant;
+        var result = await CatalogClient.GetQuoteAsync(_service.Id, selectedVariant?.VariantId);
+        if (result.Success && result.Quote is not null)
+        {
+            _quote = result.Quote;
+        }
+        else
+        {
+            _quoteErrorMessage = result.ErrorMessage ?? "Live pricing is not available for this selection.";
+        }
+
+        _quoteLoading = false;
+    }
+
+    private static string FormatIrr(decimal amount)
+    {
+        return $"{amount:N0} IRR";
     }
 }
