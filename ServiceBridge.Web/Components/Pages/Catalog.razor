@@ -1,55 +1,144 @@
 @page "/ui/catalog"
-@inject ServiceBridgeMockDataProvider MockData
+@layout PublicLayout
+@inject PublicCatalogClient CatalogClient
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", null) })" />
 
 <PageHeader Eyebrow="Catalog"
             Title="Digital services"
-            Description="Select a provider-backed service, compare variants, and continue into a mock checkout without any backend dependency.">
+            Description="Select an active provider-backed service, compare live IRR pricing, and review fulfillment context before checkout.">
     <Actions>
-        <MudButton Href="/ui/checkout/chatgpt-plus" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Lock">
-            Start checkout
+        <MudButton Href="/ui" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Home">
+            Home
         </MudButton>
     </Actions>
 </PageHeader>
 
 <PageSection MaxWidth="standard">
     <DataGridToolbar Title="Available services"
-                     Description="Mock catalog data for AI assistants and developer tools."
+                     Description="Active services backed by the ServiceBridge API."
                      Search="@_search"
                      SearchChanged="OnSearchChanged"
-                     SearchPlaceholder="Search by service or provider">
+                     SearchPlaceholder="Search by service, provider, or category">
         <Actions>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.FilterList" OnClick="ToggleFilters">
-                Filters
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Refresh" OnClick="LoadAsync">
+                Refresh
             </MudButton>
         </Actions>
     </DataGridToolbar>
-    @if (_showFilters)
+
+    @if (_loading)
     {
-        <FilterPanel />
+        <LoadingSkeleton Lines="6" Label="Loading active services" />
     }
-    <div class="sb-service-grid">
-        @foreach (var service in FilteredServices)
-        {
-            <ServiceCard Service="@service" />
-        }
-    </div>
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <EmptyState Title="Unable to load services"
+                    Description="@_errorMessage"
+                    Icon="@Icons.Material.Outlined.CloudOff">
+            <Actions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">
+                    Try again
+                </MudButton>
+            </Actions>
+        </EmptyState>
+    }
+    else if (_services.Count == 0)
+    {
+        <EmptyState Title="No active services"
+                    Description="The public catalog has no active services available."
+                    Icon="@Icons.Material.Outlined.Inventory2" />
+    }
+    else if (!FilteredServices.Any())
+    {
+        <EmptyState Title="No matching services"
+                    Description="Adjust the search text to find another service or provider."
+                    Icon="@Icons.Material.Outlined.SearchOff" />
+    }
+    else
+    {
+        <div class="sb-service-grid">
+            @foreach (var service in FilteredServices)
+            {
+                <ServiceCard Service="@service" />
+            }
+        </div>
+    }
+</PageSection>
+
+<PageSection Title="Browse by category" Description="Categories are derived from active public services." MaxWidth="standard">
+    @if (_loading)
+    {
+        <LoadingSkeleton Lines="3" Label="Loading categories" />
+    }
+    else if (_categories.Count == 0)
+    {
+        <EmptyState Title="No active categories"
+                    Description="Categories appear when active services are published."
+                    Icon="@Icons.Material.Outlined.Category" />
+    }
+    else
+    {
+        <div class="sb-category-grid">
+            @foreach (var category in _categories)
+            {
+                <a class="sb-category-card" href="@($"/ui/catalog/{category.Slug}")">
+                    <MudIcon Icon="@Icons.Material.Outlined.Category" Size="Size.Large" />
+                    <strong>@category.Name</strong>
+                    <span>@category.Description</span>
+                </a>
+            }
+        </div>
+    }
 </PageSection>
 
 @code {
     private string? _search;
-    private bool _showFilters;
+    private bool _loading = true;
+    private string? _errorMessage;
+    private IReadOnlyList<PublicCatalogCategory> _categories = [];
+    private IReadOnlyList<PublicCatalogService> _services = [];
 
-    private IEnumerable<DigitalServiceModel> FilteredServices => string.IsNullOrWhiteSpace(_search)
-        ? MockData.Services
-        : MockData.Services.Where(service =>
-            service.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-            service.ProviderName.Contains(_search, StringComparison.OrdinalIgnoreCase));
-
-    private void ToggleFilters()
+    private IEnumerable<PublicCatalogService> FilteredServices
     {
-        _showFilters = !_showFilters;
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_search))
+            {
+                return _services;
+            }
+
+            return _services.Where(service =>
+                service.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                service.ProviderName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                service.CategoryName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await CatalogClient.GetCatalogAsync();
+        if (result.Success)
+        {
+            _categories = result.Categories;
+            _services = result.Services;
+        }
+        else
+        {
+            _categories = [];
+            _services = [];
+            _errorMessage = result.ErrorMessage ?? "Unable to load active services.";
+        }
+
+        _loading = false;
     }
 
     private Task OnSearchChanged(string? value)

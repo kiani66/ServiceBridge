@@ -13,15 +13,15 @@
             <dd>@Service.ProviderName</dd>
         </div>
         <div>
-            <dt>From</dt>
-            <dd>@FormatIrr(Service.PrimaryVariant.FinalPriceIrr)</dd>
+            <dt>Live price</dt>
+            <dd>@Service.PriceLabel</dd>
         </div>
         <div>
             <dt>Fulfillment</dt>
-            <dd>@Service.PrimaryVariant.ProcessingTime</dd>
+            <dd>@Service.ProcessingTime</dd>
         </div>
     </dl>
-    <MudButton Href="@($"/ui/services/{Service.Slug}")"
+    <MudButton Href="@Service.DetailHref"
                Variant="Variant.Outlined"
                Color="Color.Primary"
                FullWidth="true"
@@ -31,10 +31,5 @@
 </article>
 
 @code {
-    [Parameter, EditorRequired] public DigitalServiceModel Service { get; set; } = default!;
-
-    private static string FormatIrr(decimal amount)
-    {
-        return $"{amount:N0} IRR";
-    }
+    [Parameter, EditorRequired] public IServiceCardModel Service { get; set; } = default!;
 }

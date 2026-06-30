@@ -1,4 +1,5 @@
 using MudBlazor;
+using ServiceBridge.Web.Components.Shared;
 
 namespace ServiceBridge.Web.MockData;
 
@@ -168,9 +169,12 @@ public sealed record DigitalServiceModel(
     string Icon,
     bool RequiresCredentials,
     IReadOnlyList<string> RequiredFields,
-    IReadOnlyList<ServiceVariantModel> Variants)
+    IReadOnlyList<ServiceVariantModel> Variants) : IServiceCardModel
 {
     public ServiceVariantModel PrimaryVariant => Variants[0];
+    public string DetailHref => $"/ui/services/{Slug}";
+    public string PriceLabel => $"{PrimaryVariant.FinalPriceIrr:N0} IRR";
+    public string ProcessingTime => PrimaryVariant.ProcessingTime;
 }
 
 public sealed record ServiceVariantModel(
@@ -183,9 +187,11 @@ public sealed record ServiceVariantModel(
     decimal MarginPercent,
     decimal ExchangeRate,
     string ProcessingTime,
-    bool IsPopular)
+    bool IsPopular) : IServiceVariantOption
 {
     public decimal FinalPriceIrr => Math.Round(ForeignPrice * ExchangeRate * (1 + MarginPercent / 100), 0);
+    public string PriceText => $"{FinalPriceIrr:N0} IRR";
+    public string MetaText => $"{Currency} {ForeignPrice:N0} {BillingPeriod}";
 }
 
 public sealed record OrderModel(
