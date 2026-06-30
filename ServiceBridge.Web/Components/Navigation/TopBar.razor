@@ -1,0 +1,24 @@
+<MudAppBar Elevation="0" Dense="true" Class="sb-topbar">
+    <MudIconButton Icon="@Icons.Material.Outlined.Menu"
+                   Color="Color.Primary"
+                   Edge="Edge.Start"
+                   OnClick="ToggleAsync"
+                   aria-label="Toggle navigation" />
+    <MudText Typo="Typo.subtitle1" Class="sb-topbar-title">Blazor UI Foundation</MudText>
+    <MudSpacer />
+    <MudButton Href="/Dashboard"
+               Variant="Variant.Outlined"
+               Color="Color.Primary"
+               Size="Size.Small">
+        Razor Dashboard
+    </MudButton>
+</MudAppBar>
+
+@code {
+    [Parameter] public EventCallback OnMenuToggle { get; set; }
+
+    private Task ToggleAsync()
+    {
+        return OnMenuToggle.InvokeAsync();
+    }
+}

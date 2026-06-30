@@ -1,0 +1,9 @@
+<div class="sb-loading-state">
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Medium" />
+    <span>@Text</span>
+</div>
+
+@code {
+    [Parameter] public string Text { get; set; } = "Loading";
+}
+
