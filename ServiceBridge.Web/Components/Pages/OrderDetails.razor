@@ -1,0 +1,75 @@
+@page "/ui/orders/{OrderNumber}"
+@inject ServiceBridgeMockDataProvider MockData
+
+@if (Order is null)
+{
+    <EmptyState Title="Order not found"
+                Description="The requested mock order is not available."
+                Icon="@Icons.Material.Outlined.SearchOff">
+        <Actions>
+            <MudButton Href="/ui/orders" Variant="Variant.Filled" Color="Color.Primary">Back to orders</MudButton>
+        </Actions>
+    </EmptyState>
+}
+else
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Orders", "/ui/orders"), (Order.OrderNumber, null) })" />
+
+    <PageHeader Eyebrow="Order details"
+                Title="@Order.OrderNumber"
+                Description="@($"{Order.ServiceName} for {Order.CustomerName}")">
+        <Actions>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Timeline" OnClick="OpenDrawer">
+                Timeline drawer
+            </MudButton>
+        </Actions>
+    </PageHeader>
+
+    <PageSection MaxWidth="standard">
+        <div class="sb-detail-grid">
+            <div class="sb-detail-panel">
+                <h2>Order summary</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Service</dt><dd>@Order.ServiceName</dd></div>
+                    <div><dt>Provider</dt><dd>@Order.ProviderName</dd></div>
+                    <div><dt>Variant</dt><dd>@Order.VariantName</dd></div>
+                    <div><dt>Status</dt><dd><StatusBadge Text="@Order.Status" Tone="@ToneFor(Order.Status)" /></dd></div>
+                    <div><dt>Payment</dt><dd>@Order.PaymentStatus</dd></div>
+                    <div><dt>Total</dt><dd>@Order.TotalIrr.ToString("N0") IRR</dd></div>
+                </dl>
+            </div>
+            <div class="sb-detail-panel">
+                <h2>Fulfillment timeline</h2>
+                <Timeline Items="@MockData.Activity" />
+            </div>
+        </div>
+    </PageSection>
+
+    <Drawer @bind-Open="_drawerOpen" Title="@Order.OrderNumber" Eyebrow="Order timeline">
+        <Timeline Items="@MockData.Activity" />
+    </Drawer>
+}
+
+@code {
+    [Parameter] public string? OrderNumber { get; set; }
+
+    private bool _drawerOpen;
+    private OrderModel? Order => MockData.FindOrder(OrderNumber);
+
+    private void OpenDrawer()
+    {
+        _drawerOpen = true;
+    }
+
+    private static string ToneFor(string status)
+    {
+        return status switch
+        {
+            "Completed" => "success",
+            "Failed" => "danger",
+            "Pending" => "warning",
+            "Processing" => "info",
+            _ => "neutral"
+        };
+    }
+}

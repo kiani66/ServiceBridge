@@ -1,0 +1,17 @@
+<ol class="sb-timeline">
+    @foreach (var item in Items)
+    {
+        <li>
+            <span class="sb-timeline-dot sb-status-@item.Tone"></span>
+            <div>
+                <strong>@item.Title</strong>
+                <p>@item.Description</p>
+                <time>@item.Time</time>
+            </div>
+        </li>
+    }
+</ol>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ActivityModel> Items { get; set; } = [];
+}

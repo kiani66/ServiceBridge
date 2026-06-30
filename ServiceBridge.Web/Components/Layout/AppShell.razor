@@ -1,0 +1,64 @@
+@inject NavigationManager Navigation
+
+<MudThemeProvider Theme="_theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout Class="sb-app-shell">
+    <TopBar Title="ServiceBridge" OnMenuToggle="ToggleDrawer" />
+
+    <MudDrawer @bind-Open="_drawerOpen"
+               Anchor="Anchor.Start"
+               Variant="DrawerVariant.Responsive"
+               Elevation="0"
+               Class="sb-sidebar">
+        <Sidebar CurrentPath="@CurrentPath" />
+    </MudDrawer>
+
+    <MudMainContent Class="sb-main-content">
+        <div class="sb-content-frame">
+            @ChildContent
+        </div>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath;
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#2563EB",
+            Secondary = "#0F172A",
+            Tertiary = "#0891B2",
+            Success = "#16A34A",
+            Warning = "#D97706",
+            Error = "#DC2626",
+            Info = "#0891B2",
+            Background = "#F8FAFC",
+            Surface = "#FFFFFF",
+            AppbarBackground = "#FFFFFF",
+            AppbarText = "#0F172A",
+            DrawerBackground = "#FFFFFF",
+            DrawerText = "#334155",
+            TextPrimary = "#0F172A",
+            TextSecondary = "#475569",
+            LinesDefault = "#E2E8F0"
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DefaultBorderRadius = "8px"
+        }
+    };
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+}

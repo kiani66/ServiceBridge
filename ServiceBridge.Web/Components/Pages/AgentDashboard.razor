@@ -1,0 +1,31 @@
+@page "/ui/agent"
+@inject ServiceBridgeMockDataProvider MockData
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Agent", null) })" />
+
+<PageHeader Eyebrow="Agent workspace"
+            Title="Agent dashboard"
+            Description="Mock fulfillment queue with credential-safe summaries and timeline activity." />
+
+<PageSection MaxWidth="standard">
+    <div class="sb-stat-grid">
+        <StatCard Label="Assigned today" Value="6" Description="Orders currently owned by this agent" Tone="info" Icon="@Icons.Material.Outlined.SupportAgent" />
+        <StatCard Label="Credential checks" Value="2" Description="Orders requiring careful credential handling" Tone="warning" Icon="@Icons.Material.Outlined.Security" />
+        <StatCard Label="Completed" Value="4" Description="Fulfilled in the current shift" Tone="success" Icon="@Icons.Material.Outlined.CheckCircle" />
+    </div>
+</PageSection>
+
+<PageSection Title="Assigned work" Description="Mock processing orders for an agent workflow." MaxWidth="standard">
+    <div class="sb-order-grid">
+        @foreach (var order in MockData.Orders.Where(order => order.Status == "Processing"))
+        {
+            <OrderCard Order="@order" />
+        }
+    </div>
+</PageSection>
+
+<PageSection Title="Fulfillment notes" Description="Credential-sensitive details stay redacted in list context." MaxWidth="standard">
+    <div class="sb-detail-panel">
+        <Timeline Items="@MockData.Activity" />
+    </div>
+</PageSection>

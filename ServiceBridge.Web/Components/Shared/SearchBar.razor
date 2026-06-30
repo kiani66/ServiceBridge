@@ -1,0 +1,20 @@
+<div class="sb-search-bar @(Compact ? "sb-search-compact" : null)">
+    <MudTextField T="string"
+                  Value="@Value"
+                  ValueChanged="@ValueChanged"
+                  Placeholder="@Placeholder"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Outlined.Search"
+                  Clearable="true"
+                  Immediate="true"
+                  aria-label="@Placeholder" />
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Search";
+    [Parameter] public bool Compact { get; set; }
+}

@@ -1,0 +1,32 @@
+<MudDrawer Open="@Open"
+           OpenChanged="@OpenChanged"
+           Anchor="Anchor.End"
+           Variant="DrawerVariant.Temporary"
+           Elevation="8"
+           Class="sb-context-drawer">
+    <div class="sb-drawer-header">
+        <div>
+            <span>@Eyebrow</span>
+            <h2>@Title</h2>
+        </div>
+        <MudIconButton Icon="@Icons.Material.Outlined.Close"
+                       aria-label="Close drawer"
+                       OnClick="CloseAsync" />
+    </div>
+    <div class="sb-drawer-body">
+        @ChildContent
+    </div>
+</MudDrawer>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Eyebrow { get; set; } = "Details";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private Task CloseAsync()
+    {
+        return OpenChanged.InvokeAsync(false);
+    }
+}

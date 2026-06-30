@@ -1,0 +1,97 @@
+@page "/ui/orders"
+@inject ServiceBridgeMockDataProvider MockData
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Orders", null) })" />
+
+<PageHeader Eyebrow="Orders"
+            Title="Order tracking"
+            Description="Track payment, assignment, fulfillment, and credential attention with mock order data.">
+    <Actions>
+        <MudButton Href="/ui/checkout/chatgpt-plus" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Add">
+            New order
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Orders"
+                     Description="Operational table with search, filters, and row actions."
+                     Search="@_search"
+                     SearchChanged="OnSearchChanged"
+                     SearchPlaceholder="Search by order, service, or customer">
+        <Actions>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.FilterList" OnClick="ToggleFilters">
+                Filters
+            </MudButton>
+        </Actions>
+    </DataGridToolbar>
+    @if (_showFilters)
+    {
+        <FilterPanel />
+    }
+    <MudTable Items="@FilteredOrders" Hover="true" Dense="true" Class="sb-data-table">
+        <HeaderContent>
+            <MudTh>Order</MudTh>
+            <MudTh>Service</MudTh>
+            <MudTh>Customer</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Payment</MudTh>
+            <MudTh>Total</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Order">
+                <strong>@context.OrderNumber</strong>
+                <span class="sb-table-subtext">@context.CreatedAt.ToString("MMM d, HH:mm")</span>
+            </MudTd>
+            <MudTd DataLabel="Service">@context.ServiceName</MudTd>
+            <MudTd DataLabel="Customer">
+                @context.CustomerName
+                <span class="sb-table-subtext">@context.CustomerEmail</span>
+            </MudTd>
+            <MudTd DataLabel="Status"><StatusBadge Text="@context.Status" Tone="@ToneFor(context.Status)" /></MudTd>
+            <MudTd DataLabel="Payment">@context.PaymentStatus</MudTd>
+            <MudTd DataLabel="Total">@context.TotalIrr.ToString("N0") IRR</MudTd>
+            <MudTd DataLabel="Actions">
+                <MudButton Href="@($"/ui/orders/{context.OrderNumber}")" Variant="Variant.Text" Color="Color.Primary" Size="Size.Small">
+                    Details
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+</PageSection>
+
+@code {
+    private string? _search;
+    private bool _showFilters;
+
+    private IEnumerable<OrderModel> FilteredOrders => string.IsNullOrWhiteSpace(_search)
+        ? MockData.Orders
+        : MockData.Orders.Where(order =>
+            order.OrderNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            order.ServiceName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            order.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private void ToggleFilters()
+    {
+        _showFilters = !_showFilters;
+    }
+
+    private Task OnSearchChanged(string? value)
+    {
+        _search = value;
+        return Task.CompletedTask;
+    }
+
+    private static string ToneFor(string status)
+    {
+        return status switch
+        {
+            "Completed" => "success",
+            "Failed" => "danger",
+            "Pending" => "warning",
+            "Processing" => "info",
+            _ => "neutral"
+        };
+    }
+}

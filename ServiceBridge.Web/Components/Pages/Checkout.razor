@@ -1,0 +1,80 @@
+@page "/ui/checkout"
+@page "/ui/checkout/{ServiceSlug}"
+@inject ServiceBridgeMockDataProvider MockData
+
+@if (Service is null)
+{
+    <EmptyState Title="Checkout needs a service"
+                Description="Choose a mock service before opening checkout."
+                Icon="@Icons.Material.Outlined.Apps">
+        <Actions>
+            <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary">Browse catalog</MudButton>
+        </Actions>
+    </EmptyState>
+}
+else
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", "/ui/catalog"), (Service.Name, $"/ui/services/{Service.Slug}"), ("Checkout", null) })" />
+
+    <PageHeader Eyebrow="Checkout"
+                Title="Create a mock service order"
+                Description="Collect service fields, credentials, and payment context without writing to backend systems."
+                MaxWidth="form" />
+
+    <PageSection MaxWidth="form">
+        <FormSection Title="Service variant" Description="Variant selection drives the mock pricing snapshot.">
+            <VariantSelector Variants="@Service.Variants" @bind-SelectedVariantId="_selectedVariantId" />
+        </FormSection>
+
+        <FormSection Title="Order fields" Description="These fields represent shaped UI input contracts for future API integration.">
+            <MudTextField T="string" Label="Customer email" Variant="Variant.Outlined" FullWidth="true" Value="@("customer@example.com")" />
+            <MudTextField T="string" Label="Account identifier" Variant="Variant.Outlined" FullWidth="true" Value="@("customer-account")" />
+            <MudTextField T="string" Label="Fulfillment notes" Variant="Variant.Outlined" Lines="4" FullWidth="true" Value="@("Activate the selected plan on the listed account.")" />
+        </FormSection>
+
+        @if (Service.RequiresCredentials)
+        {
+            <FormSection Title="Sensitive credentials" Description="Credential inputs remain isolated and visibly sensitive.">
+                <CredentialForm />
+            </FormSection>
+        }
+
+        <div class="sb-checkout-summary">
+            <div>
+                <span>Total snapshot</span>
+                <strong>@SelectedVariant?.FinalPriceIrr.ToString("N0") IRR</strong>
+                <p>@VariantCaption</p>
+            </div>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Payments" OnClick="OpenConfirmation">
+                Submit mock order
+            </MudButton>
+        </div>
+    </PageSection>
+
+    <ConfirmationDialog @bind-Open="_confirmOpen"
+                        Title="Submit mock order"
+                        Description="This prototype action does not call an API or create a database record."
+                        ConfirmText="Submit mock order" />
+}
+
+@code {
+    [Parameter] public string? ServiceSlug { get; set; }
+
+    private bool _confirmOpen;
+    private string? _selectedVariantId;
+    private DigitalServiceModel? Service => MockData.FindService(ServiceSlug) ?? MockData.FeaturedService;
+    private ServiceVariantModel? SelectedVariant => Service?.Variants.FirstOrDefault(variant => variant.Id == _selectedVariantId) ?? Service?.PrimaryVariant;
+    private string VariantCaption => SelectedVariant is null
+        ? "No variant selected."
+        : $"{SelectedVariant.Currency} {SelectedVariant.ForeignPrice:N0} {SelectedVariant.BillingPeriod} with {SelectedVariant.MarginPercent:N0}% margin.";
+
+    protected override void OnParametersSet()
+    {
+        _selectedVariantId ??= Service?.PrimaryVariant.Id;
+    }
+
+    private void OpenConfirmation()
+    {
+        _confirmOpen = true;
+    }
+}

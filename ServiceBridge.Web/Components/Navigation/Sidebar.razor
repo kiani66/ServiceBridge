@@ -1,0 +1,25 @@
+<div class="sb-sidebar-header">
+    <div class="sb-brand-mark">SB</div>
+    <div>
+        <strong>ServiceBridge</strong>
+        <span>Service operations</span>
+    </div>
+</div>
+
+<MudNavMenu Class="sb-nav-menu">
+    <MudText Typo="Typo.caption" Class="sb-nav-group">Prototype</MudText>
+    <MudNavLink Href="/ui" Icon="@Icons.Material.Outlined.Home" Match="NavLinkMatch.All">Home</MudNavLink>
+    <MudNavLink Href="/ui/catalog" Icon="@Icons.Material.Outlined.Apps">Catalog</MudNavLink>
+    <MudNavLink Href="/ui/checkout/chatgpt-plus" Icon="@Icons.Material.Outlined.Lock">Checkout</MudNavLink>
+    <MudNavLink Href="/ui/dashboard" Icon="@Icons.Material.Outlined.SpaceDashboard">Dashboard</MudNavLink>
+    <MudNavLink Href="/ui/orders" Icon="@Icons.Material.Outlined.ReceiptLong">Orders</MudNavLink>
+
+    <MudText Typo="Typo.caption" Class="sb-nav-group">Operations</MudText>
+    <MudNavLink Href="/ui/admin" Icon="@Icons.Material.Outlined.AdminPanelSettings">Admin</MudNavLink>
+    <MudNavLink Href="/ui/agent" Icon="@Icons.Material.Outlined.SupportAgent">Agent</MudNavLink>
+    <MudNavLink Href="/Services" Icon="@Icons.Material.Outlined.OpenInNew">Legacy catalog</MudNavLink>
+</MudNavMenu>
+
+@code {
+    [Parameter] public string CurrentPath { get; set; } = "/";
+}

@@ -1,55 +1,6 @@
 @inherits LayoutComponentBase
 
-<MudThemeProvider Theme="_theme" />
-<MudPopoverProvider />
-<MudDialogProvider />
-<MudSnackbarProvider />
-
-<MudLayout Class="sb-app-shell">
-    <TopBar OnMenuToggle="ToggleDrawer" />
-
-    <MudDrawer @bind-Open="_drawerOpen"
-               Anchor="Anchor.Start"
-               Variant="DrawerVariant.Responsive"
-               Elevation="0"
-               Class="sb-sidebar">
-        <NavMenu />
-    </MudDrawer>
-
-    <MudMainContent Class="sb-main-content">
-        @Body
-    </MudMainContent>
-</MudLayout>
-
-@code {
-    private bool _drawerOpen = true;
-
-    private readonly MudTheme _theme = new()
-    {
-        PaletteLight = new PaletteLight
-        {
-            Primary = "#2563EB",
-            Secondary = "#38BDF8",
-            Tertiary = "#14B8A6",
-            Background = "#F8FAFC",
-            Surface = "#FFFFFF",
-            AppbarBackground = "#FFFFFF",
-            AppbarText = "#0F172A",
-            DrawerBackground = "#FFFFFF",
-            DrawerText = "#334155",
-            TextPrimary = "#0F172A",
-            TextSecondary = "#64748B",
-            LinesDefault = "#E2E8F0"
-        },
-        LayoutProperties = new LayoutProperties
-        {
-            DefaultBorderRadius = "12px"
-        }
-    };
-
-    private void ToggleDrawer()
-    {
-        _drawerOpen = !_drawerOpen;
-    }
-}
+<AppShell>
+    @Body
+</AppShell>
 

@@ -1,4 +1,4 @@
-<article class="sb-price-card">
+<article class="sb-price-card @(Selected ? "sb-price-card-selected" : null)">
     <div class="sb-price-card-header">
         <span>@Label</span>
         @if (!string.IsNullOrWhiteSpace(Badge))
@@ -19,5 +19,6 @@
     [Parameter] public string? Caption { get; set; }
     [Parameter] public string? Badge { get; set; }
     [Parameter] public string BadgeTone { get; set; } = "info";
+    [Parameter] public bool Selected { get; set; }
 }
 

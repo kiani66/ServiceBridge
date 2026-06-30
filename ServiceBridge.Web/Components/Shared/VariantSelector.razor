@@ -1,0 +1,33 @@
+<div class="sb-variant-selector" role="radiogroup" aria-label="Service variants">
+    @foreach (var variant in Variants)
+    {
+        var selected = variant.Id == SelectedVariantId;
+        <button type="button"
+                class="sb-variant-option @(selected ? "sb-variant-selected" : null)"
+                aria-pressed="@selected"
+                @onclick="() => SelectAsync(variant.Id)">
+            <span>
+                <strong>@variant.Name</strong>
+                <small>@variant.Description</small>
+            </span>
+            <b>@variant.FinalPriceIrr.ToString("N0") IRR</b>
+            <em>@variant.Currency @variant.ForeignPrice:N0 @variant.BillingPeriod</em>
+            @if (variant.IsPopular)
+            {
+                <StatusBadge Text="Recommended" Tone="success" />
+            }
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ServiceVariantModel> Variants { get; set; } = [];
+    [Parameter] public string? SelectedVariantId { get; set; }
+    [Parameter] public EventCallback<string> SelectedVariantIdChanged { get; set; }
+
+    private Task SelectAsync(string variantId)
+    {
+        SelectedVariantId = variantId;
+        return SelectedVariantIdChanged.InvokeAsync(variantId);
+    }
+}

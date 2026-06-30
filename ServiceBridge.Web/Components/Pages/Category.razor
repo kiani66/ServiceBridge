@@ -1,0 +1,37 @@
+@page "/ui/catalog/{CategorySlug}"
+@inject ServiceBridgeMockDataProvider MockData
+
+@if (CurrentCategory is null)
+{
+    <EmptyState Title="Category not found"
+                Description="The requested mock category is not available."
+                Icon="@Icons.Material.Outlined.SearchOff">
+        <Actions>
+            <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary">Back to catalog</MudButton>
+        </Actions>
+    </EmptyState>
+}
+else
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", "/ui/catalog"), (CurrentCategory.Name, null) })" />
+
+    <PageHeader Eyebrow="Category"
+                Title="@CurrentCategory.Name"
+                Description="@CurrentCategory.Description" />
+
+    <PageSection MaxWidth="standard">
+        <div class="sb-service-grid">
+            @foreach (var service in Services)
+            {
+                <ServiceCard Service="@service" />
+            }
+        </div>
+    </PageSection>
+}
+
+@code {
+    [Parameter] public string? CategorySlug { get; set; }
+
+    private ServiceCategoryModel? CurrentCategory => MockData.FindCategory(CategorySlug);
+    private IReadOnlyList<DigitalServiceModel> Services => MockData.ServicesForCategory(CategorySlug);
+}
