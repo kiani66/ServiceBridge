@@ -1,0 +1,23 @@
+<article class="sb-price-card">
+    <div class="sb-price-card-header">
+        <span>@Label</span>
+        @if (!string.IsNullOrWhiteSpace(Badge))
+        {
+            <StatusBadge Text="@Badge" Tone="@BadgeTone" />
+        }
+    </div>
+    <strong>@Amount</strong>
+    @if (!string.IsNullOrWhiteSpace(Caption))
+    {
+        <p>@Caption</p>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Amount { get; set; } = string.Empty;
+    [Parameter] public string? Caption { get; set; }
+    [Parameter] public string? Badge { get; set; }
+    [Parameter] public string BadgeTone { get; set; } = "info";
+}
+

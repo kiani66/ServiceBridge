@@ -1,0 +1,9 @@
+<span class="sb-status-badge sb-status-@Tone.ToLowerInvariant()">
+    @Text
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = string.Empty;
+    [Parameter] public string Tone { get; set; } = "neutral";
+}
+
