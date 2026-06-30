@@ -1,0 +1,66 @@
+@page "/ui/services/{ServiceSlug}"
+@inject ServiceBridgeMockDataProvider MockData
+
+@if (Service is null)
+{
+    <EmptyState Title="Service not found"
+                Description="The requested mock service is not available."
+                Icon="@Icons.Material.Outlined.SearchOff">
+        <Actions>
+            <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary">Back to catalog</MudButton>
+        </Actions>
+    </EmptyState>
+}
+else
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", "/ui/catalog"), (Service.CategoryName, $"/ui/catalog/{Service.CategorySlug}"), (Service.Name, null) })" />
+
+    <PageHeader Eyebrow="@Service.ProviderName"
+                Title="@Service.Name"
+                Description="@Service.Description">
+        <Actions>
+            <MudButton Href="@($"/ui/checkout/{Service.Slug}")" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Lock">
+                Continue to checkout
+            </MudButton>
+        </Actions>
+    </PageHeader>
+
+    <PageSection Title="Choose a variant" Description="Pricing is shown as an immutable snapshot preview for checkout." MaxWidth="standard">
+        <div class="sb-detail-grid">
+            <VariantSelector Variants="@Service.Variants" @bind-SelectedVariantId="_selectedVariantId" />
+            <div class="sb-detail-panel">
+                <h2>Required information</h2>
+                <ul class="sb-field-list">
+                    @foreach (var field in Service.RequiredFields)
+                    {
+                        <li>
+                            <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                            <span>@field</span>
+                        </li>
+                    }
+                </ul>
+                <StatusBadge Text="Credential-aware flow" Tone="warning" Icon="@Icons.Material.Outlined.Security" />
+            </div>
+        </div>
+    </PageSection>
+
+    <PageSection Title="Fulfillment guidance" MaxWidth="standard">
+        <div class="sb-process-grid">
+            <div><strong>Payment snapshot</strong><span>IRR amount is captured when the order is submitted.</span></div>
+            <div><strong>Admin review</strong><span>Paid orders are reviewed and assigned to an agent.</span></div>
+            <div><strong>Agent fulfillment</strong><span>Timeline events keep users informed until completion.</span></div>
+        </div>
+    </PageSection>
+}
+
+@code {
+    [Parameter] public string? ServiceSlug { get; set; }
+
+    private DigitalServiceModel? Service => MockData.FindService(ServiceSlug);
+    private string? _selectedVariantId;
+
+    protected override void OnParametersSet()
+    {
+        _selectedVariantId ??= Service?.PrimaryVariant.Id;
+    }
+}

@@ -1,0 +1,62 @@
+@page "/ui"
+@inject ServiceBridgeMockDataProvider MockData
+
+<PageHeader Eyebrow="Prototype"
+            Title="Service mediation from request to fulfillment"
+            Description="A Blazor prototype for digital-service selection, credential-safe checkout, payment visibility, and operational tracking. All data on these pages is mock data."
+            MaxWidth="public">
+    <Actions>
+        <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Apps">
+            Browse services
+        </MudButton>
+        <MudButton Href="/ui/orders" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.ReceiptLong">
+            Track orders
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<PageSection MaxWidth="public">
+    <div class="sb-hero-grid">
+        <div class="sb-hero-panel">
+            <span class="sb-eyebrow">Featured service</span>
+            <h2>@MockData.FeaturedService.Name</h2>
+            <p>@MockData.FeaturedService.Description</p>
+            <div class="sb-hero-actions">
+                <MudButton Href="@($"/ui/services/{MockData.FeaturedService.Slug}")" Variant="Variant.Filled" Color="Color.Primary">
+                    View details
+                </MudButton>
+                <MudButton Href="@($"/ui/checkout/{MockData.FeaturedService.Slug}")" Variant="Variant.Text" Color="Color.Primary">
+                    Start checkout
+                </MudButton>
+            </div>
+        </div>
+        <div class="sb-hero-steps" aria-label="ServiceBridge workflow">
+            <div><strong>1</strong><span>Select service and variant</span></div>
+            <div><strong>2</strong><span>Submit order fields and credentials when needed</span></div>
+            <div><strong>3</strong><span>Pay in IRR with a captured pricing snapshot</span></div>
+            <div><strong>4</strong><span>Track agent fulfillment through completion</span></div>
+        </div>
+    </div>
+</PageSection>
+
+<PageSection Title="Service categories" Description="Focused discovery for the digital-service workflows ServiceBridge supports." MaxWidth="public">
+    <div class="sb-category-grid">
+        @foreach (var category in MockData.Categories)
+        {
+            <a class="sb-category-card" href="@($"/ui/catalog/{category.Slug}")">
+                <MudIcon Icon="@category.Icon" Size="Size.Large" />
+                <strong>@category.Name</strong>
+                <span>@category.Description</span>
+            </a>
+        }
+    </div>
+</PageSection>
+
+<PageSection Title="Operational snapshot" Description="Prototype metrics use mock data but mirror the future dashboard contract." MaxWidth="public">
+    <div class="sb-stat-grid">
+        @foreach (var metric in MockData.DashboardMetrics)
+        {
+            <StatCard Label="@metric.Label" Value="@metric.Value" Description="@metric.Description" Tone="@metric.Tone" Icon="@metric.Icon" />
+        }
+    </div>
+</PageSection>

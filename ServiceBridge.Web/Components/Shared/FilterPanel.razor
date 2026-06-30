@@ -1,0 +1,23 @@
+<div class="sb-filter-panel">
+    <MudSelect T="string" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense" Value="@Status">
+        <MudSelectItem Value="@("All")">All statuses</MudSelectItem>
+        <MudSelectItem Value="@("Pending")">Pending</MudSelectItem>
+        <MudSelectItem Value="@("Processing")">Processing</MudSelectItem>
+        <MudSelectItem Value="@("Completed")">Completed</MudSelectItem>
+        <MudSelectItem Value="@("Failed")">Failed</MudSelectItem>
+    </MudSelect>
+    <MudSelect T="string" Label="Provider" Variant="Variant.Outlined" Margin="Margin.Dense" Value="@Provider">
+        <MudSelectItem Value="@("All")">All providers</MudSelectItem>
+        <MudSelectItem Value="@("OpenAI")">OpenAI</MudSelectItem>
+        <MudSelectItem Value="@("Anthropic")">Anthropic</MudSelectItem>
+        <MudSelectItem Value="@("Cursor")">Cursor</MudSelectItem>
+        <MudSelectItem Value="@("GitHub")">GitHub</MudSelectItem>
+    </MudSelect>
+    <MudSwitch T="bool" Label="Needs credential review" Color="Color.Warning" @bind-Value="CredentialReviewOnly" />
+</div>
+
+@code {
+    [Parameter] public string Status { get; set; } = "All";
+    [Parameter] public string Provider { get; set; } = "All";
+    [Parameter] public bool CredentialReviewOnly { get; set; }
+}

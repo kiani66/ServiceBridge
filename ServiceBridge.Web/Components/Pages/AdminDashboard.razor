@@ -1,0 +1,104 @@
+@page "/ui/admin"
+@inject ServiceBridgeMockDataProvider MockData
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", null) })" />
+
+<PageHeader Eyebrow="Admin operations"
+            Title="Admin dashboard"
+            Description="Mock admin dashboard for catalog, pricing, assignment, payments, and order supervision.">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.AssignmentInd">
+            Assign selected
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<PageSection MaxWidth="wide">
+    <div class="sb-stat-grid">
+        @foreach (var metric in MockData.DashboardMetrics)
+        {
+            <StatCard Label="@metric.Label" Value="@metric.Value" Description="@metric.Description" Tone="@metric.Tone" Icon="@metric.Icon" />
+        }
+    </div>
+</PageSection>
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Admin order queue"
+                     Description="Dense operational view for payment and assignment state."
+                     SearchPlaceholder="Search admin queue">
+        <Actions>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Download">
+                Export
+            </MudButton>
+        </Actions>
+    </DataGridToolbar>
+    <MudTable Items="@MockData.Orders" Hover="true" Dense="true" Class="sb-data-table">
+        <HeaderContent>
+            <MudTh>Order</MudTh>
+            <MudTh>Payment</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Assignment</MudTh>
+            <MudTh>Credential</MudTh>
+            <MudTh>Action</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Order"><strong>@context.OrderNumber</strong><span class="sb-table-subtext">@context.ServiceName</span></MudTd>
+            <MudTd DataLabel="Payment">@context.PaymentStatus</MudTd>
+            <MudTd DataLabel="Status"><StatusBadge Text="@context.Status" Tone="@ToneFor(context.Status)" /></MudTd>
+            <MudTd DataLabel="Assignment">@context.Assignment</MudTd>
+            <MudTd DataLabel="Credential">
+                @if (context.RequiresCredentialReview)
+                {
+                    <StatusBadge Text="Review" Tone="warning" Icon="@Icons.Material.Outlined.Security" />
+                }
+                else
+                {
+                    <StatusBadge Text="Clear" Tone="success" />
+                }
+            </MudTd>
+            <MudTd DataLabel="Action">
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenDrawer(context))">Inspect</MudButton>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+</PageSection>
+
+<PageSection Title="Catalog coverage" Description="Prototype services by provider." MaxWidth="wide">
+    <div class="sb-service-grid">
+        @foreach (var service in MockData.Services)
+        {
+            <ServiceCard Service="@service" />
+        }
+    </div>
+</PageSection>
+
+<Drawer @bind-Open="_drawerOpen" Title="@(_selectedOrder?.OrderNumber ?? "Order")" Eyebrow="Admin review">
+    @if (_selectedOrder is not null)
+    {
+        <OrderCard Order="@_selectedOrder" />
+        <LoadingSkeleton Lines="4" />
+    }
+</Drawer>
+
+@code {
+    private bool _drawerOpen;
+    private OrderModel? _selectedOrder;
+
+    private void OpenDrawer(OrderModel order)
+    {
+        _selectedOrder = order;
+        _drawerOpen = true;
+    }
+
+    private static string ToneFor(string status)
+    {
+        return status switch
+        {
+            "Completed" => "success",
+            "Failed" => "danger",
+            "Pending" => "warning",
+            "Processing" => "info",
+            _ => "neutral"
+        };
+    }
+}

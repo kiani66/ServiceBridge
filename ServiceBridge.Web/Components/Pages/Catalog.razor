@@ -1,0 +1,60 @@
+@page "/ui/catalog"
+@inject ServiceBridgeMockDataProvider MockData
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", null) })" />
+
+<PageHeader Eyebrow="Catalog"
+            Title="Digital services"
+            Description="Select a provider-backed service, compare variants, and continue into a mock checkout without any backend dependency.">
+    <Actions>
+        <MudButton Href="/ui/checkout/chatgpt-plus" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Lock">
+            Start checkout
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<PageSection MaxWidth="standard">
+    <DataGridToolbar Title="Available services"
+                     Description="Mock catalog data for AI assistants and developer tools."
+                     Search="@_search"
+                     SearchChanged="OnSearchChanged"
+                     SearchPlaceholder="Search by service or provider">
+        <Actions>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.FilterList" OnClick="ToggleFilters">
+                Filters
+            </MudButton>
+        </Actions>
+    </DataGridToolbar>
+    @if (_showFilters)
+    {
+        <FilterPanel />
+    }
+    <div class="sb-service-grid">
+        @foreach (var service in FilteredServices)
+        {
+            <ServiceCard Service="@service" />
+        }
+    </div>
+</PageSection>
+
+@code {
+    private string? _search;
+    private bool _showFilters;
+
+    private IEnumerable<DigitalServiceModel> FilteredServices => string.IsNullOrWhiteSpace(_search)
+        ? MockData.Services
+        : MockData.Services.Where(service =>
+            service.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            service.ProviderName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private void ToggleFilters()
+    {
+        _showFilters = !_showFilters;
+    }
+
+    private Task OnSearchChanged(string? value)
+    {
+        _search = value;
+        return Task.CompletedTask;
+    }
+}

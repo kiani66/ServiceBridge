@@ -3,6 +3,7 @@ using MudBlazor.Services;
 using ServiceBridge.Web.Components;
 using ServiceBridge.Shared.Constants;
 using ServiceBridge.Web.Handlers;
+using ServiceBridge.Web.MockData;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,6 +19,7 @@ builder.Services.AddRazorPages(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddMudServices();
+builder.Services.AddSingleton<ServiceBridgeMockDataProvider>();
 
 // Cookie Authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

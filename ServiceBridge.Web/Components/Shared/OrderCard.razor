@@ -1,0 +1,45 @@
+<article class="sb-order-card">
+    <div class="sb-order-card-head">
+        <div>
+            <strong>@Order.OrderNumber</strong>
+            <span>@Order.ServiceName - @Order.VariantName</span>
+        </div>
+        <StatusBadge Text="@Order.Status" Tone="@ToneFor(Order.Status)" />
+    </div>
+    <dl class="sb-card-facts">
+        <div>
+            <dt>Payment</dt>
+            <dd>@Order.PaymentStatus</dd>
+        </div>
+        <div>
+            <dt>Assignment</dt>
+            <dd>@Order.Assignment</dd>
+        </div>
+        <div>
+            <dt>Total</dt>
+            <dd>@Order.TotalIrr.ToString("N0") IRR</dd>
+        </div>
+    </dl>
+    <MudButton Href="@($"/ui/orders/{Order.OrderNumber}")"
+               Variant="Variant.Text"
+               Color="Color.Primary"
+               EndIcon="@Icons.Material.Outlined.ArrowForward">
+        Open order
+    </MudButton>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public OrderModel Order { get; set; } = default!;
+
+    private static string ToneFor(string status)
+    {
+        return status switch
+        {
+            "Completed" => "success",
+            "Failed" => "danger",
+            "Pending" => "warning",
+            "Processing" => "info",
+            _ => "neutral"
+        };
+    }
+}

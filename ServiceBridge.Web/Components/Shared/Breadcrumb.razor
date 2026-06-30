@@ -1,0 +1,16 @@
+<nav aria-label="Breadcrumb" class="sb-breadcrumb">
+    <MudBreadcrumbs Items="_items" />
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<(string Text, string? Href)> Items { get; set; } = [];
+
+    private List<BreadcrumbItem> _items = [];
+
+    protected override void OnParametersSet()
+    {
+        _items = Items
+            .Select(item => new BreadcrumbItem(item.Text, item.Href, disabled: string.IsNullOrWhiteSpace(item.Href)))
+            .ToList();
+    }
+}

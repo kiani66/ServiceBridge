@@ -1,0 +1,22 @@
+<div class="sb-loading-skeleton" aria-busy="true" aria-label="@Label">
+    @for (var i = 0; i < Lines; i++)
+    {
+        <MudSkeleton Height="@Height" Width="@WidthFor(i)" Animation="Animation.Wave" />
+    }
+</div>
+
+@code {
+    [Parameter] public int Lines { get; set; } = 3;
+    [Parameter] public string Height { get; set; } = "28px";
+    [Parameter] public string Label { get; set; } = "Loading content";
+
+    private static string WidthFor(int index)
+    {
+        return (index % 3) switch
+        {
+            0 => "100%",
+            1 => "82%",
+            _ => "64%"
+        };
+    }
+}

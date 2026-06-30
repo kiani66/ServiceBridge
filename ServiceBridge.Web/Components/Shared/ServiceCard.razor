@@ -1,0 +1,40 @@
+<article class="sb-service-card">
+    <div class="sb-service-card-top">
+        <div class="sb-service-logo">@Service.ProviderShortName</div>
+        <StatusBadge Text="@Service.CategoryName" Tone="info" />
+    </div>
+    <div class="sb-service-card-body">
+        <h3>@Service.Name</h3>
+        <p>@Service.Summary</p>
+    </div>
+    <dl class="sb-card-facts">
+        <div>
+            <dt>Provider</dt>
+            <dd>@Service.ProviderName</dd>
+        </div>
+        <div>
+            <dt>From</dt>
+            <dd>@FormatIrr(Service.PrimaryVariant.FinalPriceIrr)</dd>
+        </div>
+        <div>
+            <dt>Fulfillment</dt>
+            <dd>@Service.PrimaryVariant.ProcessingTime</dd>
+        </div>
+    </dl>
+    <MudButton Href="@($"/ui/services/{Service.Slug}")"
+               Variant="Variant.Outlined"
+               Color="Color.Primary"
+               FullWidth="true"
+               EndIcon="@Icons.Material.Outlined.ArrowForward">
+        View service
+    </MudButton>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public DigitalServiceModel Service { get; set; } = default!;
+
+    private static string FormatIrr(decimal amount)
+    {
+        return $"{amount:N0} IRR";
+    }
+}
