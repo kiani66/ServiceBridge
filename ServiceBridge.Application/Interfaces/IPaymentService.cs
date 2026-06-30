@@ -9,6 +9,10 @@ public interface IPaymentService
         Guid userId,
         InitiatePaymentRequest request);
 
+    Task<ServiceResult<MockPaymentResultResponse>> ProcessMockAsync(
+        Guid userId,
+        MockPaymentRequest request);
+
     Task<ServiceResult> ConfirmAsync(
         ConfirmPaymentRequest request,
         string callbackPayload);

@@ -23,6 +23,7 @@ builder.Services.AddMudServices();
 builder.Services.AddSingleton<ServiceBridgeMockDataProvider>();
 builder.Services.AddScoped<PublicCatalogClient>();
 builder.Services.AddScoped<CheckoutClient>();
+builder.Services.AddScoped<PaymentClient>();
 
 // Cookie Authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

@@ -40,6 +40,25 @@ public class PaymentsController : BaseApiController
         return ToActionResult(result);
     }
 
+    [Authorize(Roles = AppConstants.Roles.User)]
+    [HttpPost("mock")]
+    public async Task<IActionResult> Mock(
+        [FromBody] MockPaymentRequest request)
+    {
+        if (!Guid.TryParse(
+                User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var userId))
+        {
+            return ToActionResult(ServiceResult.Fail(
+                AppMessages.UnauthorizedAccess,
+                AppConstants.ErrorCodes.Unauthorized,
+                401));
+        }
+
+        var result = await _paymentService.ProcessMockAsync(userId, request);
+        return ToActionResult(result);
+    }
+
     [AllowAnonymous]
     [HttpPost("callback")]
     public async Task<IActionResult> Callback(

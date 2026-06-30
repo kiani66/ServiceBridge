@@ -16,7 +16,7 @@ public class PaymentServiceTests
         var userId = Guid.NewGuid();
         var order = CreateOrder(userId, OrderStatus.WaitingForPayment);
         var repository = new FakePaymentRepository { Order = order };
-        var service = new PaymentService(repository);
+        var service = CreateService(repository);
         var paymentId = Guid.NewGuid();
 
         var result = await service.InitiateAsync(userId, new InitiatePaymentRequest
@@ -41,7 +41,7 @@ public class PaymentServiceTests
     [Fact]
     public async Task InitiateAsync_WhenOrderDoesNotExist_ReturnsNotFound()
     {
-        var service = new PaymentService(new FakePaymentRepository());
+        var service = CreateService(new FakePaymentRepository());
 
         var result = await service.InitiateAsync(Guid.NewGuid(), ValidRequest(Guid.NewGuid()));
 
@@ -54,7 +54,7 @@ public class PaymentServiceTests
     public async Task InitiateAsync_WhenOrderBelongsToAnotherUser_ReturnsForbidden()
     {
         var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
-        var service = new PaymentService(new FakePaymentRepository { Order = order });
+        var service = CreateService(new FakePaymentRepository { Order = order });
 
         var result = await service.InitiateAsync(Guid.NewGuid(), ValidRequest(order.Id));
 
@@ -68,7 +68,7 @@ public class PaymentServiceTests
     {
         var userId = Guid.NewGuid();
         var order = CreateOrder(userId, OrderStatus.Paid);
-        var service = new PaymentService(new FakePaymentRepository { Order = order });
+        var service = CreateService(new FakePaymentRepository { Order = order });
 
         var result = await service.InitiateAsync(userId, ValidRequest(order.Id));
 
@@ -82,7 +82,7 @@ public class PaymentServiceTests
     {
         var userId = Guid.NewGuid();
         var order = CreateOrder(userId, OrderStatus.WaitingForPayment);
-        var service = new PaymentService(new FakePaymentRepository
+        var service = CreateService(new FakePaymentRepository
         {
             Order = order,
             HasPendingPayment = true
@@ -101,7 +101,7 @@ public class PaymentServiceTests
         var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
         var payment = CreatePayment(order);
         var repository = new FakePaymentRepository { Payment = payment };
-        var service = new PaymentService(repository);
+        var service = CreateService(repository);
 
         var result = await service.ConfirmAsync(
             new ConfirmPaymentRequest
@@ -123,7 +123,7 @@ public class PaymentServiceTests
     [Fact]
     public async Task ConfirmAsync_WhenPaymentDoesNotExist_ReturnsNotFound()
     {
-        var service = new PaymentService(new FakePaymentRepository());
+        var service = CreateService(new FakePaymentRepository());
 
         var result = await service.ConfirmAsync(
             new ConfirmPaymentRequest { PaymentId = Guid.NewGuid() },
@@ -135,15 +135,38 @@ public class PaymentServiceTests
     }
 
     [Fact]
-    public async Task ConfirmAsync_WhenPaymentWasConfirmed_ReturnsConflict()
+    public async Task ConfirmAsync_WhenCompletedPaymentReceivesDuplicateCompletedCallback_ReturnsOk()
     {
-        var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
+        var order = CreateOrder(Guid.NewGuid(), OrderStatus.Paid);
         var payment = CreatePayment(order);
         payment.Complete("existing", "{}", DateTime.UtcNow);
-        var service = new PaymentService(new FakePaymentRepository { Payment = payment });
+        var repository = new FakePaymentRepository { Payment = payment };
+        var service = CreateService(repository);
 
         var result = await service.ConfirmAsync(
             new ConfirmPaymentRequest { PaymentId = payment.Id },
+            "{}");
+
+        Assert.True(result.Success);
+        Assert.Equal(200, result.StatusCode);
+        Assert.Equal(0, repository.SaveCount);
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_WhenCompletedPaymentReceivesFailedCallback_ReturnsConflict()
+    {
+        var order = CreateOrder(Guid.NewGuid(), OrderStatus.Paid);
+        var payment = CreatePayment(order);
+        payment.Complete("existing", "{}", DateTime.UtcNow);
+        var service = CreateService(new FakePaymentRepository { Payment = payment });
+
+        var result = await service.ConfirmAsync(
+            new ConfirmPaymentRequest
+            {
+                PaymentId = payment.Id,
+                Status = PaymentStatus.Failed,
+                FailureReason = "Gateway declined."
+            },
             "{}");
 
         Assert.False(result.Success);
@@ -157,7 +180,7 @@ public class PaymentServiceTests
         var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
         var payment = CreatePayment(order);
         var repository = new FakePaymentRepository { Payment = payment };
-        var service = new PaymentService(repository);
+        var service = CreateService(repository);
 
         var result = await service.ConfirmAsync(
             new ConfirmPaymentRequest
@@ -183,7 +206,7 @@ public class PaymentServiceTests
         var payment = CreatePayment(order);
         payment.Complete("gateway-1", "{}", DateTime.UtcNow);
         var repository = new FakePaymentRepository { Payment = payment };
-        var service = new PaymentService(repository);
+        var service = CreateService(repository);
 
         var result = await service.ConfirmAsync(
             new ConfirmPaymentRequest
@@ -198,6 +221,88 @@ public class PaymentServiceTests
         Assert.Equal(PaymentStatus.Refunded, payment.Status);
         Assert.NotNull(payment.RefundedAt);
         Assert.Equal(2, payment.Events.Count);
+    }
+
+    [Fact]
+    public async Task ProcessMockAsync_WhenGatewaySucceeds_ConfirmsAndMarksOrderPaid()
+    {
+        var userId = Guid.NewGuid();
+        var order = CreateOrder(userId, OrderStatus.WaitingForPayment);
+        var payment = CreatePayment(order);
+        var repository = new FakePaymentRepository { Payment = payment };
+        var gateway = new FakeMockPaymentGateway();
+        var service = CreateService(repository, gateway);
+
+        var result = await service.ProcessMockAsync(
+            userId,
+            new MockPaymentRequest
+            {
+                PaymentId = payment.Id,
+                Succeed = true
+            });
+
+        Assert.True(result.Success);
+        Assert.Equal(PaymentStatus.Completed, result.Data!.Status);
+        Assert.Equal(payment.Id, result.Data.PaymentId);
+        Assert.Equal(order.Id, result.Data.OrderId);
+        Assert.Equal("mock-success", result.Data.GatewayReference);
+        Assert.Equal(OrderStatus.Paid, order.Status);
+        Assert.Equal(PaymentStatus.Completed, payment.Status);
+        Assert.Equal(1, repository.SaveCount);
+        Assert.Equal(1, gateway.CallCount);
+        Assert.True(gateway.LastOutcome);
+    }
+
+    [Fact]
+    public async Task ProcessMockAsync_WhenGatewayFails_RecordsFailureAndKeepsOrderPending()
+    {
+        var userId = Guid.NewGuid();
+        var order = CreateOrder(userId, OrderStatus.WaitingForPayment);
+        var payment = CreatePayment(order);
+        var repository = new FakePaymentRepository { Payment = payment };
+        var gateway = new FakeMockPaymentGateway();
+        var service = CreateService(repository, gateway);
+
+        var result = await service.ProcessMockAsync(
+            userId,
+            new MockPaymentRequest
+            {
+                PaymentId = payment.Id,
+                Succeed = false
+            });
+
+        Assert.True(result.Success);
+        Assert.Equal(PaymentStatus.Failed, result.Data!.Status);
+        Assert.Equal("mock-failed", result.Data.GatewayReference);
+        Assert.Equal(OrderStatus.WaitingForPayment, order.Status);
+        Assert.Equal(PaymentStatus.Failed, payment.Status);
+        Assert.Equal(1, repository.SaveCount);
+        Assert.False(gateway.LastOutcome);
+    }
+
+    [Fact]
+    public async Task ProcessMockAsync_WhenPaymentBelongsToAnotherUser_ReturnsForbidden()
+    {
+        var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
+        var payment = CreatePayment(order);
+        var gateway = new FakeMockPaymentGateway();
+        var service = CreateService(
+            new FakePaymentRepository { Payment = payment },
+            gateway);
+
+        var result = await service.ProcessMockAsync(
+            Guid.NewGuid(),
+            new MockPaymentRequest
+            {
+                PaymentId = payment.Id,
+                Succeed = true
+            });
+
+        Assert.False(result.Success);
+        Assert.Equal(403, result.StatusCode);
+        Assert.Equal(AppConstants.ErrorCodes.Forbidden, result.ErrorCode);
+        Assert.Equal(0, gateway.CallCount);
+        Assert.Equal(OrderStatus.WaitingForPayment, order.Status);
     }
 
     private static InitiatePaymentRequest ValidRequest(Guid orderId)
@@ -236,5 +341,14 @@ public class PaymentServiceTests
             AmountUSD = order.ForeignPrice,
             ExchangeRateSnapshot = order.ExchangeRateSnapshot
         };
+    }
+
+    private static PaymentService CreateService(
+        FakePaymentRepository repository,
+        FakeMockPaymentGateway? gateway = null)
+    {
+        return new PaymentService(
+            repository,
+            gateway ?? new FakeMockPaymentGateway());
     }
 }
