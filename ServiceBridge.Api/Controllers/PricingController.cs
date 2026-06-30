@@ -18,11 +18,13 @@ public class PricingController : BaseApiController
     [HttpGet]
     public async Task<IActionResult> GetQuote(
         Guid serviceId,
+        [FromQuery] Guid? serviceVariantId,
         [FromQuery] Guid? planId)
     {
+        var selectedVariantId = serviceVariantId ?? planId;
         var result = await _pricingQuoteService.GetQuoteAsync(
             serviceId,
-            planId,
+            selectedVariantId,
             DateTime.UtcNow);
 
         return ToActionResult(result);

@@ -10,21 +10,18 @@ public class PricingQuoteService : IPricingQuoteService
 {
     private readonly IPricingRepository _repository;
     private readonly IPricingResolver _resolver;
-    private readonly IPricingCalculator _calculator;
 
     public PricingQuoteService(
         IPricingRepository repository,
-        IPricingResolver resolver,
-        IPricingCalculator calculator)
+        IPricingResolver resolver)
     {
         _repository = repository;
         _resolver = resolver;
-        _calculator = calculator;
     }
 
     public async Task<ServiceResult<PricingQuoteResponse>> GetQuoteAsync(
         Guid serviceId,
-        Guid? planId,
+        Guid? serviceVariantId,
         DateTime quotedAtUtc)
     {
         if (quotedAtUtc.Kind != DateTimeKind.Utc)
@@ -35,11 +32,15 @@ public class PricingQuoteService : IPricingQuoteService
                 400);
         }
 
-        var context = await _repository.GetActiveServiceContextAsync(serviceId, planId);
+        var context = await _repository.GetActiveServiceContextAsync(
+            serviceId,
+            serviceVariantId);
         if (context == null)
         {
             return ServiceResult<PricingQuoteResponse>.Fail(
-                planId.HasValue ? "The selected service plan was not found." : AppMessages.ServiceNotFound,
+                serviceVariantId.HasValue
+                    ? "The selected service variant was not found."
+                    : AppMessages.ServiceNotFound,
                 AppConstants.ErrorCodes.NotFound,
                 404);
         }
@@ -53,26 +54,22 @@ public class PricingQuoteService : IPricingQuoteService
                 resolution.StatusCode);
         }
 
-        var calculation = _calculator.Calculate(
-            context.BasePrice,
-            resolution.Data.ExchangeRate,
-            resolution.Data.MarginPercentage);
-
         return ServiceResult<PricingQuoteResponse>.Ok(
             new PricingQuoteResponse
             {
                 ServiceId = context.ServiceId,
-                PlanId = context.PlanId,
+                ServiceVariantId = resolution.Data.ServiceVariantId,
+                PlanId = resolution.Data.ServiceVariantId,
                 PlanName = context.PlanName,
                 PlanDurationDays = context.PlanDurationDays,
                 PlanRegionCode = context.PlanRegionCode,
-                CurrencyCode = context.CurrencyCode,
-                ForeignPrice = calculation.ForeignPrice,
-                ExchangeRate = calculation.ExchangeRate,
-                MarginPercentage = calculation.MarginPercent,
-                BaseAmountIrr = calculation.BaseAmountIrr,
-                ProfitAmountIrr = calculation.ProfitAmountIrr,
-                FinalAmountIrr = calculation.FinalAmountIrr,
+                CurrencyCode = resolution.Data.CurrencyCode,
+                ForeignPrice = resolution.Data.ForeignPrice,
+                ExchangeRate = resolution.Data.ExchangeRate,
+                MarginPercentage = resolution.Data.MarginPercent,
+                BaseAmountIrr = resolution.Data.BaseAmountIrr,
+                ProfitAmountIrr = resolution.Data.ProfitAmountIrr,
+                FinalAmountIrr = resolution.Data.FinalAmountIrr,
                 QuotedAtUtc = quotedAtUtc
             });
     }

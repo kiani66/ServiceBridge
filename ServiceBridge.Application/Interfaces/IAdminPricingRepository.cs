@@ -8,6 +8,7 @@ public interface IAdminPricingRepository
     Task<IReadOnlyCollection<ProfitMargin>> GetProfitMarginsAsync();
     Task<ExchangeRate?> GetExchangeRateByIdAsync(Guid id);
     Task<ProfitMargin?> GetProfitMarginByIdAsync(Guid id);
+    Task<bool> ServiceVariantExistsAsync(Guid id);
     Task<bool> CategoryExistsAsync(Guid id);
     Task<bool> ServiceExistsAsync(Guid id);
     Task AddExchangeRateAsync(ExchangeRate exchangeRate);

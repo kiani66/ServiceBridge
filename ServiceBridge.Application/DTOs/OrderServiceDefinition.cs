@@ -6,8 +6,17 @@ public class OrderServiceDefinition
 {
     public Guid ServiceId { get; set; }
     public Guid CategoryId { get; set; }
-    public bool HasActiveVariants { get; set; }
-    public Guid? VariantId { get; set; }
+    public Guid ServiceVariantId { get; set; }
+    public Guid? VariantId
+    {
+        get => ServiceVariantId == Guid.Empty ? null : ServiceVariantId;
+        set => ServiceVariantId = value ?? Guid.Empty;
+    }
+
+    public bool IsVariantActive { get; set; } = true;
+    public bool IsServiceActive { get; set; } = true;
+    public bool IsCategoryActive { get; set; } = true;
+    public bool IsProviderActive { get; set; } = true;
     public string? VariantName { get; set; }
     public int? VariantDurationDays { get; set; }
     public string? VariantRegionCode { get; set; }

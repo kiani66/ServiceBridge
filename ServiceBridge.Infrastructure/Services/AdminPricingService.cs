@@ -47,12 +47,28 @@ public class AdminPricingService : IAdminPricingService
             return InvalidDate<ProfitMarginResponse>();
         }
 
-        if (request.ServiceId.HasValue && request.CategoryId.HasValue)
+        var scopeCount = new[]
+        {
+            request.ServiceVariantId,
+            request.ServiceId,
+            request.CategoryId
+        }.Count(x => x.HasValue);
+
+        if (scopeCount > 1)
         {
             return ServiceResult<ProfitMarginResponse>.Fail(
                 AppMessages.InvalidProfitMarginScope,
                 AppConstants.ErrorCodes.ValidationFailed,
                 400);
+        }
+
+        if (request.ServiceVariantId.HasValue &&
+            !await _repository.ServiceVariantExistsAsync(request.ServiceVariantId.Value))
+        {
+            return ServiceResult<ProfitMarginResponse>.Fail(
+                AppMessages.ServiceVariantNotFound,
+                AppConstants.ErrorCodes.NotFound,
+                404);
         }
 
         if (request.ServiceId.HasValue &&
@@ -75,6 +91,7 @@ public class AdminPricingService : IAdminPricingService
 
         var margin = new ProfitMargin
         {
+            ServiceVariantId = request.ServiceVariantId,
             CategoryId = request.CategoryId,
             ServiceId = request.ServiceId,
             Percentage = request.Percentage,

@@ -25,11 +25,10 @@ public class PricingQuoteServiceTests
             ExchangeRate = 150_000m,
             ServiceMargin = 10m
         };
-        var resolver = new PricingResolver(repository);
+        var resolver = new PricingResolver(repository, new PricingCalculator());
         var service = new PricingQuoteService(
             repository,
-            resolver,
-            new PricingCalculator());
+            resolver);
 
         var result = await service.GetQuoteAsync(
             repository.ServiceContext.ServiceId,
@@ -46,11 +45,10 @@ public class PricingQuoteServiceTests
     public async Task GetQuoteAsync_WhenServiceDoesNotExist_ReturnsNotFound()
     {
         var repository = new FakePricingRepository();
-        var resolver = new PricingResolver(repository);
+        var resolver = new PricingResolver(repository, new PricingCalculator());
         var service = new PricingQuoteService(
             repository,
-            resolver,
-            new PricingCalculator());
+            resolver);
 
         var result = await service.GetQuoteAsync(Guid.NewGuid(), null, QuotedAtUtc);
 
@@ -78,11 +76,10 @@ public class PricingQuoteServiceTests
             ExchangeRate = 150_000m,
             ServiceMargin = 10m
         };
-        var resolver = new PricingResolver(repository);
+        var resolver = new PricingResolver(repository, new PricingCalculator());
         var service = new PricingQuoteService(
             repository,
-            resolver,
-            new PricingCalculator());
+            resolver);
 
         var result = await service.GetQuoteAsync(
             repository.ServiceContext.ServiceId,
@@ -90,6 +87,7 @@ public class PricingQuoteServiceTests
             QuotedAtUtc);
 
         Assert.True(result.Success);
+        Assert.Equal(planId, result.Data?.ServiceVariantId);
         Assert.Equal(planId, result.Data?.PlanId);
         Assert.Equal("Monthly / Global", result.Data?.PlanName);
         Assert.Equal(30, result.Data?.PlanDurationDays);

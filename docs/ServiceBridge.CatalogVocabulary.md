@@ -4,7 +4,9 @@
 
 Catalog and pricing concepts affect filtering, pricing, fulfillment, validation, reporting, and user/operator workflow. Raw strings are still needed at API and persistence boundaries, but business-significant concepts should have structured domain vocabulary so later catalog work does not spread arbitrary string comparisons through the codebase.
 
-This PR adds vocabulary only. It does not change runtime catalog behavior, order creation, pricing resolution, UI flows, or database schema.
+The vocabulary is introduced incrementally. PR4C2B uses these concepts on
+`ServiceVariant` while intentionally leaving order creation, pricing resolution,
+payment, and agent processing behavior unchanged.
 
 ## CurrencyCode
 
@@ -17,11 +19,16 @@ This PR adds vocabulary only. It does not change runtime catalog behavior, order
 - `AED = 4`
 - `TRY = 5`
 
-Existing string columns remain unchanged for compatibility. `CurrencyCodeExtensions` provides safe conversion between enum values and ISO strings for future domain logic.
+`ServiceVariant.CurrencyCode` is stored as a required uppercase string with
+`USD` as the default. `CurrencyCodeExtensions` provides safe conversion between
+enum values and ISO strings for future domain logic. ServiceBridge v1.0 checkout
+supports USD to IRR only, so active purchasable variants must use `USD`.
 
 ## RegionCode
 
-`RegionCode` is a lightweight value object. It normalizes codes to uppercase, rejects empty values, and keeps compatibility with existing string `RegionCode` columns.
+`RegionCode` is a lightweight value object. It normalizes codes to uppercase,
+rejects empty values, and keeps compatibility with string `RegionCode` columns.
+`ServiceVariant.RegionCode` is required and defaults to `GLOBAL`.
 
 Known values:
 
@@ -73,3 +80,5 @@ This is distinct from the current `OrderFulfillmentMode`, which is already used 
 - `InstructionOnly`
 
 `ExternalAutomation` is future-ready only. No automation behavior is implemented by this PR.
+`ServiceVariant.FulfillmentMode` is stored as an integer and defaults to
+`ManualAgent`.

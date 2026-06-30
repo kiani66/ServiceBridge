@@ -4,14 +4,25 @@
 
 `ServicePlan` was renamed to `ServiceVariant`.
 
-PR4C2A adds the first minimal structured variant fields:
+PR4C2A added the first minimal structured variant fields:
 
 - `BillingCycle`
 - `AccountDeliveryType`
 
-Both fields reuse the PR4A catalog vocabulary enums. `FulfillmentMode`,
-structured currency storage, structured region storage, pricing behavior, order
-creation behavior, and payment behavior remain intentionally unchanged.
+PR4C2B completes the ServiceVariant v1.0 production fields:
+
+- `CurrencyCode`
+- `RegionCode`
+- `FulfillmentMode`
+
+`CurrencyCode` is stored as a required ISO-style code and defaults to `USD`.
+`RegionCode` is stored as a required uppercase operational region code and
+defaults to `GLOBAL`. `FulfillmentMode` uses the Domain `FulfillmentMode` enum
+and defaults to `ManualAgent`.
+
+Checkout behavior is intentionally unchanged in PR4C2B. ServiceBridge v1.0
+checkout supports USD to IRR pricing only, so active purchasable variants are
+validated as `CurrencyCode = USD`.
 
 ## Renamed model surface
 
@@ -23,7 +34,8 @@ creation behavior, and payment behavior remain intentionally unchanged.
 - Order navigation: `ServiceVariant`
 - Order snapshots: `VariantNameSnapshot`, `VariantDurationDaysSnapshot`,
   `VariantRegionCodeSnapshot`
-- Structured fields: `BillingCycle`, `AccountDeliveryType`
+- Structured fields: `BillingCycle`, `AccountDeliveryType`, `CurrencyCode`,
+  `RegionCode`, `FulfillmentMode`
 
 ## Data preservation strategy
 
@@ -41,6 +53,14 @@ Existing rows are preserved and receive safe compatibility defaults:
 
 - `BillingCycle.None`
 - `AccountDeliveryType.NotApplicable`
+
+The migration `CompleteServiceVariantFields` completes the v1.0 variant fields
+without recreating the table. Existing rows are preserved and receive safe
+production defaults:
+
+- `CurrencyCode = USD`
+- `RegionCode = GLOBAL`
+- `FulfillmentMode = ManualAgent`
 
 ## Compatibility notes
 

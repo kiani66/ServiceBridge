@@ -35,6 +35,7 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
                 OrderId = x.Id,
                 OrderNumber = x.OrderNumber,
                 ServiceName = x.Service.Name,
+                ServiceVariantId = x.ServiceVariantId,
                 PlanName = x.VariantNameSnapshot,
                 PlanDurationDays = x.VariantDurationDaysSnapshot,
                 PlanRegionCode = x.VariantRegionCodeSnapshot,

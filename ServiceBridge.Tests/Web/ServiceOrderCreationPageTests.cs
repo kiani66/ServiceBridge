@@ -21,6 +21,7 @@ public class ServiceOrderCreationPageTests
     public async Task OnPost_MapsFieldsAndRedirectsToCreatedOrder()
     {
         var serviceId = Guid.NewGuid();
+        var serviceVariantId = Guid.NewGuid();
         var orderId = Guid.NewGuid();
         CreateOrderRequest? capturedRequest = null;
         var handler = new StubHttpMessageHandler(async request =>
@@ -30,6 +31,7 @@ public class ServiceOrderCreationPageTests
                 new OrderCreatedResponse { OrderId = orderId, OrderNumber = "PB-100" }));
         });
         var model = CreateModel(handler);
+        model.SelectedServiceVariantId = serviceVariantId;
         model.OrderFields =
         [
             new DetailsModel.OrderFieldInput { FieldKey = "email", Value = " user@example.com " }
@@ -42,6 +44,8 @@ public class ServiceOrderCreationPageTests
         Assert.Equal(orderId, redirect.RouteValues!["id"]);
         Assert.NotNull(capturedRequest);
         Assert.Equal(serviceId, capturedRequest!.ServiceId);
+        Assert.Equal(serviceVariantId, capturedRequest.ServiceVariantId);
+        Assert.Null(capturedRequest.PlanId);
         Assert.Equal("Purchase", capturedRequest.OrderType.ToString());
         var field = Assert.Single(capturedRequest.Credentials);
         Assert.Equal("email", field.FieldKey);

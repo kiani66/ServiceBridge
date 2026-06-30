@@ -3,6 +3,7 @@ namespace ServiceBridge.Application.DTOs;
 public class PricingQuoteResponse
 {
     public Guid ServiceId { get; set; }
+    public Guid? ServiceVariantId { get; set; }
     public Guid? PlanId { get; set; }
     public string? PlanName { get; set; }
     public int? PlanDurationDays { get; set; }

@@ -7,6 +7,7 @@ internal class FakeAdminPricingRepository : IAdminPricingRepository
 {
     private readonly Dictionary<Guid, ExchangeRate> _exchangeRates = new();
     private readonly Dictionary<Guid, ProfitMargin> _profitMargins = new();
+    private readonly HashSet<Guid> _serviceVariantIds = new();
     private readonly HashSet<Guid> _categoryIds = new();
     private readonly HashSet<Guid> _serviceIds = new();
 
@@ -20,6 +21,11 @@ internal class FakeAdminPricingRepository : IAdminPricingRepository
     public void SeedService(Guid id)
     {
         _serviceIds.Add(id);
+    }
+
+    public void SeedServiceVariant(Guid id)
+    {
+        _serviceVariantIds.Add(id);
     }
 
     public void SeedExchangeRate(ExchangeRate exchangeRate)
@@ -54,6 +60,11 @@ internal class FakeAdminPricingRepository : IAdminPricingRepository
     public Task<ProfitMargin?> GetProfitMarginByIdAsync(Guid id)
     {
         return Task.FromResult(_profitMargins.GetValueOrDefault(id));
+    }
+
+    public Task<bool> ServiceVariantExistsAsync(Guid id)
+    {
+        return Task.FromResult(_serviceVariantIds.Contains(id));
     }
 
     public Task<bool> CategoryExistsAsync(Guid id)

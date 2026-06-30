@@ -145,6 +145,7 @@ internal static class ServiceCatalogMapper
             AccountDeliveryType = plan.AccountDeliveryType,
             RegionCode = plan.RegionCode,
             CurrencyCode = plan.CurrencyCode,
+            FulfillmentMode = plan.FulfillmentMode,
             BasePrice = plan.BasePrice,
             IsActive = plan.IsActive,
             DisplayOrder = plan.DisplayOrder,

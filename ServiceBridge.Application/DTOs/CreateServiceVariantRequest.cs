@@ -27,12 +27,16 @@ public class CreateServiceVariantRequest
     public AccountDeliveryType AccountDeliveryType { get; set; } =
         AccountDeliveryType.NotApplicable;
 
+    [Required(ErrorMessage = "Region code is required.")]
     [MaxLength(20, ErrorMessage = "Region code cannot exceed 20 characters.")]
-    public string? RegionCode { get; set; }
+    public string RegionCode { get; set; } = "GLOBAL";
 
     [Required(ErrorMessage = "Currency code is required.")]
     [StringLength(3, MinimumLength = 3, ErrorMessage = "Currency code must contain 3 characters.")]
     public string CurrencyCode { get; set; } = "USD";
+
+    [EnumDataType(typeof(FulfillmentMode), ErrorMessage = "Invalid fulfillment mode.")]
+    public FulfillmentMode FulfillmentMode { get; set; } = FulfillmentMode.ManualAgent;
 
     [Range(typeof(decimal), "0.0001", "99999999999999",
         ErrorMessage = "Base price must be greater than zero.")]

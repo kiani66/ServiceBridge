@@ -47,6 +47,9 @@ public class ServiceCatalogServiceTests
         var variant = Assert.Single(result.Data!.Plans);
         Assert.Equal("Monthly / Global", variant.Name);
         Assert.Equal("monthly-global", variant.Slug);
+        Assert.Equal("USD", variant.CurrencyCode);
+        Assert.Equal("GLOBAL", variant.RegionCode);
+        Assert.Equal(FulfillmentMode.ManualAgent, variant.FulfillmentMode);
     }
 
     [Fact]
@@ -225,6 +228,7 @@ public class ServiceCatalogServiceTests
                 AccountDeliveryType = AccountDeliveryType.UseExistingAccount,
                 RegionCode = "global",
                 CurrencyCode = "usd",
+                FulfillmentMode = FulfillmentMode.InventoryCode,
                 BasePrice = 20,
                 IsActive = true,
                 DisplayOrder = 1
@@ -239,11 +243,15 @@ public class ServiceCatalogServiceTests
             result.Data?.AccountDeliveryType);
         Assert.Equal("GLOBAL", result.Data?.RegionCode);
         Assert.Equal("USD", result.Data?.CurrencyCode);
-        Assert.Single(service.Variants);
+        Assert.Equal(FulfillmentMode.InventoryCode, result.Data?.FulfillmentMode);
+        var variant = Assert.Single(service.Variants);
+        Assert.Equal("GLOBAL", variant.RegionCode);
+        Assert.Equal("USD", variant.CurrencyCode);
+        Assert.Equal(FulfillmentMode.InventoryCode, variant.FulfillmentMode);
     }
 
     [Fact]
-    public async Task UpdateVariantAsync_WhenValid_UpdatesBasicStructuredFields()
+    public async Task UpdateVariantAsync_WhenValid_UpdatesProductionFields()
     {
         var repository = new FakeServiceCatalogRepository();
         var service = CreateDigitalService();
@@ -261,8 +269,9 @@ public class ServiceCatalogServiceTests
                 DurationDays = 365,
                 BillingCycle = BillingCycle.Annual,
                 AccountDeliveryType = AccountDeliveryType.ActivationCode,
-                RegionCode = "global",
+                RegionCode = "us",
                 CurrencyCode = "usd",
+                FulfillmentMode = FulfillmentMode.InstructionOnly,
                 BasePrice = 200,
                 IsActive = true,
                 DisplayOrder = 2
@@ -273,8 +282,41 @@ public class ServiceCatalogServiceTests
         Assert.Equal(
             AccountDeliveryType.ActivationCode,
             result.Data?.AccountDeliveryType);
+        Assert.Equal("US", result.Data?.RegionCode);
+        Assert.Equal("USD", result.Data?.CurrencyCode);
+        Assert.Equal(FulfillmentMode.InstructionOnly, result.Data?.FulfillmentMode);
         Assert.Equal(BillingCycle.Annual, variant.BillingCycle);
         Assert.Equal(AccountDeliveryType.ActivationCode, variant.AccountDeliveryType);
+        Assert.Equal("US", variant.RegionCode);
+        Assert.Equal("USD", variant.CurrencyCode);
+        Assert.Equal(FulfillmentMode.InstructionOnly, variant.FulfillmentMode);
+    }
+
+    [Fact]
+    public async Task CreateVariantAsync_WhenActivePurchasableCurrencyIsNotUsd_ReturnsValidationFailed()
+    {
+        var repository = new FakeServiceCatalogRepository();
+        var service = CreateDigitalService();
+        repository.SeedService(service);
+        var catalogService = CreateAdminService(repository);
+
+        var result = await catalogService.CreateVariantAsync(
+            service.Id,
+            new CreateServiceVariantRequest
+            {
+                Name = "EU Monthly",
+                Slug = "eu-monthly",
+                RegionCode = "eu",
+                CurrencyCode = "eur",
+                BasePrice = 20,
+                IsActive = true
+            });
+
+        Assert.False(result.Success);
+        Assert.Equal(400, result.StatusCode);
+        Assert.Contains(nameof(CreateServiceVariantRequest.CurrencyCode),
+            result.ValidationErrors!.Keys);
+        Assert.Empty(service.Variants);
     }
 
     [Fact]
@@ -378,6 +420,8 @@ public class ServiceCatalogServiceTests
             Name = "Monthly / Global",
             Slug = slug,
             CurrencyCode = "USD",
+            RegionCode = "GLOBAL",
+            FulfillmentMode = FulfillmentMode.ManualAgent,
             BasePrice = 20,
             IsActive = true
         };

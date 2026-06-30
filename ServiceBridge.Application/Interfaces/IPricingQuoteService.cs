@@ -7,6 +7,6 @@ public interface IPricingQuoteService
 {
     Task<ServiceResult<PricingQuoteResponse>> GetQuoteAsync(
         Guid serviceId,
-        Guid? planId,
+        Guid? serviceVariantId,
         DateTime quotedAtUtc);
 }

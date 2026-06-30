@@ -68,6 +68,26 @@ public class AdminPricingServiceTests
     }
 
     [Fact]
+    public async Task CreateProfitMarginAsync_WhenServiceVariantExists_CreatesVariantScope()
+    {
+        var repository = new FakeAdminPricingRepository();
+        var serviceVariantId = Guid.NewGuid();
+        repository.SeedServiceVariant(serviceVariantId);
+        var service = new AdminPricingService(repository);
+
+        var result = await service.CreateProfitMarginAsync(new CreateProfitMarginRequest
+        {
+            ServiceVariantId = serviceVariantId,
+            Percentage = 15m,
+            EffectiveFromUtc = EffectiveUtc
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal("ServiceVariant", result.Data?.Scope);
+        Assert.Equal(serviceVariantId, result.Data?.ServiceVariantId);
+    }
+
+    [Fact]
     public async Task CreateProfitMarginAsync_WhenBothScopesAreSet_ReturnsValidationFailure()
     {
         var repository = new FakeAdminPricingRepository();

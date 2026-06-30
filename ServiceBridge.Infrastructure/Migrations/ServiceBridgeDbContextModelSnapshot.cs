@@ -271,17 +271,6 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int?>("VariantDurationDaysSnapshot")
-                        .HasColumnType("int");
-
-                    b.Property<string>("VariantNameSnapshot")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("VariantRegionCodeSnapshot")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
                     b.Property<decimal>("ProfitAmountIrr")
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
@@ -306,6 +295,17 @@ namespace ServiceBridge.Infrastructure.Migrations
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("VariantDurationDaysSnapshot")
+                        .HasColumnType("int");
+
+                    b.Property<string>("VariantNameSnapshot")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("VariantRegionCodeSnapshot")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.HasKey("Id");
 
@@ -614,6 +614,9 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Property<Guid?>("ServiceId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ServiceVariantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -625,11 +628,13 @@ namespace ServiceBridge.Infrastructure.Migrations
 
                     b.HasIndex("ServiceId", "IsActive", "EffectiveFrom");
 
+                    b.HasIndex("ServiceVariantId", "IsActive", "EffectiveFrom");
+
                     b.ToTable("ProfitMargins", t =>
                         {
                             t.HasCheckConstraint("CK_ProfitMargins_Percentage_Range", "[Percentage] >= 0 AND [Percentage] <= 100");
 
-                            t.HasCheckConstraint("CK_ProfitMargins_SingleScope", "NOT ([CategoryId] IS NOT NULL AND [ServiceId] IS NOT NULL)");
+                            t.HasCheckConstraint("CK_ProfitMargins_SingleScope", "([ServiceVariantId] IS NULL AND [ServiceId] IS NULL AND [CategoryId] IS NULL) OR ([ServiceVariantId] IS NOT NULL AND [ServiceId] IS NULL AND [CategoryId] IS NULL) OR ([ServiceVariantId] IS NULL AND [ServiceId] IS NOT NULL AND [CategoryId] IS NULL) OR ([ServiceVariantId] IS NULL AND [ServiceId] IS NULL AND [CategoryId] IS NOT NULL)");
                         });
                 });
 
@@ -710,86 +715,6 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.ToTable("ServiceCategories");
                 });
 
-            modelBuilder.Entity("ServiceBridge.Domain.Entities.ServiceVariant", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("AccountDeliveryType")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
-
-                    b.Property<decimal>("BasePrice")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<int>("BillingCycle")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CurrencyCode")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("nchar(3)")
-                        .IsFixedLength();
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("DurationDays")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("ProcessingTimeDescription")
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<string>("RegionCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<Guid>("ServiceId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Slug")
-                        .IsRequired()
-                        .HasMaxLength(170)
-                        .HasColumnType("nvarchar(170)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ServiceId", "Slug")
-                        .IsUnique();
-
-                    b.HasIndex("ServiceId", "IsActive", "DisplayOrder");
-
-                    b.ToTable("ServiceVariants", t =>
-                        {
-                            t.HasCheckConstraint("CK_ServiceVariants_BasePrice_NonNegative", "[BasePrice] >= 0");
-
-                            t.HasCheckConstraint("CK_ServiceVariants_DurationDays_Positive", "[DurationDays] IS NULL OR [DurationDays] > 0");
-
-                            t.HasCheckConstraint("CK_ServiceVariants_BillingCycle_Valid", "[BillingCycle] IN (0, 1, 2, 3, 4, 5, 6)");
-
-                            t.HasCheckConstraint("CK_ServiceVariants_AccountDeliveryType_Valid", "[AccountDeliveryType] IN (0, 1, 2, 3, 4, 5)");
-                        });
-                });
-
             modelBuilder.Entity("ServiceBridge.Domain.Entities.ServiceRequiredField", b =>
                 {
                     b.Property<Guid>("Id")
@@ -845,6 +770,98 @@ namespace ServiceBridge.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("ServiceRequiredFields");
+                });
+
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.ServiceVariant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AccountDeliveryType")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<decimal>("BasePrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("BillingCycle")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(3)
+                        .HasColumnType("nchar(3)")
+                        .HasDefaultValue("USD")
+                        .IsFixedLength();
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FulfillmentMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("ProcessingTimeDescription")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("RegionCode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("GLOBAL");
+
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(170)
+                        .HasColumnType("nvarchar(170)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceId", "Slug")
+                        .IsUnique();
+
+                    b.HasIndex("ServiceId", "IsActive", "DisplayOrder");
+
+                    b.ToTable("ServiceVariants", t =>
+                        {
+                            t.HasCheckConstraint("CK_ServiceVariants_AccountDeliveryType_Valid", "[AccountDeliveryType] IN (0, 1, 2, 3, 4, 5)");
+
+                            t.HasCheckConstraint("CK_ServiceVariants_BasePrice_NonNegative", "[BasePrice] >= 0");
+
+                            t.HasCheckConstraint("CK_ServiceVariants_BillingCycle_Valid", "[BillingCycle] IN (0, 1, 2, 3, 4, 5, 6)");
+
+                            t.HasCheckConstraint("CK_ServiceVariants_DurationDays_Positive", "[DurationDays] IS NULL OR [DurationDays] > 0");
+
+                            t.HasCheckConstraint("CK_ServiceVariants_FulfillmentMode_Valid", "[FulfillmentMode] IN (1, 2, 3, 4)");
+                        });
                 });
 
             modelBuilder.Entity("ServiceBridge.Domain.Entities.User", b =>
@@ -1088,7 +1105,25 @@ namespace ServiceBridge.Infrastructure.Migrations
                         .HasForeignKey("ServiceId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ServiceBridge.Domain.Entities.ServiceVariant", "ServiceVariant")
+                        .WithMany()
+                        .HasForeignKey("ServiceVariantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Category");
+
+                    b.Navigation("Service");
+
+                    b.Navigation("ServiceVariant");
+                });
+
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.ServiceRequiredField", b =>
+                {
+                    b.HasOne("ServiceBridge.Domain.Entities.DigitalService", "Service")
+                        .WithMany("RequiredFields")
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Service");
                 });
@@ -1104,24 +1139,13 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Navigation("Service");
                 });
 
-            modelBuilder.Entity("ServiceBridge.Domain.Entities.ServiceRequiredField", b =>
-                {
-                    b.HasOne("ServiceBridge.Domain.Entities.DigitalService", "Service")
-                        .WithMany("RequiredFields")
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Service");
-                });
-
             modelBuilder.Entity("ServiceBridge.Domain.Entities.DigitalService", b =>
                 {
-                    b.Navigation("Variants");
-
                     b.Navigation("ProfitMargins");
 
                     b.Navigation("RequiredFields");
+
+                    b.Navigation("Variants");
                 });
 
             modelBuilder.Entity("ServiceBridge.Domain.Entities.Order", b =>

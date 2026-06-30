@@ -350,6 +350,7 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
                 DurationDays = seedPlan.DurationDays,
                 RegionCode = seedPlan.RegionCode,
                 CurrencyCode = seedPlan.CurrencyCode,
+                FulfillmentMode = FulfillmentMode.ManualAgent,
                 BasePrice = seedPlan.BasePrice,
                 IsActive = true,
                 DisplayOrder = seedPlan.DisplayOrder,
@@ -363,6 +364,7 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
         plan.DurationDays = seedPlan.DurationDays;
         plan.RegionCode = seedPlan.RegionCode;
         plan.CurrencyCode = seedPlan.CurrencyCode;
+        plan.FulfillmentMode = FulfillmentMode.ManualAgent;
         plan.BasePrice = seedPlan.BasePrice;
         plan.IsActive = true;
         plan.DisplayOrder = seedPlan.DisplayOrder;
@@ -645,7 +647,7 @@ public class DevelopmentDataSeeder : IDevelopmentDataSeeder
         string Name,
         string Slug,
         int? DurationDays,
-        string? RegionCode,
+        string RegionCode,
         string CurrencyCode,
         decimal BasePrice,
         int DisplayOrder);

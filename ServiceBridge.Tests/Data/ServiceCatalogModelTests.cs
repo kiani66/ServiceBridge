@@ -120,15 +120,33 @@ public class ServiceCatalogModelTests
         var billingCycle = variantType.FindProperty(nameof(ServiceVariant.BillingCycle))!;
         var accountDeliveryType =
             variantType.FindProperty(nameof(ServiceVariant.AccountDeliveryType))!;
+        var currencyCode = variantType.FindProperty(nameof(ServiceVariant.CurrencyCode))!;
+        var regionCode = variantType.FindProperty(nameof(ServiceVariant.RegionCode))!;
+        var fulfillmentMode = variantType.FindProperty(nameof(ServiceVariant.FulfillmentMode))!;
+        var variant = new ServiceVariant();
 
         Assert.NotNull(typeof(ServiceVariant).GetProperty(nameof(ServiceVariant.BillingCycle)));
         Assert.NotNull(typeof(ServiceVariant).GetProperty(nameof(ServiceVariant.AccountDeliveryType)));
+        Assert.NotNull(typeof(ServiceVariant).GetProperty(nameof(ServiceVariant.CurrencyCode)));
+        Assert.NotNull(typeof(ServiceVariant).GetProperty(nameof(ServiceVariant.RegionCode)));
+        Assert.NotNull(typeof(ServiceVariant).GetProperty(nameof(ServiceVariant.FulfillmentMode)));
         Assert.False(billingCycle.IsNullable);
         Assert.False(accountDeliveryType.IsNullable);
+        Assert.False(currencyCode.IsNullable);
+        Assert.False(regionCode.IsNullable);
+        Assert.False(fulfillmentMode.IsNullable);
         Assert.Equal(BillingCycle.None, billingCycle.GetDefaultValue());
         Assert.Equal(
             AccountDeliveryType.NotApplicable,
             accountDeliveryType.GetDefaultValue());
+        Assert.Equal("USD", currencyCode.GetDefaultValue());
+        Assert.Equal("GLOBAL", regionCode.GetDefaultValue());
+        Assert.Equal(FulfillmentMode.ManualAgent, fulfillmentMode.GetDefaultValue());
+        Assert.Equal(3, currencyCode.GetMaxLength());
+        Assert.Equal(20, regionCode.GetMaxLength());
+        Assert.Equal("USD", variant.CurrencyCode);
+        Assert.Equal("GLOBAL", variant.RegionCode);
+        Assert.Equal(FulfillmentMode.ManualAgent, variant.FulfillmentMode);
     }
 
     [Fact]
@@ -146,6 +164,9 @@ public class ServiceCatalogModelTests
             constraintNames);
         Assert.Contains(
             "CK_ServiceVariants_AccountDeliveryType_Valid",
+            constraintNames);
+        Assert.Contains(
+            "CK_ServiceVariants_FulfillmentMode_Valid",
             constraintNames);
     }
 
@@ -195,11 +216,14 @@ public class ServiceCatalogModelTests
 
         var rate = exchangeRateType.FindProperty(nameof(ExchangeRate.RateToIrr))!;
         var percentage = profitMarginType.FindProperty(nameof(ProfitMargin.Percentage))!;
+        var serviceVariantId =
+            profitMarginType.FindProperty(nameof(ProfitMargin.ServiceVariantId))!;
 
         Assert.Equal(18, rate.GetPrecision());
         Assert.Equal(4, rate.GetScale());
         Assert.Equal(5, percentage.GetPrecision());
         Assert.Equal(2, percentage.GetScale());
+        Assert.True(serviceVariantId.IsNullable);
     }
 
     [Fact]
@@ -217,6 +241,9 @@ public class ServiceCatalogModelTests
         Assert.All(
             profitMarginType.GetForeignKeys(),
             foreignKey => Assert.Equal(DeleteBehavior.Restrict, foreignKey.DeleteBehavior));
+        Assert.Contains(profitMarginType.GetForeignKeys(), foreignKey =>
+            foreignKey.Properties.Select(x => x.Name)
+                .SequenceEqual(new[] { nameof(ProfitMargin.ServiceVariantId) }));
     }
 
     private void AssertClientGeneratedId<TEntity>()

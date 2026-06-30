@@ -54,6 +54,11 @@ public class AdminPricingRepository : IAdminPricingRepository
         return _context.ServiceCategories.AnyAsync(x => x.Id == id);
     }
 
+    public Task<bool> ServiceVariantExistsAsync(Guid id)
+    {
+        return _context.ServiceVariants.AnyAsync(x => x.Id == id);
+    }
+
     public Task<bool> ServiceExistsAsync(Guid id)
     {
         return _context.DigitalServices.AnyAsync(x => x.Id == id);

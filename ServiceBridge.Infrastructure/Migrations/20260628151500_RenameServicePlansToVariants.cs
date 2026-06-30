@@ -1,10 +1,13 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using ServiceBridge.Infrastructure.Data;
 
 #nullable disable
 
 namespace ServiceBridge.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(ServiceBridgeDbContext))]
     [Migration("20260628151500_RenameServicePlansToVariants")]
     public partial class RenameServicePlansToVariants : Migration
     {
