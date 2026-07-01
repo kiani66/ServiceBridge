@@ -11,9 +11,19 @@ public class IndexModel : PageModel
         if (User.Identity?.IsAuthenticated == true)
         {
             var landingPage = RoleNavigation.GetLandingPage(User);
-            return landingPage == null ? Forbid() : RedirectToPage(landingPage);
+            return landingPage == null
+                ? Forbid()
+                : IsBlazorRoute(landingPage)
+                    ? LocalRedirect(landingPage)
+                    : RedirectToPage(landingPage);
         }
 
         return RedirectToPage("/Account/Login");
+    }
+
+    private static bool IsBlazorRoute(string route)
+    {
+        return string.Equals(route, "/ui", StringComparison.OrdinalIgnoreCase)
+            || route.StartsWith("/ui/", StringComparison.OrdinalIgnoreCase);
     }
 }
