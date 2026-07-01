@@ -20,12 +20,39 @@ public class AgentOrderQueryRepository : IAgentOrderQueryRepository
         _fieldProtector = fieldProtector;
     }
 
+    public async Task<AgentOrderDashboardSummaryDto> GetDashboardSummaryAsync(
+        Guid agentId,
+        DateTime todayStartUtc,
+        DateTime tomorrowStartUtc)
+    {
+        return new AgentOrderDashboardSummaryDto
+        {
+            AssignedOrders = await _context.Orders.CountAsync(x =>
+                x.AssignedAgentId == agentId &&
+                x.Status == OrderStatus.Assigned),
+            ProcessingOrders = await _context.Orders.CountAsync(x =>
+                x.AssignedAgentId == agentId &&
+                x.Status == OrderStatus.Processing),
+            CompletedToday = await _context.Orders.CountAsync(x =>
+                x.AssignedAgentId == agentId &&
+                x.Status == OrderStatus.Completed &&
+                x.CompletedAt >= todayStartUtc &&
+                x.CompletedAt < tomorrowStartUtc),
+            FailedToday = await _context.OrderStatusHistory.CountAsync(x =>
+                x.Order.AssignedAgentId == agentId &&
+                x.NewStatus == OrderStatus.Failed &&
+                x.CreatedAt >= todayStartUtc &&
+                x.CreatedAt < tomorrowStartUtc)
+        };
+    }
+
     public async Task<PagedResultDto<AgentOrderListItemDto>>
         GetAssignedOrdersAsync(
             Guid agentId,
             int page,
             int pageSize,
-            OrderStatus? status)
+            OrderStatus? status,
+            string? search)
     {
         var query = _context.Orders
             .AsNoTracking()
@@ -36,11 +63,22 @@ public class AgentOrderQueryRepository : IAgentOrderQueryRepository
             query = query.Where(x => x.Status == status.Value);
         }
 
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(x =>
+                x.OrderNumber.Contains(search) ||
+                x.User.FullName.Contains(search) ||
+                x.User.Email.Contains(search) ||
+                x.Service.Name.Contains(search) ||
+                (x.VariantNameSnapshot != null &&
+                    x.VariantNameSnapshot.Contains(search)));
+        }
+
         var totalCount = await query.CountAsync();
         var items = await query
-            .OrderBy(x => x.Status == OrderStatus.Assigned ? 0 : 1)
-            .ThenBy(x => x.AssignedAt)
-            .ThenBy(x => x.Id)
+            .OrderByDescending(x => x.AssignedAt ?? x.CreatedAt)
+            .ThenByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new AgentOrderListItemDto
@@ -53,6 +91,7 @@ public class AgentOrderQueryRepository : IAgentOrderQueryRepository
                 PlanDurationDays = x.VariantDurationDaysSnapshot,
                 PlanRegionCode = x.VariantRegionCodeSnapshot,
                 CustomerName = x.User.FullName,
+                FinalAmountIrr = x.FinalAmountIrr,
                 Status = x.Status.ToString(),
                 CreatedAt = x.CreatedAt,
                 AssignedAt = x.AssignedAt,
@@ -91,6 +130,10 @@ public class AgentOrderQueryRepository : IAgentOrderQueryRepository
                 PlanName = x.VariantNameSnapshot,
                 PlanDurationDays = x.VariantDurationDaysSnapshot,
                 PlanRegionCode = x.VariantRegionCodeSnapshot,
+                BasePriceUsdSnapshot = x.ForeignPrice,
+                ExchangeRateSnapshot = x.ExchangeRateSnapshot,
+                MarginSnapshot = x.MarginPercentSnapshot,
+                FinalPriceIrr = x.FinalAmountIrr,
                 CreatedAt = x.CreatedAt,
                 PaidAt = x.PaidAt,
                 AssignedAt = x.AssignedAt,
@@ -227,6 +270,21 @@ public class AgentOrderQueryRepository : IAgentOrderQueryRepository
                 RequestedAt = x.RequestedAt,
                 RespondedAt = x.RespondedAt,
                 IsResolved = x.IsResolved
+            })
+            .ToListAsync();
+
+        order.Payments = await _context.Payments
+            .AsNoTracking()
+            .Where(x => x.OrderId == orderId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new PaymentHistoryDto
+            {
+                PaymentId = x.Id,
+                AmountIrr = x.AmountIRR,
+                Status = x.Status.ToString(),
+                GatewayReference = x.GatewayReference,
+                CreatedAt = x.CreatedAt,
+                CompletedAt = x.ConfirmedAt
             })
             .ToListAsync();
 
