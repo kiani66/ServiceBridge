@@ -122,9 +122,6 @@ public class LoginModel : PageModel
             new ClaimsPrincipal(claimsIdentity),
             authProperties);
 
-        return string.Equals(landingPage, "/ui", StringComparison.OrdinalIgnoreCase)
-            || landingPage.StartsWith("/ui/", StringComparison.OrdinalIgnoreCase)
-            ? LocalRedirect(landingPage)
-            : RedirectToPage(landingPage);
+        return LocalRedirect(landingPage);
     }
 }

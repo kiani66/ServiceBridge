@@ -45,7 +45,7 @@
                     <form method="post" asp-page-handler="Cancel" asp-route-id="@Model.Order.OrderId">
                         <button type="submit"
                                 class="btn btn-outline-danger"
-                                onclick="return confirm('Cancel this order?');">
+                                data-confirm="Cancel this order?">
                             Cancel order
                         </button>
                     </form>

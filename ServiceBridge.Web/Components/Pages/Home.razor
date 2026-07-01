@@ -1,5 +1,5 @@
 @page "/ui"
-@layout PublicLayout
+@layout PublicOrDashboardLayout
 @inject PublicCatalogClient CatalogClient
 
 @if (_loading)
@@ -105,11 +105,27 @@ else
         }
     </PageSection>
 
-    <PageSection Title="Trust and payment guidance" Description="Public browsing stays separate from checkout, order creation, and payment." MaxWidth="public">
+    <PageSection Id="about" Title="About ServiceBridge" Description="ServiceBridge connects local payment, service information collection, and controlled fulfillment for international digital services." MaxWidth="public">
         <div class="sb-process-grid">
-            <div><strong>Live quotes</strong><span>Displayed IRR prices come from the pricing API at browsing time.</span></div>
-            <div><strong>Provider context</strong><span>Each service shows provider, description, currency, and fulfillment timing.</span></div>
-            <div><strong>Credential-aware checkout</strong><span>Sensitive order fields are collected only in the order flow.</span></div>
+            <div><strong>Service discovery</strong><span>Browse active services and compare provider-backed variants before checkout.</span></div>
+            <div><strong>Operational tracking</strong><span>Paid orders move through admin review, agent processing, and timeline updates.</span></div>
+            <div><strong>Clear separation</strong><span>Public browsing stays separate from checkout, order creation, and account pages.</span></div>
+        </div>
+    </PageSection>
+
+    <PageSection Id="faq" Title="FAQ" Description="Common public questions before creating an order." MaxWidth="public">
+        <div class="sb-process-grid">
+            <div><strong>How is price shown?</strong><span>Public service pages show live IRR quotes from the pricing API.</span></div>
+            <div><strong>When do I sign in?</strong><span>Sign in is required only for checkout, orders, payment, and profile pages.</span></div>
+            <div><strong>How is fulfillment tracked?</strong><span>Dashboard order details show payment state, notes, and timeline entries.</span></div>
+        </div>
+    </PageSection>
+
+    <PageSection Id="contact" Title="Contact Us" Description="Use your dashboard order timeline for order-specific support after checkout." MaxWidth="public">
+        <div class="sb-process-grid">
+            <div><strong>Public questions</strong><span>Use the public catalog to review service details before signing in.</span></div>
+            <div><strong>Order support</strong><span>After checkout, use the authenticated dashboard for order-specific communication.</span></div>
+            <div><strong>Account access</strong><span>Login and registration are available from the public navigation when needed.</span></div>
         </div>
     </PageSection>
 }

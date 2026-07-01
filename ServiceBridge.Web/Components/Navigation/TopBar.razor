@@ -7,13 +7,17 @@
     <MudText Typo="Typo.subtitle1" Class="sb-topbar-title">@Title</MudText>
     <MudSpacer />
     <SearchBar Placeholder="Search services or orders" Compact="true" />
-    <MudButton Href="/ui/checkout/chatgpt-plus"
-               Variant="Variant.Filled"
-               Color="Color.Primary"
-               Size="Size.Small"
-               StartIcon="@Icons.Material.Outlined.Add">
-        New order
-    </MudButton>
+    <AuthorizeView Roles="@AppConstants.Roles.User">
+        <Authorized>
+            <MudButton Href="/ui/catalog"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Small"
+                       StartIcon="@Icons.Material.Outlined.Add">
+                New order
+            </MudButton>
+        </Authorized>
+    </AuthorizeView>
 </MudAppBar>
 
 @code {

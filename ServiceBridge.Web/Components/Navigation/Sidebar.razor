@@ -10,39 +10,46 @@
     <AuthorizeView Roles="@AppConstants.Roles.User">
         <Authorized>
             <MudText Typo="Typo.caption" Class="sb-nav-group">Customer</MudText>
-            <MudNavLink Href="/ui" Icon="@Icons.Material.Outlined.Home" Match="NavLinkMatch.All">Home</MudNavLink>
-            <MudNavLink Href="/ui/catalog" Icon="@Icons.Material.Outlined.Apps">Catalog</MudNavLink>
-            <MudNavLink Href="/ui/checkout/chatgpt-plus" Icon="@Icons.Material.Outlined.Lock">Checkout</MudNavLink>
-            <MudNavLink Href="/ui/dashboard" Icon="@Icons.Material.Outlined.SpaceDashboard">Dashboard</MudNavLink>
+            <MudNavLink Href="/ui/catalog" Icon="@Icons.Material.Outlined.Apps">Services</MudNavLink>
             <MudNavLink Href="/ui/orders" Icon="@Icons.Material.Outlined.ReceiptLong">Orders</MudNavLink>
+            <MudNavLink Href="/ui/profile" Icon="@Icons.Material.Outlined.Person">Profile</MudNavLink>
         </Authorized>
     </AuthorizeView>
 
     <AuthorizeView Roles="@AppConstants.Roles.Admin">
         <Authorized>
             <MudText Typo="Typo.caption" Class="sb-nav-group">Admin operations</MudText>
-            <MudNavLink Href="/ui/admin" Icon="@Icons.Material.Outlined.AdminPanelSettings">Workspace</MudNavLink>
-            <MudNavLink Href="/Dashboard" Icon="@Icons.Material.Outlined.SpaceDashboard">Legacy dashboard</MudNavLink>
+            <MudNavLink Href="/ui/admin" Icon="@Icons.Material.Outlined.SpaceDashboard">Dashboard</MudNavLink>
+            <MudNavLink Href="/Admin/Catalog" Icon="@Icons.Material.Outlined.Inventory2">Catalog</MudNavLink>
+            <MudNavLink Href="/Admin/Pricing" Icon="@Icons.Material.Outlined.PriceChange">Pricing</MudNavLink>
+            <MudNavLink Href="/Admin/Users" Icon="@Icons.Material.Outlined.Group">Users</MudNavLink>
+            <MudNavLink Href="/Admin/Orders" Icon="@Icons.Material.Outlined.ReceiptLong">Orders</MudNavLink>
+            <MudNavLink Href="/ui/profile" Icon="@Icons.Material.Outlined.Person">Profile</MudNavLink>
         </Authorized>
     </AuthorizeView>
 
     <AuthorizeView Roles="@AppConstants.Roles.Agent">
         <Authorized>
             <MudText Typo="Typo.caption" Class="sb-nav-group">Agent operations</MudText>
-            <MudNavLink Href="/ui/agent" Icon="@Icons.Material.Outlined.SupportAgent">Workspace</MudNavLink>
+            <MudNavLink Href="/Agent/Orders?status=Assigned" Icon="@Icons.Material.Outlined.AssignmentInd">Assigned Orders</MudNavLink>
+            <MudNavLink Href="/Agent/Orders?status=Processing" Icon="@Icons.Material.Outlined.ManageHistory">Processing</MudNavLink>
+            <MudNavLink Href="/Agent/Orders?status=Completed" Icon="@Icons.Material.Outlined.CheckCircle">Completed</MudNavLink>
+            <MudNavLink Href="/ui/profile" Icon="@Icons.Material.Outlined.Person">Profile</MudNavLink>
         </Authorized>
     </AuthorizeView>
 
     <AuthorizeView>
         <Authorized>
-            <MudText Typo="Typo.caption" Class="sb-nav-group">Account</MudText>
-            <MudNavLink Href="/User/UserProfile" Icon="@Icons.Material.Outlined.Person">Profile</MudNavLink>
         </Authorized>
         <NotAuthorized>
             <MudText Typo="Typo.caption" Class="sb-nav-group">Public</MudText>
             <MudNavLink Href="/ui" Icon="@Icons.Material.Outlined.Home" Match="NavLinkMatch.All">Home</MudNavLink>
-            <MudNavLink Href="/ui/catalog" Icon="@Icons.Material.Outlined.Apps">Catalog</MudNavLink>
+            <MudNavLink Href="/ui/catalog" Icon="@Icons.Material.Outlined.Apps">Services</MudNavLink>
+            <MudNavLink Href="/ui#faq" Icon="@Icons.Material.Outlined.HelpOutline">FAQ</MudNavLink>
+            <MudNavLink Href="/ui#contact" Icon="@Icons.Material.Outlined.MailOutline">Contact Us</MudNavLink>
+            <MudNavLink Href="/ui#about" Icon="@Icons.Material.Outlined.Info">About</MudNavLink>
             <MudNavLink Href="/Account/Login" Icon="@Icons.Material.Outlined.Login">Sign in</MudNavLink>
+            <MudNavLink Href="/Account/Register" Icon="@Icons.Material.Outlined.PersonAdd">Register</MudNavLink>
         </NotAuthorized>
     </AuthorizeView>
 </MudNavMenu>
