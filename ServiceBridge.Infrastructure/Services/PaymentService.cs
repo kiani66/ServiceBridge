@@ -11,10 +11,14 @@ namespace ServiceBridge.Infrastructure.Services;
 public class PaymentService : IPaymentService
 {
     private readonly IPaymentRepository _repository;
+    private readonly IMockPaymentGateway _mockPaymentGateway;
 
-    public PaymentService(IPaymentRepository repository)
+    public PaymentService(
+        IPaymentRepository repository,
+        IMockPaymentGateway mockPaymentGateway)
     {
         _repository = repository;
+        _mockPaymentGateway = mockPaymentGateway;
     }
 
     public async Task<ServiceResult<PaymentInitiatedResponse>> InitiateAsync(
@@ -85,6 +89,56 @@ public class PaymentService : IPaymentService
             AppMessages.PaymentInitiated);
     }
 
+    public async Task<ServiceResult<MockPaymentResultResponse>> ProcessMockAsync(
+        Guid userId,
+        MockPaymentRequest request)
+    {
+        if (request.PaymentId == Guid.Empty)
+        {
+            return ValidationFailed<MockPaymentResultResponse>(
+                nameof(request.PaymentId),
+                "Payment ID is required.");
+        }
+
+        var payment = await _repository.GetPaymentWithOrderAsync(request.PaymentId);
+        if (payment == null)
+        {
+            return ServiceResult<MockPaymentResultResponse>.Fail(
+                AppMessages.PaymentNotFound,
+                AppConstants.ErrorCodes.NotFound,
+                404);
+        }
+
+        if (payment.Order.UserId != userId)
+        {
+            return ServiceResult<MockPaymentResultResponse>.Fail(
+                AppMessages.PaymentOrderForbidden,
+                AppConstants.ErrorCodes.Forbidden,
+                403);
+        }
+
+        var callback = _mockPaymentGateway.CreateCallback(
+            request.PaymentId,
+            request.Succeed);
+        var confirmation = await ConfirmAsync(
+            callback.Request,
+            callback.RawPayload);
+        if (!confirmation.Success)
+        {
+            return FromFailure<MockPaymentResultResponse>(confirmation);
+        }
+
+        return ServiceResult<MockPaymentResultResponse>.Ok(
+            new MockPaymentResultResponse
+            {
+                PaymentId = request.PaymentId,
+                OrderId = payment.OrderId,
+                Status = callback.Request.Status,
+                GatewayReference = callback.Request.GatewayReference
+            },
+            confirmation.Message);
+    }
+
     public async Task<ServiceResult> ConfirmAsync(
         ConfirmPaymentRequest request,
         string callbackPayload)
@@ -133,6 +187,14 @@ public class PaymentService : IPaymentService
 
         if (payment.Status != PaymentStatus.Pending)
         {
+            if (IsIdempotentConfirmation(payment.Status, request.Status))
+            {
+                return ServiceResult.Ok(
+                    request.Status == PaymentStatus.Completed
+                        ? AppMessages.PaymentConfirmed
+                        : AppMessages.PaymentFailed);
+            }
+
             return ServiceResult.Fail(
                 AppMessages.PaymentAlreadyProcessed,
                 AppConstants.ErrorCodes.Conflict,
@@ -188,7 +250,14 @@ public class PaymentService : IPaymentService
         string key,
         string message)
     {
-        return new ServiceResult<PaymentInitiatedResponse>
+        return ValidationFailed<PaymentInitiatedResponse>(key, message);
+    }
+
+    private static ServiceResult<T> ValidationFailed<T>(
+        string key,
+        string message)
+    {
+        return new ServiceResult<T>
         {
             Success = false,
             Message = AppMessages.ValidationFailed,
@@ -199,6 +268,26 @@ public class PaymentService : IPaymentService
                 [key] = [message]
             }
         };
+    }
+
+    private static ServiceResult<T> FromFailure<T>(ServiceResult result)
+    {
+        return new ServiceResult<T>
+        {
+            Success = false,
+            Message = result.Message,
+            ErrorCode = result.ErrorCode,
+            StatusCode = result.StatusCode,
+            ValidationErrors = result.ValidationErrors
+        };
+    }
+
+    private static bool IsIdempotentConfirmation(
+        PaymentStatus currentStatus,
+        PaymentStatus requestedStatus)
+    {
+        return currentStatus == requestedStatus &&
+               requestedStatus is PaymentStatus.Completed or PaymentStatus.Failed;
     }
 
     private static ServiceResult ValidationFailedCallback(

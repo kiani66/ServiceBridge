@@ -1,0 +1,122 @@
+@page "/ui/payments/success/{OrderId:guid}"
+@layout PublicLayout
+@using ServiceBridge.Application.DTOs
+@using ServiceBridge.Domain.Enums
+@inject PaymentClient PaymentClient
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <PageHeader Eyebrow="Payment result"
+                Title="Loading result"
+                Description="Fetching the latest order payment state." />
+    <PageSection MaxWidth="standard">
+        <LoadingSkeleton Lines="5" Label="Loading result" />
+    </PageSection>
+}
+else if (_order is null)
+{
+    <EmptyState Title="Payment result unavailable"
+                Description="@(_errorMessage ?? "The requested order payment result could not be loaded.")"
+                Icon="@Icons.Material.Outlined.SearchOff">
+        <Actions>
+            <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary">
+                Browse catalog
+            </MudButton>
+        </Actions>
+    </EmptyState>
+}
+else
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), (_order.OrderNumber, $"/ui/payments/{OrderId}"), ("Payment confirmed", null) })" />
+
+    <PageHeader Eyebrow="Payment result"
+                Title="Payment confirmed"
+                Description="@($"{_order.OrderNumber} is {_order.Status}.")">
+        <Actions>
+            <MudButton Href="@($"/Orders/Details/{OrderId}")"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.ReceiptLong">
+                View order
+            </MudButton>
+        </Actions>
+    </PageHeader>
+
+    <PageSection MaxWidth="wide">
+        <div class="sb-detail-grid">
+            <div class="sb-detail-panel">
+                <h2>Payment status</h2>
+                @if (IsConfirmed)
+                {
+                    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">
+                        The mock gateway callback was confirmed and the order is paid.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                        The latest order state is not paid. Refresh the payment page before continuing.
+                    </MudAlert>
+                }
+
+                <dl class="sb-fact-list">
+                    <div><dt>Order number</dt><dd>@_order.OrderNumber</dd></div>
+                    <div><dt>Payment status</dt><dd>@(SelectedPayment?.Status ?? "-")</dd></div>
+                    <div><dt>Paid at</dt><dd>@(_order.PaidAt?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "-")</dd></div>
+                    <div><dt>Total</dt><dd>@_order.FinalPriceIrr.ToString("N0") IRR</dd></div>
+                </dl>
+            </div>
+
+            <PaymentSummaryPanel Order="_order"
+                                 Payment="SelectedPayment"
+                                 Title="Payment summary" />
+        </div>
+    </PageSection>
+}
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "paymentId")]
+    public Guid? PaymentId { get; set; }
+
+    private bool _loading = true;
+    private string? _errorMessage;
+    private UserOrderDetailDto? _order;
+
+    private PaymentHistoryDto? SelectedPayment =>
+        FindPayment(PaymentId, nameof(PaymentStatus.Completed)) ??
+        _order?.Payments.FirstOrDefault(payment =>
+            string.Equals(payment.Status, nameof(PaymentStatus.Completed), StringComparison.OrdinalIgnoreCase));
+
+    private bool IsConfirmed =>
+        string.Equals(_order?.Status, nameof(OrderStatus.Paid), StringComparison.OrdinalIgnoreCase) &&
+        SelectedPayment is not null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var result = await PaymentClient.GetOrderAsync(OrderId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _order = result.Success ? result.Data : null;
+        _errorMessage = result.ErrorMessage;
+        _loading = false;
+    }
+
+    private PaymentHistoryDto? FindPayment(Guid? paymentId, string status)
+    {
+        if (!paymentId.HasValue || _order is null)
+        {
+            return null;
+        }
+
+        return _order.Payments.FirstOrDefault(payment =>
+            payment.PaymentId == paymentId.Value &&
+            string.Equals(payment.Status, status, StringComparison.OrdinalIgnoreCase));
+    }
+}

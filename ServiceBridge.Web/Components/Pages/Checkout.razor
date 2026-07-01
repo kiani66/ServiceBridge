@@ -376,7 +376,7 @@ else
 
         if (result.Success && result.Order is not null)
         {
-            Navigation.NavigateTo($"/Orders/Details/{result.Order.OrderId}");
+            Navigation.NavigateTo($"/ui/payments/{result.Order.OrderId}");
             return;
         }
 

@@ -1,0 +1,317 @@
+@page "/ui/payments/{OrderId:guid}"
+@layout PublicLayout
+@using ServiceBridge.Application.DTOs
+@using ServiceBridge.Domain.Enums
+@inject PaymentClient PaymentClient
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <PageHeader Eyebrow="Payment"
+                Title="Loading payment"
+                Description="Fetching the order and current payment state." />
+    <PageSection MaxWidth="standard">
+        <LoadingSkeleton Lines="6" Label="Loading payment" />
+    </PageSection>
+}
+else if (_notFound)
+{
+    <EmptyState Title="Order not found"
+                Description="The requested order is not available for payment."
+                Icon="@Icons.Material.Outlined.SearchOff">
+        <Actions>
+            <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary">
+                Browse catalog
+            </MudButton>
+        </Actions>
+    </EmptyState>
+}
+else if (!string.IsNullOrWhiteSpace(_loadErrorMessage))
+{
+    <EmptyState Title="Unable to load payment"
+                Description="@_loadErrorMessage"
+                Icon="@Icons.Material.Outlined.CloudOff">
+        <Actions>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">
+                Try again
+            </MudButton>
+        </Actions>
+    </EmptyState>
+}
+else if (_order is not null)
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", "/ui/catalog"), (_order.OrderNumber, null), ("Payment", null) })" />
+
+    <PageHeader Eyebrow="Payment"
+                Title="Mock payment"
+                Description="@($"{_order.OrderNumber} / {_order.ServiceName}")" />
+
+    <PageSection MaxWidth="wide">
+        <div class="sb-detail-grid">
+            <div class="sb-detail-panel">
+                <h2>Mock gateway</h2>
+
+                @if (IsPaid)
+                {
+                    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">
+                        This order is already paid.
+                    </MudAlert>
+                }
+                else if (!IsWaitingForPayment)
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                        This order is not waiting for payment.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                        The payment attempt will be recorded through the mock gateway callback.
+                    </MudAlert>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_actionErrorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                        @_actionErrorMessage
+                    </MudAlert>
+                }
+
+                @if (_validationErrors.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                        @foreach (var error in _validationErrors)
+                        {
+                            <div>@error</div>
+                        }
+                    </MudAlert>
+                }
+
+                <div class="sb-checkout-action">
+                    <div>
+                        <span>Amount due</span>
+                        <strong>@_order.FinalPriceIrr.ToString("N0") IRR</strong>
+                        <p>@_order.OrderNumber</p>
+                    </div>
+                    @if (IsPaid)
+                    {
+                        <MudButton Href="@SuccessHref"
+                                   Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Outlined.ReceiptLong">
+                            Payment result
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudStack Row="true" Spacing="2">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Outlined.Payments"
+                                       Disabled="@ActionDisabled"
+                                       OnClick="@(() => SubmitAsync(true))">
+                                @if (_processing && _requestedOutcome == true)
+                                {
+                                    <MudProgressCircular Color="Color.Inherit" Indeterminate="true" Size="Size.Small" />
+                                    <span>Processing</span>
+                                }
+                                else
+                                {
+                                    <span>Mock pay</span>
+                                }
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Error"
+                                       StartIcon="@Icons.Material.Outlined.ReportProblem"
+                                       Disabled="@ActionDisabled"
+                                       OnClick="@(() => SubmitAsync(false))">
+                                @if (_processing && _requestedOutcome == false)
+                                {
+                                    <MudProgressCircular Color="Color.Inherit" Indeterminate="true" Size="Size.Small" />
+                                    <span>Recording</span>
+                                }
+                                else
+                                {
+                                    <span>Simulate failure</span>
+                                }
+                            </MudButton>
+                        </MudStack>
+                    }
+                </div>
+            </div>
+
+            <PaymentSummaryPanel Order="_order"
+                                 Payment="CurrentPayment"
+                                 Title="Payment summary" />
+        </div>
+    </PageSection>
+}
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _processing;
+    private bool? _requestedOutcome;
+    private string? _loadErrorMessage;
+    private string? _actionErrorMessage;
+    private UserOrderDetailDto? _order;
+    private readonly List<string> _validationErrors = [];
+
+    private bool IsWaitingForPayment =>
+        string.Equals(_order?.Status, nameof(OrderStatus.WaitingForPayment), StringComparison.OrdinalIgnoreCase);
+
+    private bool IsPaid =>
+        string.Equals(_order?.Status, nameof(OrderStatus.Paid), StringComparison.OrdinalIgnoreCase);
+
+    private bool ActionDisabled => _processing || !IsWaitingForPayment;
+
+    private PaymentHistoryDto? PendingPayment => _order?.Payments.FirstOrDefault(payment =>
+        string.Equals(payment.Status, nameof(PaymentStatus.Pending), StringComparison.OrdinalIgnoreCase));
+
+    private PaymentHistoryDto? CurrentPayment =>
+        PendingPayment ?? _order?.Payments.OrderByDescending(payment => payment.CreatedAt).FirstOrDefault();
+
+    private string SuccessHref => $"/ui/payments/success/{OrderId}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await LoadAsync(showLoading: true);
+    }
+
+    private async Task LoadAsync(bool showLoading)
+    {
+        if (showLoading)
+        {
+            _loading = true;
+        }
+
+        _notFound = false;
+        _loadErrorMessage = null;
+        _actionErrorMessage = null;
+        _validationErrors.Clear();
+
+        var result = await PaymentClient.GetOrderAsync(OrderId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (result.Success && result.Data is not null)
+        {
+            _order = result.Data;
+            _loading = false;
+            return;
+        }
+
+        _order = null;
+        _notFound = result.NotFound;
+        _loadErrorMessage = result.NotFound
+            ? null
+            : result.ErrorMessage ?? "Unable to load payment for this order.";
+        _loading = false;
+    }
+
+    private async Task SubmitAsync(bool succeed)
+    {
+        if (_processing || _order is null || !IsWaitingForPayment)
+        {
+            return;
+        }
+
+        _processing = true;
+        _requestedOutcome = succeed;
+        _actionErrorMessage = null;
+        _validationErrors.Clear();
+
+        var paymentId = await EnsurePaymentAsync();
+        if (!paymentId.HasValue)
+        {
+            _processing = false;
+            _requestedOutcome = null;
+            return;
+        }
+
+        var result = await PaymentClient.ProcessMockPaymentAsync(
+            paymentId.Value,
+            succeed);
+
+        _processing = false;
+        _requestedOutcome = null;
+
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (result.Success && result.Data is not null)
+        {
+            var route = result.Data.Status == PaymentStatus.Completed
+                ? "success"
+                : "failure";
+            Navigation.NavigateTo(
+                $"/ui/payments/{route}/{result.Data.OrderId}?paymentId={result.Data.PaymentId}");
+            return;
+        }
+
+        ApplyErrors(result);
+        await LoadAsync(showLoading: false);
+    }
+
+    private async Task<Guid?> EnsurePaymentAsync()
+    {
+        if (PendingPayment is not null)
+        {
+            return PendingPayment.PaymentId;
+        }
+
+        var paymentId = Guid.NewGuid();
+        var result = await PaymentClient.InitiatePaymentAsync(OrderId, paymentId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return null;
+        }
+
+        if (result.Success && result.Data is not null)
+        {
+            return result.Data.PaymentId;
+        }
+
+        if (result.Conflict)
+        {
+            await LoadAsync(showLoading: false);
+            if (PendingPayment is not null)
+            {
+                return PendingPayment.PaymentId;
+            }
+        }
+
+        ApplyErrors(result);
+        return null;
+    }
+
+    private void ApplyErrors<T>(PaymentApiResult<T> result)
+    {
+        _actionErrorMessage = result.ErrorMessage;
+        _validationErrors.Clear();
+
+        if (result.ValidationErrors is null)
+        {
+            return;
+        }
+
+        foreach (var error in result.ValidationErrors.Values.SelectMany(x => x))
+        {
+            _validationErrors.Add(error);
+        }
+    }
+}

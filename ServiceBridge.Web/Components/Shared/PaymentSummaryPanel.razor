@@ -1,0 +1,75 @@
+@using ServiceBridge.Application.DTOs
+@using ServiceBridge.Domain.Enums
+
+<div class="sb-detail-panel">
+    <h2>@Title</h2>
+    <dl class="sb-fact-list">
+        <div><dt>Order</dt><dd>@Order.OrderNumber</dd></div>
+        <div><dt>Service</dt><dd>@Order.ServiceName</dd></div>
+        <div><dt>Variant</dt><dd>@VariantLabel</dd></div>
+        <div><dt>Status</dt><dd><StatusBadge Text="@OrderStatusLabel" Tone="@ToneForOrder(Order.Status)" /></dd></div>
+        <div><dt>Final IRR price</dt><dd>@Order.FinalPriceIrr.ToString("N0") IRR</dd></div>
+        @if (Payment is not null)
+        {
+            <div><dt>Payment</dt><dd><StatusBadge Text="@Payment.Status" Tone="@ToneForPayment(Payment.Status)" /></dd></div>
+            <div><dt>Gateway reference</dt><dd>@(Payment.GatewayReference ?? "-")</dd></div>
+        }
+    </dl>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public UserOrderDetailDto Order { get; set; } = null!;
+    [Parameter] public PaymentHistoryDto? Payment { get; set; }
+    [Parameter] public string Title { get; set; } = "Payment summary";
+
+    private string VariantLabel
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Order.PlanName))
+            {
+                return "-";
+            }
+
+            var parts = new List<string> { Order.PlanName };
+            if (Order.PlanDurationDays.HasValue)
+            {
+                parts.Add($"{Order.PlanDurationDays.Value} days");
+            }
+
+            if (!string.IsNullOrWhiteSpace(Order.PlanRegionCode))
+            {
+                parts.Add(Order.PlanRegionCode);
+            }
+
+            return string.Join(" / ", parts);
+        }
+    }
+
+    private string OrderStatusLabel => Order.Status == nameof(OrderStatus.WaitingForPayment)
+        ? "Waiting for payment"
+        : Order.Status;
+
+    private static string ToneForOrder(string status)
+    {
+        return status switch
+        {
+            nameof(OrderStatus.Paid) or nameof(OrderStatus.Completed) => "success",
+            nameof(OrderStatus.Cancelled) or nameof(OrderStatus.Failed) => "danger",
+            nameof(OrderStatus.WaitingForPayment) => "warning",
+            nameof(OrderStatus.Assigned) or nameof(OrderStatus.Processing) => "info",
+            _ => "neutral"
+        };
+    }
+
+    private static string ToneForPayment(string status)
+    {
+        return status switch
+        {
+            nameof(PaymentStatus.Completed) => "success",
+            nameof(PaymentStatus.Failed) or nameof(PaymentStatus.Refunded) => "danger",
+            nameof(PaymentStatus.Pending) => "warning",
+            _ => "neutral"
+        };
+    }
+}

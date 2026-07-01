@@ -57,6 +57,7 @@ builder.Services.AddScoped<IOrderCreationService, OrderCreationService>();
 builder.Services.AddScoped<IUserOrderQueryRepository, UserOrderQueryRepository>();
 builder.Services.AddScoped<IUserOrderCommandRepository, UserOrderCommandRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+builder.Services.AddScoped<IMockPaymentGateway, MockPaymentGateway>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IAdminOrderQueryRepository, AdminOrderQueryRepository>();
 builder.Services.AddScoped<IAdminOrderCommandRepository, AdminOrderCommandRepository>();
