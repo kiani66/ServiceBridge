@@ -1,9 +1,1 @@
-@if (TempData["StatusMessage"] != null)
-{
-    var statusMessage = TempData["StatusMessage"]?.ToString();
-    var alertClass = statusMessage?.StartsWith("Error") == true ? "alert-danger" : "alert-success";
-    <div class="alert @alertClass alert-dismissible fade show" role="alert">
-        @statusMessage
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-}
+@* Status messages are rendered as shared toast notifications by _Layout.cshtml. *@

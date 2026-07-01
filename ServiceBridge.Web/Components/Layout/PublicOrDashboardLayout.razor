@@ -1,0 +1,14 @@
+@inherits LayoutComponentBase
+
+<AuthorizeView>
+    <Authorized>
+        <AppShell>
+            @Body
+        </AppShell>
+    </Authorized>
+    <NotAuthorized>
+        <PublicChrome>
+            @Body
+        </PublicChrome>
+    </NotAuthorized>
+</AuthorizeView>

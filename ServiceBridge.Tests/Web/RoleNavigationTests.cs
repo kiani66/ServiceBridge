@@ -11,15 +11,15 @@ public class RoleNavigationTests
     [InlineData(
         AppConstants.Roles.User,
         "Services|Orders|Profile",
-        "/Services/Index|/Orders/Index|/User/UserProfile")]
+        "/ui/catalog|/ui/orders|/ui/profile")]
     [InlineData(
         AppConstants.Roles.Agent,
-        "Dashboard|Profile",
-        "/ui/agent|/User/UserProfile")]
+        "Assigned Orders|Processing|Completed|Profile",
+        "/Agent/Orders?status=Assigned|/Agent/Orders?status=Processing|/Agent/Orders?status=Completed|/ui/profile")]
     [InlineData(
         AppConstants.Roles.Admin,
-        "Admin Workspace|Assignment Queue|Users|Catalog|Pricing|Profile",
-        "/ui/admin|/Admin/Orders/Index|/Admin/Users/Index|/Admin/Catalog/Index|/Admin/Pricing/Index|/User/UserProfile")]
+        "Dashboard|Catalog|Pricing|Users|Orders|Profile",
+        "/ui/admin|/Admin/Catalog|/Admin/Pricing|/Admin/Users|/Admin/Orders|/ui/profile")]
     public void GetItems_ReturnsOnlyItemsForRole(
         string role,
         string expectedText,
@@ -32,8 +32,8 @@ public class RoleNavigationTests
     }
 
     [Theory]
-    [InlineData(AppConstants.Roles.User, "/Orders/Index")]
-    [InlineData(AppConstants.Roles.Agent, "/ui/agent")]
+    [InlineData(AppConstants.Roles.User, "/ui/orders")]
+    [InlineData(AppConstants.Roles.Agent, "/Agent/Orders")]
     [InlineData(AppConstants.Roles.Admin, "/ui/admin")]
     public void GetLandingPage_ReturnsTaskWorkspace(
         string role,

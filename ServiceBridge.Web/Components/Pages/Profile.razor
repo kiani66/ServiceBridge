@@ -1,0 +1,35 @@
+@page "/ui/profile"
+@attribute [Authorize]
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Profile", null) })" />
+
+<PageHeader Eyebrow="Account"
+            Title="Profile"
+            Description="Manage account details, profile photo, and password from the authenticated dashboard." />
+
+<PageSection MaxWidth="form">
+    <div class="sb-detail-panel">
+        <h2>Account settings</h2>
+        <p>Profile actions keep the existing account workflow while using the shared dashboard shell.</p>
+        <div class="sb-page-actions">
+            <MudButton Href="/User/UserProfile"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.Person">
+                View profile
+            </MudButton>
+            <MudButton Href="/User/EditProfile"
+                       Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.Edit">
+                Edit profile
+            </MudButton>
+            <MudButton Href="/User/ChangePassword"
+                       Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.LockReset">
+                Change password
+            </MudButton>
+        </div>
+    </div>
+</PageSection>

@@ -1,4 +1,4 @@
-<section class="sb-page-section @MaxWidthClass">
+<section id="@Id" class="sb-page-section @MaxWidthClass">
     @if (!string.IsNullOrWhiteSpace(Title) || Actions is not null)
     {
         <div class="sb-section-header">
@@ -24,6 +24,7 @@
 @code {
     [Parameter] public string? Title { get; set; }
     [Parameter] public string? Description { get; set; }
+    [Parameter] public string? Id { get; set; }
     [Parameter] public string MaxWidth { get; set; } = "standard";
     [Parameter] public RenderFragment? Actions { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }

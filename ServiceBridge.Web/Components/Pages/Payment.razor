@@ -1,5 +1,5 @@
 @page "/ui/payments/{OrderId:guid}"
-@layout PublicLayout
+@attribute [Authorize(Roles = AppConstants.Roles.User)]
 @using ServiceBridge.Application.DTOs
 @using ServiceBridge.Domain.Enums
 @inject PaymentClient PaymentClient

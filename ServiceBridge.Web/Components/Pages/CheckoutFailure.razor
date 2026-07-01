@@ -1,5 +1,5 @@
 @page "/ui/checkout/failure"
-@layout PublicLayout
+@attribute [Authorize(Roles = AppConstants.Roles.User)]
 
 <EmptyState Title="Order could not be created"
             Description="@Description"

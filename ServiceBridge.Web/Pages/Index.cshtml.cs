@@ -13,17 +13,9 @@ public class IndexModel : PageModel
             var landingPage = RoleNavigation.GetLandingPage(User);
             return landingPage == null
                 ? Forbid()
-                : IsBlazorRoute(landingPage)
-                    ? LocalRedirect(landingPage)
-                    : RedirectToPage(landingPage);
+                : LocalRedirect(landingPage);
         }
 
-        return RedirectToPage("/Account/Login");
-    }
-
-    private static bool IsBlazorRoute(string route)
-    {
-        return string.Equals(route, "/ui", StringComparison.OrdinalIgnoreCase)
-            || route.StartsWith("/ui/", StringComparison.OrdinalIgnoreCase);
+        return LocalRedirect("/ui");
     }
 }
