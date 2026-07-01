@@ -74,15 +74,70 @@ public class DetailsModel : PageModel
 
     public async Task<IActionResult> OnPostInitiatePaymentAsync(Guid id)
     {
-        return await PostOrderActionAsync(
-            id,
-            "api/payments/initiate",
-            new InitiatePaymentRequest
+        var client = _httpClientFactory.CreateClient(AppConstants.Api.HttpClientName);
+
+        try
+        {
+            var initiateResponse = await client.PostAsJsonAsync(
+                "api/payments/initiate",
+                new InitiatePaymentRequest
+                {
+                    OrderId = id,
+                    PaymentId = Guid.NewGuid()
+                });
+            if (initiateResponse.StatusCode == HttpStatusCode.Unauthorized)
             {
-                OrderId = id,
-                PaymentId = Guid.NewGuid()
-            },
-            "Payment request created. Continue through the configured gateway.");
+                return await SignOutExpiredSessionAsync();
+            }
+
+            var initiateResult = await initiateResponse.Content
+                .ReadFromJsonAsync<ServiceResult<PaymentInitiatedResponse>>();
+            if (initiateResult?.Success != true || initiateResult.Data == null)
+            {
+                ErrorMessage = initiateResult?.Message ?? "Unable to start payment for this order.";
+                return await LoadOrderAsync(id);
+            }
+
+            var mockResponse = await client.PostAsJsonAsync(
+                "api/payments/mock",
+                new MockPaymentRequest
+                {
+                    PaymentId = initiateResult.Data.PaymentId,
+                    Succeed = true
+                });
+            if (mockResponse.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                return await SignOutExpiredSessionAsync();
+            }
+
+            var mockResult = await mockResponse.Content
+                .ReadFromJsonAsync<ServiceResult<MockPaymentResultResponse>>();
+            if (mockResult?.Success == true && mockResult.Data != null)
+            {
+                var route = mockResult.Data.Status == Domain.Enums.PaymentStatus.Completed
+                    ? "success"
+                    : "failure";
+
+                return Redirect(
+                    $"/ui/payments/{route}/{mockResult.Data.OrderId}?paymentId={mockResult.Data.PaymentId}");
+            }
+
+            ErrorMessage = mockResult?.Message ?? "Unable to process the mock payment.";
+        }
+        catch (HttpRequestException)
+        {
+            ErrorMessage = "Unable to connect to the server. Please try again later.";
+        }
+        catch (NotSupportedException)
+        {
+            ErrorMessage = "The server returned an unsupported response.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            ErrorMessage = "The server returned an invalid response.";
+        }
+
+        return await LoadOrderAsync(id);
     }
 
     public async Task<IActionResult> OnPostRespondToCustomerActionAsync(Guid id)
