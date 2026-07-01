@@ -10,6 +10,8 @@ internal class FakeOrderCreationRepository : IOrderCreationRepository
     public OrderServiceDefinition? ServiceDefinition { get; set; }
     public HashSet<string> ExistingOrderNumbers { get; } = new();
     public Order? AddedOrder { get; private set; }
+    public bool SaveSucceeds { get; set; } = true;
+    public int SaveCount { get; private set; }
     public Guid? RequestedServiceVariantId { get; private set; }
     public Guid? RequestedServiceId { get; private set; }
 
@@ -52,5 +54,11 @@ internal class FakeOrderCreationRepository : IOrderCreationRepository
     {
         AddedOrder = order;
         return Task.CompletedTask;
+    }
+
+    public Task<bool> SaveChangesAsync()
+    {
+        SaveCount++;
+        return Task.FromResult(SaveSucceeds);
     }
 }

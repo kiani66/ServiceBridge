@@ -27,6 +27,7 @@ public class ServiceBridgeDbContext : DbContext
     public DbSet<AgentAssignment> AgentAssignments { get; set; } = null!;
     public DbSet<CustomerActionRequest> CustomerActionRequests { get; set; } = null!;
     public DbSet<OrderCredentialAccessLog> OrderCredentialAccessLogs { get; set; } = null!;
+    public DbSet<Notification> Notifications { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

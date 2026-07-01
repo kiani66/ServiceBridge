@@ -16,19 +16,22 @@ public class OrderCreationService : IOrderCreationService
     private readonly IOrderFieldValidator _fieldValidator;
     private readonly IOrderNumberGenerator _orderNumberGenerator;
     private readonly IOrderFactory _orderFactory;
+    private readonly INotificationService _notificationService;
 
     public OrderCreationService(
         IOrderCreationRepository repository,
         IPricingResolver pricingResolver,
         IOrderFieldValidator fieldValidator,
         IOrderNumberGenerator orderNumberGenerator,
-        IOrderFactory orderFactory)
+        IOrderFactory orderFactory,
+        INotificationService notificationService)
     {
         _repository = repository;
         _pricingResolver = pricingResolver;
         _fieldValidator = fieldValidator;
         _orderNumberGenerator = orderNumberGenerator;
         _orderFactory = orderFactory;
+        _notificationService = notificationService;
     }
 
     public async Task<ServiceResult<OrderCreatedResponse>> CreateAsync(
@@ -156,6 +159,17 @@ public class OrderCreationService : IOrderCreationService
         });
 
         await _repository.AddOrderAsync(order);
+        await _notificationService.QueueOrderCreatedAsync(
+            order.UserId,
+            order.Id,
+            order.OrderNumber);
+        if (!await _repository.SaveChangesAsync())
+        {
+            return ServiceResult<OrderCreatedResponse>.Fail(
+                AppMessages.OrderNumberGenerationFailed,
+                AppConstants.ErrorCodes.Conflict,
+                409);
+        }
 
         return ServiceResult<OrderCreatedResponse>.Created(
             new OrderCreatedResponse

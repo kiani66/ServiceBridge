@@ -12,13 +12,16 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
 {
     private readonly IAgentOrderCommandRepository _repository;
     private readonly IOrderFieldProtector _fieldProtector;
+    private readonly INotificationService _notificationService;
 
     public AgentOrderProcessingService(
         IAgentOrderCommandRepository repository,
-        IOrderFieldProtector fieldProtector)
+        IOrderFieldProtector fieldProtector,
+        INotificationService notificationService)
     {
         _repository = repository;
         _fieldProtector = fieldProtector;
+        _notificationService = notificationService;
     }
 
     public Task<ServiceResult> StartProcessingAsync(
@@ -30,6 +33,10 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
             agentId,
             orderId,
             order => order.StartProcessing(agentId, request.Note),
+            order => _notificationService.QueueAgentStartedProcessingAsync(
+                order.UserId,
+                order.Id,
+                order.OrderNumber),
             AppMessages.OrderProcessingStarted);
     }
 
@@ -42,6 +49,10 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
             agentId,
             orderId,
             order => order.RequestCustomerAction(agentId, request.Note),
+            order => _notificationService.QueueCustomerActionRequestedAsync(
+                order.UserId,
+                order.Id,
+                order.OrderNumber),
             AppMessages.CustomerActionRequested);
     }
 
@@ -54,6 +65,7 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
             agentId,
             orderId,
             order => order.AcknowledgeCustomerResponse(agentId, request.Note),
+            null,
             AppMessages.OrderProcessingResumed);
     }
 
@@ -147,6 +159,10 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
             agentId,
             orderId,
             order => order.Fail(agentId, request.Reason),
+            order => _notificationService.QueueOrderFailedAsync(
+                order.UserId,
+                order.Id,
+                order.OrderNumber),
             AppMessages.OrderFailed);
     }
 
@@ -182,6 +198,7 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
         Guid agentId,
         Guid orderId,
         Action<Order> transition,
+        Func<Order, Task>? queueNotification,
         string successMessage)
     {
         var order = await _repository.GetAssignedOrderForUpdateAsync(
@@ -195,6 +212,10 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
         try
         {
             transition(order);
+            if (queueNotification is not null)
+            {
+                await queueNotification(order);
+            }
         }
         catch (InvalidOperationException)
         {
@@ -234,6 +255,10 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
         try
         {
             order.Complete(agentId, request.Note);
+            await _notificationService.QueueOrderCompletedAsync(
+                order.UserId,
+                order.Id,
+                order.OrderNumber);
         }
         catch (InvalidOperationException)
         {

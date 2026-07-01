@@ -1,0 +1,271 @@
+@page "/ui/notifications"
+@attribute [Authorize]
+@inject NotificationsClient NotificationsClient
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageHeader Eyebrow="Notifications"
+            Title="In-app notifications"
+            Description="Order, payment, assignment, and fulfillment updates for your account.">
+    <Actions>
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.Refresh"
+                   OnClick="ReloadAsync">
+            Refresh
+        </MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.DoneAll"
+                   Disabled="@(_unreadCount == 0)"
+                   OnClick="MarkAllAsReadAsync">
+            Mark all read
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<PageSection Title="Notification center"
+             Description="Unread items appear first."
+             MaxWidth="wide">
+    <div class="sb-grid-toolbar">
+        <div>
+            <h2>Inbox</h2>
+            <p>@_unreadCount unread of @_notifications.TotalCount total notifications.</p>
+        </div>
+        <div class="sb-grid-toolbar-actions">
+            <MudSwitch T="bool"
+                       Value="@_unreadOnly"
+                       ValueChanged="OnUnreadOnlyChanged"
+                       Color="Color.Primary"
+                       Label="Unread only" />
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading notifications..." />
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <EmptyState Title="Notifications unavailable"
+                    Description="@_errorMessage"
+                    Icon="@Icons.Material.Outlined.NotificationsOff" />
+    }
+    else if (_notifications.Items.Count == 0)
+    {
+        <EmptyState Title="No notifications"
+                    Description="New order and fulfillment updates will appear here."
+                    Icon="@Icons.Material.Outlined.NotificationsNone" />
+    }
+    else
+    {
+        <MudTable Items="@_notifications.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Status</MudTh>
+                <MudTh>Notification</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>Created</MudTh>
+                <MudTh>Action</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Status">
+                    <StatusBadge Text="@(context.IsRead ? "Read" : "Unread")"
+                                 Tone="@(context.IsRead ? "neutral" : "info")" />
+                </MudTd>
+                <MudTd DataLabel="Notification">
+                    <strong>@context.Title</strong>
+                    <span class="sb-table-subtext">@context.Message</span>
+                </MudTd>
+                <MudTd DataLabel="Type">@TypeLabel(context.Type)</MudTd>
+                <MudTd DataLabel="Created">@FormatDateTime(context.CreatedAt)</MudTd>
+                <MudTd DataLabel="Action">
+                    <div class="sb-page-actions">
+                        <MudIconButton Icon="@Icons.Material.Outlined.OpenInNew"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       OnClick="@(() => OpenRelatedAsync(context))"
+                                       aria-label="Open related item" />
+                        @if (!context.IsRead)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Outlined.MarkEmailRead"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           OnClick="@(() => MarkAsReadAsync(context.Id))"
+                                           aria-label="Mark as read" />
+                        }
+                    </div>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        <div class="sb-pagination">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       Disabled="@(_notifications.Page <= 1)"
+                       OnClick="PreviousPageAsync">
+                Previous
+            </MudButton>
+            <span>Page @_notifications.Page of @_notifications.TotalPages</span>
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       Disabled="@(_notifications.Page >= _notifications.TotalPages)"
+                       OnClick="NextPageAsync">
+                Next
+            </MudButton>
+        </div>
+    }
+</PageSection>
+
+@code {
+    private const int PageSize = 20;
+
+    private bool _loading = true;
+    private bool _unreadOnly;
+    private int _unreadCount;
+    private string? _errorMessage;
+    private string _orderRoute = "/ui/orders";
+    private PagedResultDto<NotificationDto> _notifications = new()
+    {
+        Page = 1,
+        PageSize = PageSize
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ResolveOrderRouteAsync();
+        await LoadAsync(1);
+    }
+
+    private async Task ResolveOrderRouteAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = state.User;
+        if (user.IsInRole(AppConstants.Roles.Agent))
+        {
+            _orderRoute = "/ui/agent";
+            return;
+        }
+
+        if (user.IsInRole(AppConstants.Roles.Admin))
+        {
+            _orderRoute = "/ui/admin";
+        }
+    }
+
+    private async Task LoadAsync(int page)
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var notificationsResult = await NotificationsClient.GetNotificationsAsync(
+            page,
+            PageSize,
+            _unreadOnly);
+        var countResult = await NotificationsClient.GetUnreadCountAsync();
+
+        if (notificationsResult.RequiresAuthentication ||
+            countResult.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!notificationsResult.Success)
+        {
+            _errorMessage = notificationsResult.ErrorMessage;
+        }
+        else
+        {
+            _notifications = notificationsResult.Data ?? new PagedResultDto<NotificationDto>();
+        }
+
+        if (!countResult.Success)
+        {
+            _errorMessage ??= countResult.ErrorMessage;
+        }
+        else
+        {
+            _unreadCount = countResult.Data?.Count ?? 0;
+        }
+
+        _loading = false;
+    }
+
+    private Task ReloadAsync()
+    {
+        return LoadAsync(_notifications.Page <= 0 ? 1 : _notifications.Page);
+    }
+
+    private async Task OnUnreadOnlyChanged(bool value)
+    {
+        _unreadOnly = value;
+        await LoadAsync(1);
+    }
+
+    private async Task MarkAsReadAsync(Guid notificationId)
+    {
+        var result = await NotificationsClient.MarkAsReadAsync(notificationId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task MarkAllAsReadAsync()
+    {
+        var result = await NotificationsClient.MarkAllAsReadAsync();
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        await LoadAsync(1);
+    }
+
+    private Task PreviousPageAsync()
+    {
+        return LoadAsync(Math.Max(_notifications.Page - 1, 1));
+    }
+
+    private Task NextPageAsync()
+    {
+        return LoadAsync(_notifications.Page + 1);
+    }
+
+    private async Task OpenRelatedAsync(NotificationDto notification)
+    {
+        if (!notification.IsRead)
+        {
+            await NotificationsClient.MarkAsReadAsync(notification.Id);
+        }
+
+        Navigation.NavigateTo(
+            _orderRoute == "/ui/orders"
+                ? $"/ui/orders/{notification.RelatedEntityId}"
+                : _orderRoute);
+    }
+
+    private static string TypeLabel(string type)
+    {
+        return type switch
+        {
+            nameof(NotificationType.OrderCreated) => "Order created",
+            nameof(NotificationType.PaymentCompleted) => "Payment completed",
+            nameof(NotificationType.OrderAssignedToAgent) => "Order assigned",
+            nameof(NotificationType.AgentStartedProcessing) => "Processing started",
+            nameof(NotificationType.OrderCompleted) => "Order completed",
+            nameof(NotificationType.OrderFailed) => "Order failed",
+            nameof(NotificationType.CustomerActionRequested) => "Action requested",
+            _ => type
+        };
+    }
+
+    private static string FormatDateTime(DateTime value)
+    {
+        return value.ToString("yyyy-MM-dd HH:mm") + " UTC";
+    }
+}

@@ -468,7 +468,8 @@ public class OrderCreationServiceTests
             new PricingResolver(pricingRepository, new PricingCalculator()),
             new OrderFieldValidator(),
             numberGenerator,
-            new OrderFactory(new FakeOrderFieldProtector()));
+            new OrderFactory(new FakeOrderFieldProtector()),
+            new FakeNotificationService());
 
         return new TestSetup(service, orderRepository, pricingRepository);
     }

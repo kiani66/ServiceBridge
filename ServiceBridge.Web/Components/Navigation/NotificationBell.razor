@@ -1,0 +1,156 @@
+@inject NotificationsClient NotificationsClient
+@inject NavigationManager Navigation
+
+<AuthorizeView>
+    <Authorized Context="authContext">
+        <MudMenu Dense="true"
+                 AnchorOrigin="Origin.BottomRight"
+                 TransformOrigin="Origin.TopRight"
+                 PopoverClass="sb-notification-menu">
+            <ActivatorContent Context="menuContext">
+                <MudTooltip Text="Notifications">
+                    <MudBadge Content="@_unreadCount"
+                              Visible="@(_unreadCount > 0)"
+                              Color="Color.Error"
+                              Overlap="true"
+                              Class="sb-notification-badge">
+                        <MudIconButton Icon="@Icons.Material.Outlined.Notifications"
+                                       Color="Color.Primary"
+                                       aria-label="Notifications" />
+                    </MudBadge>
+                </MudTooltip>
+            </ActivatorContent>
+            <ChildContent>
+                <div class="sb-notification-dropdown">
+                    <div class="sb-notification-dropdown-header">
+                        <strong>Notifications</strong>
+                        @if (_unreadCount > 0)
+                        {
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       OnClick="MarkAllAsReadAsync">
+                                Mark all read
+                            </MudButton>
+                        }
+                    </div>
+
+                    @if (_loading)
+                    {
+                        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                    }
+                    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    {
+                        <p class="sb-notification-error">@_errorMessage</p>
+                    }
+                    else if (_notifications.Count == 0)
+                    {
+                        <p class="sb-notification-empty">No notifications yet.</p>
+                    }
+                    else
+                    {
+                        <div class="sb-notification-list">
+                            @foreach (var notification in _notifications)
+                            {
+                                <button class="sb-notification-item @(notification.IsRead ? "sb-notification-read" : null)"
+                                        type="button"
+                                        @onclick="() => OpenNotificationAsync(notification)">
+                                    <span>@notification.Title</span>
+                                    <strong>@notification.Message</strong>
+                                    <time>@FormatDateTime(notification.CreatedAt)</time>
+                                </button>
+                            }
+                        </div>
+                    }
+
+                    <MudButton Href="/ui/notifications"
+                               Variant="Variant.Text"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               StartIcon="@Icons.Material.Outlined.Inbox">
+                        View all
+                    </MudButton>
+                </div>
+            </ChildContent>
+        </MudMenu>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private bool _loading = true;
+    private int _unreadCount;
+    private string? _errorMessage;
+    private IReadOnlyCollection<NotificationDto> _notifications =
+        Array.Empty<NotificationDto>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var countResult = await NotificationsClient.GetUnreadCountAsync();
+        var notificationsResult = await NotificationsClient.GetNotificationsAsync(
+            page: 1,
+            pageSize: 5);
+
+        if (countResult.RequiresAuthentication ||
+            notificationsResult.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!countResult.Success)
+        {
+            _errorMessage = countResult.ErrorMessage;
+        }
+        else
+        {
+            _unreadCount = countResult.Data?.Count ?? 0;
+        }
+
+        if (!notificationsResult.Success)
+        {
+            _errorMessage = notificationsResult.ErrorMessage;
+        }
+        else
+        {
+            _notifications = notificationsResult.Data?.Items ??
+                Array.Empty<NotificationDto>();
+        }
+
+        _loading = false;
+    }
+
+    private async Task OpenNotificationAsync(NotificationDto notification)
+    {
+        if (!notification.IsRead)
+        {
+            await NotificationsClient.MarkAsReadAsync(notification.Id);
+        }
+
+        Navigation.NavigateTo("/ui/notifications");
+    }
+
+    private async Task MarkAllAsReadAsync()
+    {
+        var result = await NotificationsClient.MarkAllAsReadAsync();
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        await RefreshAsync();
+    }
+
+    private static string FormatDateTime(DateTime value)
+    {
+        return value.ToString("yyyy-MM-dd HH:mm") + " UTC";
+    }
+}

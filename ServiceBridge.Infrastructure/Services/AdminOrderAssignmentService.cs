@@ -9,10 +9,14 @@ namespace ServiceBridge.Infrastructure.Services;
 public class AdminOrderAssignmentService : IAdminOrderAssignmentService
 {
     private readonly IAdminOrderCommandRepository _repository;
+    private readonly INotificationService _notificationService;
 
-    public AdminOrderAssignmentService(IAdminOrderCommandRepository repository)
+    public AdminOrderAssignmentService(
+        IAdminOrderCommandRepository repository,
+        INotificationService notificationService)
     {
         _repository = repository;
+        _notificationService = notificationService;
     }
 
     public async Task<ServiceResult> AssignAsync(
@@ -44,6 +48,11 @@ public class AdminOrderAssignmentService : IAdminOrderAssignmentService
                 adminId,
                 request.Notes,
                 AppMessages.OrderAssignedToAgent);
+            await _notificationService.QueueOrderAssignedAsync(
+                order.UserId,
+                request.AgentId,
+                order.Id,
+                order.OrderNumber);
         }
         catch (InvalidOperationException)
         {

@@ -343,7 +343,8 @@ public class AgentOrderProcessingTests
             order,
             new AgentOrderProcessingService(
                 repository,
-                new FakeOrderFieldProtector()),
+                new FakeOrderFieldProtector(),
+                new FakeNotificationService()),
             repository);
     }
 
