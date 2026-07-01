@@ -211,6 +211,77 @@ namespace ServiceBridge.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.MessageOutbox", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Recipient")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<Guid?>("RelatedEntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RelatedEntityType")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RelatedEntityType", "RelatedEntityId");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("Status", "NextAttemptAt", "CreatedAt");
+
+                    b.ToTable("MessageOutbox", t =>
+                        {
+                            t.HasCheckConstraint("CK_MessageOutbox_AttemptCount_NonNegative", "[AttemptCount] >= 0");
+
+                            t.HasCheckConstraint("CK_MessageOutbox_Channel_Valid", "[Channel] IN (1, 2)");
+
+                            t.HasCheckConstraint("CK_MessageOutbox_Status_Valid", "[Status] IN (1, 2, 3, 4, 5)");
+                        });
+                });
+
             modelBuilder.Entity("ServiceBridge.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1019,6 +1090,16 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("Provider");
+                });
+
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.MessageOutbox", b =>
+                {
+                    b.HasOne("ServiceBridge.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ServiceBridge.Domain.Entities.Notification", b =>
