@@ -92,6 +92,49 @@ public class AdminOrderQueryService : IAdminOrderQueryService
         return ServiceResult<PagedResultDto<AdminPaymentListItemDto>>.Ok(payments);
     }
 
+    public async Task<ServiceResult<PagedResultDto<AdminAuditEventDto>>>
+        GetAuditEventsAsync(AdminAuditQueryDto query)
+    {
+        query.Page = Math.Max(query.Page, 1);
+        query.PageSize = NormalizePageSize(query.PageSize);
+
+        if (query.FromUtc.HasValue &&
+            query.ToUtc.HasValue &&
+            query.FromUtc.Value > query.ToUtc.Value)
+        {
+            return new ServiceResult<PagedResultDto<AdminAuditEventDto>>
+            {
+                Success = false,
+                Message = AppMessages.ValidationFailed,
+                ErrorCode = AppConstants.ErrorCodes.ValidationFailed,
+                StatusCode = 400,
+                ValidationErrors = new Dictionary<string, string[]>
+                {
+                    ["fromUtc"] = new[] { "The start date must be before the end date." }
+                }
+            };
+        }
+
+        var events = await _repository.GetAuditEventsAsync(query);
+        return ServiceResult<PagedResultDto<AdminAuditEventDto>>.Ok(events);
+    }
+
+    public async Task<ServiceResult<IReadOnlyCollection<AdminOrderTimelineEventDto>>>
+        GetOrderTimelineAsync(Guid orderId)
+    {
+        var timeline = await _repository.GetOrderTimelineAsync(orderId);
+        if (timeline == null)
+        {
+            return ServiceResult<IReadOnlyCollection<AdminOrderTimelineEventDto>>.Fail(
+                AppMessages.OrderNotFound,
+                AppConstants.ErrorCodes.NotFound,
+                404);
+        }
+
+        return ServiceResult<IReadOnlyCollection<AdminOrderTimelineEventDto>>.Ok(
+            timeline);
+    }
+
     private static int NormalizePageSize(int pageSize)
     {
         return pageSize <= 0

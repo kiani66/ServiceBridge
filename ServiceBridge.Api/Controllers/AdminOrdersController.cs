@@ -74,6 +74,19 @@ public class AdminOrdersController : BaseApiController
             search));
     }
 
+    [HttpGet("audit")]
+    public async Task<IActionResult> GetAuditEvents(
+        [FromQuery] AdminAuditQueryDto query)
+    {
+        return ToActionResult(await _queryService.GetAuditEventsAsync(query));
+    }
+
+    [HttpGet("{orderId:guid}/timeline")]
+    public async Task<IActionResult> GetOrderTimeline(Guid orderId)
+    {
+        return ToActionResult(await _queryService.GetOrderTimelineAsync(orderId));
+    }
+
     [HttpGet("{orderId:guid}")]
     public async Task<IActionResult> GetOrderDetail(Guid orderId)
     {

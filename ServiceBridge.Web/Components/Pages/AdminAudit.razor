@@ -1,0 +1,277 @@
+@page "/ui/admin/audit"
+@attribute [Authorize(Roles = AppConstants.Roles.Admin)]
+@inject AdminOrdersClient AdminOrdersClient
+@inject NavigationManager Navigation
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Audit", null) })" />
+
+<PageHeader Eyebrow="Admin operations"
+            Title="Audit log"
+            Description="Order status, payment, assignment, note, customer action, and credential access events." />
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Audit events"
+                     Description="Newest operational events are shown first."
+                     Search="@_orderFilter"
+                     SearchChanged="OnOrderFilterChanged"
+                     SearchPlaceholder="Filter by order number or ID">
+        <Actions>
+            <MudTextField T="string"
+                          Label="Actor"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Value="@_actorFilter"
+                          ValueChanged="OnActorFilterChanged"
+                          Immediate="true"
+                          Clearable="true"
+                          Class="sb-search-compact" />
+            <MudSelect T="string"
+                       Label="Event"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="@_eventType"
+                       ValueChanged="OnEventTypeChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="string" Value="@string.Empty">All events</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Status")">Status</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Payment")">Payment</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Assignment")">Assignment</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Note")">Note</MudSelectItem>
+                <MudSelectItem T="string" Value="@("CustomerAction")">Customer action</MudSelectItem>
+                <MudSelectItem T="string" Value="@("CredentialAccess")">Credential access</MudSelectItem>
+            </MudSelect>
+            <MudSelect T="OrderStatus?"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_statusFilter"
+                       ValueChanged="OnStatusFilterChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="OrderStatus?" Value="null">All statuses</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Created">Created</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.WaitingForPayment">Waiting for payment</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Paid">Paid</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Assigned">Assigned</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Processing">Processing</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Completed">Completed</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Cancelled">Cancelled</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Failed">Failed</MudSelectItem>
+            </MudSelect>
+            <MudDatePicker Label="From"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Date="_fromDate"
+                           DateChanged="OnFromDateChanged"
+                           DateFormat="yyyy-MM-dd"
+                           Class="sb-search-compact" />
+            <MudDatePicker Label="To"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Date="_toDate"
+                           DateChanged="OnToDateChanged"
+                           DateFormat="yyyy-MM-dd"
+                           Class="sb-search-compact" />
+            <MudIconButton Icon="@Icons.Material.Outlined.Refresh"
+                           Color="Color.Primary"
+                           Disabled="@_loading"
+                           OnClick="@(() => LoadAuditAsync(_audit.Page))"
+                           aria-label="Refresh audit events" />
+        </Actions>
+    </DataGridToolbar>
+
+    @if (_loading)
+    {
+        <LoadingState Text="Loading audit events" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+    }
+    else if (_audit.Items.Count == 0)
+    {
+        <EmptyState Title="No audit events found"
+                    Description="No operational events match the current filters."
+                    Icon="@Icons.Material.Outlined.ManageSearch" />
+    }
+    else
+    {
+        <MudTable Items="@_audit.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Event time</MudTh>
+                <MudTh>Event</MudTh>
+                <MudTh>Order</MudTh>
+                <MudTh>Customer</MudTh>
+                <MudTh>Actor</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Details</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Event time">@UserOrderDisplay.FormatDateTime(context.OccurredAt)</MudTd>
+                <MudTd DataLabel="Event">
+                    <StatusBadge Text="@FormatLabel(context.EventType)" Tone="@context.Tone" />
+                    <span class="sb-table-subtext">@context.Title</span>
+                </MudTd>
+                <MudTd DataLabel="Order">
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               OnClick="@(() => OpenOrderAsync(context.OrderId))">
+                        @context.OrderNumber
+                    </MudButton>
+                </MudTd>
+                <MudTd DataLabel="Customer">@context.CustomerName<span class="sb-table-subtext">@context.CustomerEmail</span></MudTd>
+                <MudTd DataLabel="Actor">@context.ActorName<span class="sb-table-subtext">@ActorDetail(context)</span></MudTd>
+                <MudTd DataLabel="Status">@(string.IsNullOrWhiteSpace(context.Status) ? "-" : FormatLabel(context.Status))</MudTd>
+                <MudTd DataLabel="Details">@context.Description</MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        <div class="sb-pagination">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       Disabled="@(_audit.Page <= 1 || _loading)"
+                       StartIcon="@Icons.Material.Outlined.ChevronLeft"
+                       OnClick="PreviousPage">
+                Previous
+            </MudButton>
+            <span>Page @_audit.Page of @_audit.TotalPages</span>
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       Disabled="@(_audit.Page >= _audit.TotalPages || _loading)"
+                       EndIcon="@Icons.Material.Outlined.ChevronRight"
+                       OnClick="NextPage">
+                Next
+            </MudButton>
+        </div>
+    }
+</PageSection>
+
+@code {
+    private const int PageSize = 20;
+
+    private bool _loading = true;
+    private string? _error;
+    private string? _actorFilter;
+    private string? _orderFilter;
+    private string _eventType = string.Empty;
+    private OrderStatus? _statusFilter;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private PagedResultDto<AdminAuditEventDto> _audit = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuditAsync();
+    }
+
+    private async Task OnActorFilterChanged(string? value)
+    {
+        _actorFilter = value;
+        await LoadAuditAsync();
+    }
+
+    private async Task OnOrderFilterChanged(string? value)
+    {
+        _orderFilter = value;
+        await LoadAuditAsync();
+    }
+
+    private async Task OnEventTypeChanged(string value)
+    {
+        _eventType = value;
+        await LoadAuditAsync();
+    }
+
+    private async Task OnStatusFilterChanged(OrderStatus? value)
+    {
+        _statusFilter = value;
+        await LoadAuditAsync();
+    }
+
+    private async Task OnFromDateChanged(DateTime? value)
+    {
+        _fromDate = value;
+        await LoadAuditAsync();
+    }
+
+    private async Task OnToDateChanged(DateTime? value)
+    {
+        _toDate = value;
+        await LoadAuditAsync();
+    }
+
+    private Task PreviousPage()
+    {
+        return LoadAuditAsync(Math.Max(_audit.Page - 1, 1));
+    }
+
+    private Task NextPage()
+    {
+        return LoadAuditAsync(_audit.Page + 1);
+    }
+
+    private void OpenOrderAsync(Guid orderId)
+    {
+        Navigation.NavigateTo($"/ui/admin?orderId={orderId}");
+    }
+
+    private async Task LoadAuditAsync(int page = 1)
+    {
+        _loading = true;
+        _error = null;
+
+        var result = await AdminOrdersClient.GetAuditEventsAsync(
+            new AdminAuditQueryDto
+            {
+                Page = page,
+                PageSize = PageSize,
+                Actor = _actorFilter,
+                Order = _orderFilter,
+                EventType = _eventType,
+                Status = _statusFilter,
+                FromUtc = _fromDate?.Date,
+                ToUtc = _toDate?.Date.AddDays(1).AddTicks(-1)
+            });
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        _audit = result.Success && result.Data is not null
+            ? result.Data
+            : new PagedResultDto<AdminAuditEventDto>();
+        _error = result.ErrorMessage;
+        _loading = false;
+    }
+
+    private bool RedirectIfAuthRequired(bool requiresAuthentication)
+    {
+        if (!requiresAuthentication)
+        {
+            return false;
+        }
+
+        Navigation.NavigateTo("/Account/Login");
+        return true;
+    }
+
+    private static string ActorDetail(AdminAuditEventDto auditEvent)
+    {
+        return string.IsNullOrWhiteSpace(auditEvent.ActorEmail)
+            ? auditEvent.ActorType
+            : $"{auditEvent.ActorType} / {auditEvent.ActorEmail}";
+    }
+
+    private static string FormatLabel(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "-";
+        }
+
+        return string.Concat(value.Select((character, index) =>
+            index > 0 && char.IsUpper(character)
+                ? $" {character}"
+                : character.ToString()));
+    }
+}

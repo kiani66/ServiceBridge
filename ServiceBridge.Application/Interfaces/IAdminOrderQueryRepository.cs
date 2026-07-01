@@ -21,4 +21,8 @@ public interface IAdminOrderQueryRepository
         int pageSize,
         PaymentStatus? status,
         string? search);
+    Task<PagedResultDto<AdminAuditEventDto>> GetAuditEventsAsync(
+        AdminAuditQueryDto query);
+    Task<IReadOnlyCollection<AdminOrderTimelineEventDto>?> GetOrderTimelineAsync(
+        Guid orderId);
 }
