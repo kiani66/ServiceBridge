@@ -1,31 +1,515 @@
 @page "/ui/agent"
-@inject ServiceBridgeMockDataProvider MockData
+@attribute [Authorize(Roles = AppConstants.Roles.Agent)]
+@inject AgentOrdersClient AgentOrdersClient
+@inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Agent", null) })" />
 
 <PageHeader Eyebrow="Agent workspace"
             Title="Agent dashboard"
-            Description="Mock fulfillment queue with credential-safe summaries and timeline activity." />
+            Description="Assigned fulfillment work, processing state, credentials, notes, and timeline activity." />
 
-<PageSection MaxWidth="standard">
-    <div class="sb-stat-grid">
-        <StatCard Label="Assigned today" Value="6" Description="Orders currently owned by this agent" Tone="info" Icon="@Icons.Material.Outlined.SupportAgent" />
-        <StatCard Label="Credential checks" Value="2" Description="Orders requiring careful credential handling" Tone="warning" Icon="@Icons.Material.Outlined.Security" />
-        <StatCard Label="Completed" Value="4" Description="Fulfilled in the current shift" Tone="success" Icon="@Icons.Material.Outlined.CheckCircle" />
-    </div>
+<PageSection MaxWidth="wide">
+    @if (_summaryLoading)
+    {
+        <LoadingState Text="Loading dashboard" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_summaryError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_summaryError</MudAlert>
+    }
+    else if (_summary is not null)
+    {
+        <div class="sb-stat-grid">
+            <StatCard Label="Assigned orders" Value="@_summary.AssignedOrders.ToString("N0")" Description="Ready to start processing" Tone="info" Icon="@Icons.Material.Outlined.AssignmentInd" />
+            <StatCard Label="Processing orders" Value="@_summary.ProcessingOrders.ToString("N0")" Description="Currently in fulfillment" Tone="warning" Icon="@Icons.Material.Outlined.ManageHistory" />
+            <StatCard Label="Completed today" Value="@_summary.CompletedToday.ToString("N0")" Description="Completed since UTC day start" Tone="success" Icon="@Icons.Material.Outlined.CheckCircle" />
+            <StatCard Label="Failed today" Value="@_summary.FailedToday.ToString("N0")" Description="Failed since UTC day start" Tone="danger" Icon="@Icons.Material.Outlined.ErrorOutline" />
+        </div>
+    }
 </PageSection>
 
-<PageSection Title="Assigned work" Description="Mock processing orders for an agent workflow." MaxWidth="standard">
-    <div class="sb-order-grid">
-        @foreach (var order in MockData.Orders.Where(order => order.Status == "Processing"))
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Assigned orders"
+                     Description="Newest assignments are shown first."
+                     Search="@_search"
+                     SearchChanged="OnSearchChanged"
+                     SearchPlaceholder="Search order, customer, service, variant">
+        <Actions>
+            <MudSelect T="OrderStatus?"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_status"
+                       ValueChanged="OnStatusChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="OrderStatus?" Value="null">All statuses</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Assigned">Assigned</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Processing">Processing</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Completed">Completed</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Failed">Failed</MudSelectItem>
+            </MudSelect>
+        </Actions>
+    </DataGridToolbar>
+
+    @if (_ordersLoading)
+    {
+        <LoadingState Text="Loading assigned orders" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_ordersError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_ordersError</MudAlert>
+    }
+    else if (_orders.Items.Count == 0)
+    {
+        <EmptyState Title="No assigned orders found"
+                    Description="@EmptyOrdersDescription"
+                    Icon="@Icons.Material.Outlined.AssignmentLate" />
+    }
+    else
+    {
+        <MudTable Items="@_orders.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Order number</MudTh>
+                <MudTh>Customer</MudTh>
+                <MudTh>Service</MudTh>
+                <MudTh>Variant</MudTh>
+                <MudTh>Paid amount</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Assigned date</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Order number"><strong>@context.OrderNumber</strong></MudTd>
+                <MudTd DataLabel="Customer">@context.CustomerName</MudTd>
+                <MudTd DataLabel="Service">@context.ServiceName</MudTd>
+                <MudTd DataLabel="Variant">@AgentOrderDisplay.VariantLabel(context.PlanName, context.PlanDurationDays, context.PlanRegionCode)</MudTd>
+                <MudTd DataLabel="Paid amount">@context.FinalAmountIrr.ToString("N0") IRR</MudTd>
+                <MudTd DataLabel="Status">
+                    <StatusBadge Text="@AgentOrderDisplay.OrderStatusLabel(context.Status)"
+                                 Tone="@AgentOrderDisplay.OrderTone(context.Status)" />
+                    @if (context.HasPendingCustomerAction)
+                    {
+                        <span class="sb-table-subtext">Customer action pending</span>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Assigned date">@(context.AssignedAt.HasValue ? AgentOrderDisplay.FormatDateTime(context.AssignedAt.Value) : "-")</MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               EndIcon="@Icons.Material.Outlined.ArrowForward"
+                               OnClick="@(() => OpenOrderAsync(context.OrderId))">
+                        Details
+                    </MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        @if (_orders.TotalPages > 1)
         {
-            <OrderCard Order="@order" />
+            <div class="sb-pagination">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_orders.Page <= 1 || _ordersLoading)"
+                           StartIcon="@Icons.Material.Outlined.ChevronLeft"
+                           OnClick="PreviousPage">
+                    Previous
+                </MudButton>
+                <span>Page @_orders.Page of @_orders.TotalPages</span>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_orders.Page >= _orders.TotalPages || _ordersLoading)"
+                           EndIcon="@Icons.Material.Outlined.ChevronRight"
+                           OnClick="NextPage">
+                    Next
+                </MudButton>
+            </div>
         }
-    </div>
+    }
 </PageSection>
 
-<PageSection Title="Fulfillment notes" Description="Credential-sensitive details stay redacted in list context." MaxWidth="standard">
-    <div class="sb-detail-panel">
-        <Timeline Items="@MockData.Activity" />
-    </div>
-</PageSection>
+<Drawer @bind-Open="_drawerOpen" Title="@(_selectedOrder?.OrderNumber ?? "Order details")" Eyebrow="Assigned order">
+    @if (_detailLoading)
+    {
+        <LoadingState Text="Loading order details" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_detailError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_detailError</MudAlert>
+    }
+    else if (_selectedOrder is not null)
+    {
+        <div class="sb-note-list">
+            <div class="sb-detail-panel">
+                <h2>Customer information</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Name</dt><dd>@_selectedOrder.CustomerName</dd></div>
+                    <div><dt>Email</dt><dd>@_selectedOrder.CustomerEmail</dd></div>
+                    <div><dt>Status</dt><dd><StatusBadge Text="@AgentOrderDisplay.OrderStatusLabel(_selectedOrder.Status)" Tone="@AgentOrderDisplay.OrderTone(_selectedOrder.Status)" /></dd></div>
+                    <div><dt>Assigned</dt><dd>@(_selectedOrder.AssignedAt.HasValue ? AgentOrderDisplay.FormatDateTime(_selectedOrder.AssignedAt.Value) : "-")</dd></div>
+                </dl>
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Service</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Service</dt><dd>@_selectedOrder.ServiceName</dd></div>
+                    <div><dt>Provider</dt><dd>@_selectedOrder.Provider</dd></div>
+                    <div><dt>Variant</dt><dd>@AgentOrderDisplay.VariantLabel(_selectedOrder.PlanName, _selectedOrder.PlanDurationDays, _selectedOrder.PlanRegionCode)</dd></div>
+                    <div><dt>Fulfillment</dt><dd>@_selectedOrder.FulfillmentMode</dd></div>
+                </dl>
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Credentials</h2>
+                @if (_selectedOrder.Fields.Count == 0)
+                {
+                    <p>No customer credentials are attached to this order.</p>
+                }
+                else
+                {
+                    <dl class="sb-fact-list">
+                        @foreach (var field in _selectedOrder.Fields.OrderBy(field => field.DisplayOrder))
+                        {
+                            <div>
+                                <dt>@field.FieldLabel</dt>
+                                <dd>@field.Value</dd>
+                            </div>
+                        }
+                    </dl>
+                }
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Payment summary</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Order total</dt><dd>@_selectedOrder.FinalPriceIrr.ToString("N0") IRR</dd></div>
+                    <div><dt>Paid at</dt><dd>@(_selectedOrder.PaidAt.HasValue ? AgentOrderDisplay.FormatDateTime(_selectedOrder.PaidAt.Value) : "-")</dd></div>
+                    @if (LatestPayment is not null)
+                    {
+                        <div><dt>Payment</dt><dd><StatusBadge Text="@AgentOrderDisplay.PaymentStatusLabel(LatestPayment.Status)" Tone="@AgentOrderDisplay.PaymentTone(LatestPayment.Status)" /></dd></div>
+                        <div><dt>Gateway reference</dt><dd>@(LatestPayment.GatewayReference ?? "-")</dd></div>
+                    }
+                </dl>
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Pricing snapshot</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Foreign price</dt><dd>@_selectedOrder.BasePriceUsdSnapshot.ToString("0.##") USD</dd></div>
+                    <div><dt>Exchange rate</dt><dd>@_selectedOrder.ExchangeRateSnapshot.ToString("N0") IRR</dd></div>
+                    <div><dt>Margin</dt><dd>@_selectedOrder.MarginSnapshot.ToString("0.##")%</dd></div>
+                    <div><dt>Final price</dt><dd>@_selectedOrder.FinalPriceIrr.ToString("N0") IRR</dd></div>
+                </dl>
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Processing actions</h2>
+                @if (!string.IsNullOrWhiteSpace(_actionError))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_actionError</MudAlert>
+                }
+                <MudTextField T="string"
+                              Label="Action note"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Lines="3"
+                              Value="@_actionNote"
+                              ValueChanged="@((string? value) => _actionNote = value)" />
+                <div class="sb-grid-toolbar-actions">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="@(!CanStart || _actionBusy)"
+                               StartIcon="@Icons.Material.Outlined.PlayArrow"
+                               OnClick="StartProcessingAsync">
+                        Start processing
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Success"
+                               Disabled="@(!CanCompleteOrFail || _actionBusy)"
+                               StartIcon="@Icons.Material.Outlined.CheckCircle"
+                               OnClick="CompleteAsync">
+                        Complete
+                    </MudButton>
+                </div>
+
+                <MudTextField T="string"
+                              Label="Failure reason"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Lines="3"
+                              Value="@_failureReason"
+                              ValueChanged="@((string? value) => _failureReason = value ?? string.Empty)" />
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Error"
+                           Disabled="@(!CanCompleteOrFail || _actionBusy)"
+                           StartIcon="@Icons.Material.Outlined.ErrorOutline"
+                           OnClick="FailAsync">
+                    Fail
+                </MudButton>
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Add agent note</h2>
+                <MudTextField T="string"
+                              Label="Note"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Lines="4"
+                              Value="@_noteText"
+                              ValueChanged="@((string? value) => _noteText = value ?? string.Empty)" />
+                <MudCheckBox T="bool"
+                             Label="Visible to customer"
+                             Value="@_noteVisibleToCustomer"
+                             ValueChanged="@((bool value) => _noteVisibleToCustomer = value)" />
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@_actionBusy"
+                           StartIcon="@Icons.Material.Outlined.NoteAdd"
+                           OnClick="AddNoteAsync">
+                    Add note
+                </MudButton>
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Order timeline</h2>
+                @if (TimelineItems.Count == 0)
+                {
+                    <p>No timeline entries have been recorded.</p>
+                }
+                else
+                {
+                    <Timeline Items="@TimelineItems" />
+                }
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Existing notes</h2>
+                @if (_selectedOrder.Notes.Count == 0)
+                {
+                    <p>No agent notes have been added.</p>
+                }
+                else
+                {
+                    <div class="sb-note-list">
+                        @foreach (var note in _selectedOrder.Notes.OrderByDescending(note => note.CreatedAt))
+                        {
+                            <article>
+                                <p>@note.Text</p>
+                                <span>@note.AuthorName - @AgentOrderDisplay.FormatDateTime(note.CreatedAt) - @(note.IsVisibleToCustomer ? "Customer visible" : "Internal")</span>
+                            </article>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</Drawer>
+
+@code {
+    private const int PageSize = 20;
+
+    private bool _summaryLoading = true;
+    private bool _ordersLoading = true;
+    private bool _detailLoading;
+    private bool _drawerOpen;
+    private bool _actionBusy;
+    private string? _summaryError;
+    private string? _ordersError;
+    private string? _detailError;
+    private string? _actionError;
+    private string? _search;
+    private string? _actionNote;
+    private string _failureReason = string.Empty;
+    private string _noteText = string.Empty;
+    private bool _noteVisibleToCustomer;
+    private OrderStatus? _status;
+    private AgentOrderDashboardSummaryDto? _summary;
+    private PagedResultDto<AgentOrderListItemDto> _orders = new();
+    private AgentOrderDetailDto? _selectedOrder;
+
+    private string EmptyOrdersDescription => _status.HasValue || !string.IsNullOrWhiteSpace(_search)
+        ? "No assigned orders match the current filters."
+        : "Assigned work will appear here after an admin assigns paid orders.";
+
+    private PaymentHistoryDto? LatestPayment =>
+        _selectedOrder is null ? null : AgentOrderDisplay.LatestPayment(_selectedOrder);
+
+    private IReadOnlyList<TimelineItem> TimelineItems =>
+        _selectedOrder is null
+            ? Array.Empty<TimelineItem>()
+            : AgentOrderDisplay.TimelineItems(_selectedOrder.StatusHistory);
+
+    private bool CanStart => _selectedOrder?.Status == nameof(OrderStatus.Assigned);
+    private bool CanCompleteOrFail => _selectedOrder?.Status == nameof(OrderStatus.Processing);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSummaryAsync();
+        await LoadOrdersAsync();
+    }
+
+    private async Task OnSearchChanged(string? search)
+    {
+        _search = search;
+        await LoadOrdersAsync(1);
+    }
+
+    private async Task OnStatusChanged(OrderStatus? status)
+    {
+        _status = status;
+        await LoadOrdersAsync(1);
+    }
+
+    private Task PreviousPage()
+    {
+        return LoadOrdersAsync(Math.Max(_orders.Page - 1, 1));
+    }
+
+    private Task NextPage()
+    {
+        return LoadOrdersAsync(_orders.Page + 1);
+    }
+
+    private async Task OpenOrderAsync(Guid orderId)
+    {
+        _drawerOpen = true;
+        await LoadOrderDetailAsync(orderId);
+    }
+
+    private async Task LoadSummaryAsync()
+    {
+        _summaryLoading = true;
+        _summaryError = null;
+
+        var result = await AgentOrdersClient.GetDashboardSummaryAsync();
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _summary = result.Success ? result.Data : null;
+        _summaryError = result.ErrorMessage;
+        _summaryLoading = false;
+    }
+
+    private async Task LoadOrdersAsync(int page = 1)
+    {
+        _ordersLoading = true;
+        _ordersError = null;
+
+        var result = await AgentOrdersClient.GetOrdersAsync(
+            page,
+            PageSize,
+            _status,
+            _search);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _orders = result.Success && result.Data is not null
+            ? result.Data
+            : new PagedResultDto<AgentOrderListItemDto>();
+        _ordersError = result.ErrorMessage;
+        _ordersLoading = false;
+    }
+
+    private async Task LoadOrderDetailAsync(Guid orderId)
+    {
+        _detailLoading = true;
+        _detailError = null;
+        _actionError = null;
+        _selectedOrder = null;
+
+        var result = await AgentOrdersClient.GetOrderAsync(orderId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _selectedOrder = result.Success ? result.Data : null;
+        _detailError = result.ErrorMessage;
+        _detailLoading = false;
+    }
+
+    private Task StartProcessingAsync()
+    {
+        return RunActionAsync(orderId =>
+            AgentOrdersClient.StartProcessingAsync(orderId, _actionNote));
+    }
+
+    private Task CompleteAsync()
+    {
+        return RunActionAsync(orderId =>
+            AgentOrdersClient.CompleteAsync(orderId, _actionNote));
+    }
+
+    private Task FailAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_failureReason))
+        {
+            _actionError = "Enter the reason the order could not be completed.";
+            return Task.CompletedTask;
+        }
+
+        return RunActionAsync(orderId =>
+            AgentOrdersClient.FailAsync(orderId, _failureReason));
+    }
+
+    private Task AddNoteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_noteText))
+        {
+            _actionError = "Enter a note before saving.";
+            return Task.CompletedTask;
+        }
+
+        return RunActionAsync(orderId =>
+            AgentOrdersClient.AddNoteAsync(
+                orderId,
+                _noteText,
+                _noteVisibleToCustomer));
+    }
+
+    private async Task RunActionAsync(
+        Func<Guid, Task<AgentOrdersApiResult<bool>>> action)
+    {
+        if (_selectedOrder is null)
+        {
+            return;
+        }
+
+        _actionBusy = true;
+        _actionError = null;
+        var orderId = _selectedOrder.OrderId;
+        var result = await action(orderId);
+
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _actionError = result.ErrorMessage ?? "Unable to update this order.";
+            _actionBusy = false;
+            return;
+        }
+
+        _actionNote = null;
+        _failureReason = string.Empty;
+        _noteText = string.Empty;
+        _noteVisibleToCustomer = false;
+
+        await LoadOrderDetailAsync(orderId);
+        await LoadSummaryAsync();
+        await LoadOrdersAsync(_orders.Page);
+        _actionBusy = false;
+    }
+}

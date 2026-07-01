@@ -25,11 +25,20 @@ public class AgentOrdersController : BaseApiController
         _processingService = processingService;
     }
 
+    [HttpGet("dashboard")]
+    public async Task<IActionResult> GetDashboardSummary()
+    {
+        return TryGetAgentId(out var agentId)
+            ? ToActionResult(await _queryService.GetDashboardSummaryAsync(agentId))
+            : UnauthorizedResult();
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetAssignedOrders(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = IAgentOrderQueryService.DefaultPageSize,
-        [FromQuery] OrderStatus? status = null)
+        [FromQuery] OrderStatus? status = null,
+        [FromQuery] string? search = null)
     {
         return TryGetAgentId(out var agentId)
             ? ToActionResult(
@@ -37,7 +46,8 @@ public class AgentOrdersController : BaseApiController
                     agentId,
                     page,
                     pageSize,
-                    status))
+                    status,
+                    search))
             : UnauthorizedResult();
     }
 

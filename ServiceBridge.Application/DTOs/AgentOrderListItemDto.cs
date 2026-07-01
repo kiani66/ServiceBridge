@@ -10,6 +10,7 @@ public class AgentOrderListItemDto
     public int? PlanDurationDays { get; set; }
     public string? PlanRegionCode { get; set; }
     public string CustomerName { get; set; } = string.Empty;
+    public decimal FinalAmountIrr { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime? AssignedAt { get; set; }

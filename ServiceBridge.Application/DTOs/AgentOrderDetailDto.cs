@@ -14,6 +14,10 @@ public class AgentOrderDetailDto
     public string? PlanName { get; set; }
     public int? PlanDurationDays { get; set; }
     public string? PlanRegionCode { get; set; }
+    public decimal BasePriceUsdSnapshot { get; set; }
+    public decimal ExchangeRateSnapshot { get; set; }
+    public decimal MarginSnapshot { get; set; }
+    public decimal FinalPriceIrr { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? PaidAt { get; set; }
     public DateTime? AssignedAt { get; set; }
@@ -26,6 +30,8 @@ public class AgentOrderDetailDto
         Array.Empty<AgentOrderNoteDto>();
     public IReadOnlyCollection<CustomerActionRequestDto> CustomerActions { get; set; } =
         Array.Empty<CustomerActionRequestDto>();
+    public IReadOnlyCollection<PaymentHistoryDto> Payments { get; set; } =
+        Array.Empty<PaymentHistoryDto>();
     public IReadOnlyCollection<OrderStatusHistoryDto> StatusHistory { get; set; } =
         Array.Empty<OrderStatusHistoryDto>();
 }

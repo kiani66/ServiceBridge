@@ -28,7 +28,14 @@
                         @foreach (var item in ServiceBridge.Web.Navigation.RoleNavigation.GetItems(User))
                         {
                             <li class="nav-item">
-                                <a class="nav-link" asp-page="@item.Page">@item.Text</a>
+                                @if (item.Page.StartsWith("/ui/", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <a class="nav-link" href="@item.Page">@item.Text</a>
+                                }
+                                else
+                                {
+                                    <a class="nav-link" asp-page="@item.Page">@item.Text</a>
+                                }
                             </li>
                         }
                     </ul>

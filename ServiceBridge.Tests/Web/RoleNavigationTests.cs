@@ -14,8 +14,8 @@ public class RoleNavigationTests
         "/Services/Index|/Orders/Index|/User/UserProfile")]
     [InlineData(
         AppConstants.Roles.Agent,
-        "Assigned Orders|Profile",
-        "/Agent/Orders/Index|/User/UserProfile")]
+        "Dashboard|Profile",
+        "/ui/agent|/User/UserProfile")]
     [InlineData(
         AppConstants.Roles.Admin,
         "Dashboard|Assignment Queue|Users|Catalog|Pricing|Profile",
@@ -33,7 +33,7 @@ public class RoleNavigationTests
 
     [Theory]
     [InlineData(AppConstants.Roles.User, "/Orders/Index")]
-    [InlineData(AppConstants.Roles.Agent, "/Agent/Orders/Index")]
+    [InlineData(AppConstants.Roles.Agent, "/ui/agent")]
     [InlineData(AppConstants.Roles.Admin, "/Dashboard")]
     public void GetLandingPage_ReturnsTaskWorkspace(
         string role,

@@ -30,7 +30,8 @@ public class AgentOrderQueryTests
             currentAgentId,
             0,
             1000,
-            OrderStatus.Assigned);
+            OrderStatus.Assigned,
+            "  customer  ");
 
         Assert.True(result.Success);
         Assert.Single(result.Data!.Items);
@@ -40,6 +41,30 @@ public class AgentOrderQueryTests
             IAgentOrderQueryService.MaximumPageSize,
             repository.LastPageSize);
         Assert.Equal(OrderStatus.Assigned, repository.LastStatus);
+        Assert.Equal("customer", repository.LastSearch);
+    }
+
+    [Fact]
+    public async Task DashboardSummary_UsesCurrentAgentScope()
+    {
+        var currentAgentId = Guid.NewGuid();
+        var otherAgentId = Guid.NewGuid();
+        var repository = new FakeAgentOrderQueryRepository();
+        repository.OrdersByAgent[currentAgentId] =
+        [
+            new AgentOrderListItemDto { OrderId = Guid.NewGuid() }
+        ];
+        repository.OrdersByAgent[otherAgentId] =
+        [
+            new AgentOrderListItemDto { OrderId = Guid.NewGuid() }
+        ];
+        var service = new AgentOrderQueryService(repository);
+
+        var result = await service.GetDashboardSummaryAsync(currentAgentId);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, result.Data!.AssignedOrders);
+        Assert.Equal(currentAgentId, repository.LastAgentId);
     }
 
     [Fact]
