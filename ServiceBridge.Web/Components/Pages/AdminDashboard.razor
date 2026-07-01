@@ -385,7 +385,11 @@
 
             <div class="sb-detail-panel">
                 <h2>Timeline</h2>
-                @if (TimelineItems.Count == 0)
+                @if (!string.IsNullOrWhiteSpace(_timelineError))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_timelineError</MudAlert>
+                }
+                else if (TimelineItems.Count == 0)
                 {
                     <p>No timeline entries have been recorded.</p>
                 }
@@ -441,6 +445,8 @@
 @code {
     private const int PageSize = 20;
 
+    [SupplyParameterFromQuery] public Guid? OrderId { get; set; }
+
     private bool _summaryLoading = true;
     private bool _ordersLoading = true;
     private bool _paidQueueLoading = true;
@@ -455,6 +461,7 @@
     private string? _agentsError;
     private string? _paymentsError;
     private string? _detailError;
+    private string? _timelineError;
     private string? _assignmentError;
     private string? _assignmentMessage;
     private string? _orderSearch;
@@ -467,13 +474,20 @@
     private PagedResultDto<AdminPaymentListItemDto> _payments = new();
     private IReadOnlyCollection<AgentSummaryDto> _agents = Array.Empty<AgentSummaryDto>();
     private AdminOrderDetailDto? _selectedOrder;
+    private IReadOnlyCollection<AdminOrderTimelineEventDto> _selectedTimeline =
+        Array.Empty<AdminOrderTimelineEventDto>();
     private readonly Dictionary<Guid, Guid?> _assignmentAgents = new();
     private readonly Dictionary<Guid, string?> _assignmentNotes = new();
 
     private IReadOnlyList<TimelineItem> TimelineItems =>
-        _selectedOrder is null
-            ? Array.Empty<TimelineItem>()
-            : UserOrderDisplay.TimelineItems(_selectedOrder.StatusHistory);
+        _selectedTimeline
+            .OrderBy(item => item.OccurredAt)
+            .Select(item => new TimelineItem(
+                item.Title,
+                $"{item.Description} / {item.ActorName}",
+                UserOrderDisplay.FormatDateTime(item.OccurredAt),
+                item.Tone))
+            .ToArray();
 
     private RenderFragment OrderPager => builder => BuildPager(
         builder,
@@ -506,6 +520,11 @@
         await LoadAgentsAsync();
         await LoadPaidQueueAsync();
         await LoadPaymentsAsync();
+
+        if (OrderId.HasValue)
+        {
+            await OpenOrderAsync(OrderId.Value);
+        }
     }
 
     private async Task OnOrderSearchChanged(string? search)
@@ -665,7 +684,9 @@
         _drawerOpen = true;
         _detailLoading = true;
         _detailError = null;
+        _timelineError = null;
         _selectedOrder = null;
+        _selectedTimeline = Array.Empty<AdminOrderTimelineEventDto>();
 
         var result = await AdminOrdersClient.GetOrderAsync(orderId);
         if (RedirectIfAuthRequired(result.RequiresAuthentication))
@@ -675,6 +696,21 @@
 
         _selectedOrder = result.Success ? result.Data : null;
         _detailError = result.ErrorMessage;
+
+        if (result.Success)
+        {
+            var timelineResult = await AdminOrdersClient.GetOrderTimelineAsync(orderId);
+            if (RedirectIfAuthRequired(timelineResult.RequiresAuthentication))
+            {
+                return;
+            }
+
+            _selectedTimeline = timelineResult.Success && timelineResult.Data is not null
+                ? timelineResult.Data
+                : Array.Empty<AdminOrderTimelineEventDto>();
+            _timelineError = timelineResult.ErrorMessage;
+        }
+
         _detailLoading = false;
     }
 

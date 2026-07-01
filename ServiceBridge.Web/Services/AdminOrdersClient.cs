@@ -108,6 +108,65 @@ public sealed class AdminOrdersClient
             cancellationToken);
     }
 
+    public Task<AdminOrdersApiResult<PagedResultDto<AdminAuditEventDto>>>
+        GetAuditEventsAsync(
+            AdminAuditQueryDto query,
+            CancellationToken cancellationToken = default)
+    {
+        var parameters = new List<string>
+        {
+            $"page={Math.Max(query.Page, 1)}",
+            $"pageSize={query.PageSize}"
+        };
+
+        if (query.FromUtc.HasValue)
+        {
+            parameters.Add(
+                $"fromUtc={Uri.EscapeDataString(query.FromUtc.Value.ToUniversalTime().ToString("O"))}");
+        }
+
+        if (query.ToUtc.HasValue)
+        {
+            parameters.Add(
+                $"toUtc={Uri.EscapeDataString(query.ToUtc.Value.ToUniversalTime().ToString("O"))}");
+        }
+
+        AppendQuery(parameters, "actor", query.Actor);
+        AppendQuery(parameters, "order", query.Order);
+        AppendQuery(parameters, "eventType", query.EventType);
+
+        if (query.OrderId.HasValue)
+        {
+            parameters.Add($"orderId={query.OrderId.Value}");
+        }
+
+        if (query.Status.HasValue)
+        {
+            parameters.Add(
+                $"status={Uri.EscapeDataString(query.Status.Value.ToString())}");
+        }
+
+        return SendAsync<PagedResultDto<AdminAuditEventDto>>(
+            client => client.GetAsync(
+                $"api/admin/orders/audit?{string.Join("&", parameters)}",
+                cancellationToken),
+            "Unable to load audit events right now.",
+            cancellationToken);
+    }
+
+    public Task<AdminOrdersApiResult<IReadOnlyCollection<AdminOrderTimelineEventDto>>>
+        GetOrderTimelineAsync(
+            Guid orderId,
+            CancellationToken cancellationToken = default)
+    {
+        return SendAsync<IReadOnlyCollection<AdminOrderTimelineEventDto>>(
+            client => client.GetAsync(
+                $"api/admin/orders/{orderId}/timeline",
+                cancellationToken),
+            "Unable to load the order timeline right now.",
+            cancellationToken);
+    }
+
     public Task<AdminOrdersApiResult<bool>> AssignAsync(
         Guid orderId,
         Guid agentId,
@@ -223,6 +282,18 @@ public sealed class AdminOrdersClient
             HttpStatusCode.Forbidden => "You are not allowed to view admin operations.",
             _ => fallbackMessage
         };
+    }
+
+    private static void AppendQuery(
+        List<string> parameters,
+        string name,
+        string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            parameters.Add(
+                $"{name}={Uri.EscapeDataString(value.Trim())}");
+        }
     }
 }
 

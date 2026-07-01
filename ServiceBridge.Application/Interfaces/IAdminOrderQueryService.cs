@@ -28,4 +28,8 @@ public interface IAdminOrderQueryService
         int pageSize,
         PaymentStatus? status,
         string? search);
+    Task<ServiceResult<PagedResultDto<AdminAuditEventDto>>> GetAuditEventsAsync(
+        AdminAuditQueryDto query);
+    Task<ServiceResult<IReadOnlyCollection<AdminOrderTimelineEventDto>>>
+        GetOrderTimelineAsync(Guid orderId);
 }
