@@ -1,10 +1,21 @@
-@page "/ui/orders/{OrderNumber}"
-@inject ServiceBridgeMockDataProvider MockData
+@page "/ui/orders/{OrderId:guid}"
+@attribute [Authorize(Roles = AppConstants.Roles.User)]
+@inject UserOrdersClient OrdersClient
+@inject NavigationManager Navigation
 
-@if (Order is null)
+@if (_loading)
 {
-    <EmptyState Title="Order not found"
-                Description="The requested mock order is not available."
+    <PageHeader Eyebrow="Order details"
+                Title="Loading order"
+                Description="Fetching the latest order state." />
+    <PageSection MaxWidth="standard">
+        <LoadingState Text="Loading order" />
+    </PageSection>
+}
+else if (_order is null)
+{
+    <EmptyState Title="Order unavailable"
+                Description="@(_errorMessage ?? "The requested order could not be loaded.")"
                 Icon="@Icons.Material.Outlined.SearchOff">
         <Actions>
             <MudButton Href="/ui/orders" Variant="Variant.Filled" Color="Color.Primary">Back to orders</MudButton>
@@ -13,63 +24,198 @@
 }
 else
 {
-    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Orders", "/ui/orders"), (Order.OrderNumber, null) })" />
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Orders", "/ui/orders"), (_order.OrderNumber, null) })" />
 
     <PageHeader Eyebrow="Order details"
-                Title="@Order.OrderNumber"
-                Description="@($"{Order.ServiceName} for {Order.CustomerName}")">
+                Title="@_order.OrderNumber"
+                Description="@($"{_order.ServiceName} via {_order.Provider}")">
         <Actions>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Timeline" OnClick="OpenDrawer">
-                Timeline drawer
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.Timeline"
+                       OnClick="OpenDrawer">
+                Timeline
             </MudButton>
         </Actions>
     </PageHeader>
 
-    <PageSection MaxWidth="standard">
+    <PageSection MaxWidth="wide">
         <div class="sb-detail-grid">
             <div class="sb-detail-panel">
                 <h2>Order summary</h2>
                 <dl class="sb-fact-list">
-                    <div><dt>Service</dt><dd>@Order.ServiceName</dd></div>
-                    <div><dt>Provider</dt><dd>@Order.ProviderName</dd></div>
-                    <div><dt>Variant</dt><dd>@Order.VariantName</dd></div>
-                    <div><dt>Status</dt><dd><StatusBadge Text="@Order.Status" Tone="@ToneFor(Order.Status)" /></dd></div>
-                    <div><dt>Payment</dt><dd>@Order.PaymentStatus</dd></div>
-                    <div><dt>Total</dt><dd>@Order.TotalIrr.ToString("N0") IRR</dd></div>
+                    <div><dt>Service</dt><dd>@_order.ServiceName</dd></div>
+                    <div><dt>Variant</dt><dd>@UserOrderDisplay.VariantLabel(_order.PlanName, _order.PlanDurationDays, _order.PlanRegionCode)</dd></div>
+                    <div><dt>Provider</dt><dd>@_order.Provider</dd></div>
+                    <div><dt>Fulfillment</dt><dd>@_order.FulfillmentMode</dd></div>
+                    <div><dt>Order status</dt><dd><StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(_order.Status)" Tone="@UserOrderDisplay.OrderTone(_order.Status)" /></dd></div>
+                    <div><dt>Created</dt><dd>@UserOrderDisplay.FormatDateTime(_order.CreatedAt)</dd></div>
                 </dl>
             </div>
+
+            <PaymentSummaryPanel Order="_order"
+                                 Payment="@LatestPayment"
+                                 Title="Payment summary" />
+        </div>
+    </PageSection>
+
+    <PageSection MaxWidth="wide">
+        <div class="sb-detail-grid">
             <div class="sb-detail-panel">
-                <h2>Fulfillment timeline</h2>
-                <Timeline Items="@MockData.Activity" />
+                <h2>Pricing snapshot</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Foreign price</dt><dd>@_order.BasePriceUsdSnapshot.ToString("0.##") USD</dd></div>
+                    <div><dt>Exchange rate</dt><dd>@_order.ExchangeRateSnapshot.ToString("N0") IRR</dd></div>
+                    <div><dt>Margin</dt><dd>@_order.MarginSnapshot.ToString("0.##")%</dd></div>
+                    <div><dt>Final price</dt><dd>@_order.FinalPriceIrr.ToString("N0") IRR</dd></div>
+                </dl>
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Credential summary</h2>
+                @if (_order.Fields.Count == 0 && _order.DeliveryFields.Count == 0)
+                {
+                    <p>No credential or fulfillment fields are attached to this order.</p>
+                }
+                else
+                {
+                    <dl class="sb-fact-list">
+                        @foreach (var field in _order.Fields.OrderBy(field => field.DisplayOrder))
+                        {
+                            <div>
+                                <dt>@field.FieldLabel</dt>
+                                <dd>@(field.IsSensitive ? "Sensitive value hidden" : "Provided")</dd>
+                            </div>
+                        }
+                        @foreach (var field in _order.DeliveryFields.OrderBy(field => field.DisplayOrder))
+                        {
+                            <div>
+                                <dt>@field.FieldLabel</dt>
+                                <dd>@(field.IsSensitive ? "Delivery credential hidden" : "Delivery information available")</dd>
+                            </div>
+                        }
+                    </dl>
+                }
             </div>
         </div>
     </PageSection>
 
-    <Drawer @bind-Open="_drawerOpen" Title="@Order.OrderNumber" Eyebrow="Order timeline">
-        <Timeline Items="@MockData.Activity" />
+    <PageSection Title="Payment information" Description="Recorded payment attempts for this order." MaxWidth="wide">
+        @if (_order.Payments.Count == 0)
+        {
+            <EmptyState Title="No payments recorded"
+                        Description="Payment attempts will appear here after checkout."
+                        Icon="@Icons.Material.Outlined.Payments" />
+        }
+        else
+        {
+            <MudTable Items="@_order.Payments" Hover="true" Dense="true" Class="sb-data-table">
+                <HeaderContent>
+                    <MudTh>Created</MudTh>
+                    <MudTh>Amount</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Gateway reference</MudTh>
+                    <MudTh>Completed</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Created">@UserOrderDisplay.FormatDateTime(context.CreatedAt)</MudTd>
+                    <MudTd DataLabel="Amount">@context.AmountIrr.ToString("N0") IRR</MudTd>
+                    <MudTd DataLabel="Status">
+                        <StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(context.Status)"
+                                     Tone="@UserOrderDisplay.PaymentTone(context.Status)" />
+                    </MudTd>
+                    <MudTd DataLabel="Gateway reference">@(context.GatewayReference ?? "-")</MudTd>
+                    <MudTd DataLabel="Completed">@(context.CompletedAt.HasValue ? UserOrderDisplay.FormatDateTime(context.CompletedAt.Value) : "-")</MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </PageSection>
+
+    <PageSection Title="Order timeline" Description="Status history recorded for this order." MaxWidth="wide">
+        @if (TimelineItems.Count == 0)
+        {
+            <EmptyState Title="No timeline yet"
+                        Description="Timeline entries will appear after order status changes are recorded."
+                        Icon="@Icons.Material.Outlined.Timeline" />
+        }
+        else
+        {
+            <div class="sb-detail-panel">
+                <Timeline Items="@TimelineItems" />
+            </div>
+        }
+    </PageSection>
+
+    <PageSection Title="Agent notes" Description="Customer-visible fulfillment notes." MaxWidth="wide">
+        @if (_order.Notes.Count == 0)
+        {
+            <EmptyState Title="No notes available"
+                        Description="Agent notes will appear here when there is an update for you."
+                        Icon="@Icons.Material.Outlined.Notes" />
+        }
+        else
+        {
+            <div class="sb-note-list">
+                @foreach (var note in _order.Notes)
+                {
+                    <article class="sb-detail-panel">
+                        <p>@note.Text</p>
+                        <span>@note.AuthorName - @UserOrderDisplay.FormatDateTime(note.CreatedAt)</span>
+                    </article>
+                }
+            </div>
+        }
+    </PageSection>
+
+    <Drawer @bind-Open="_drawerOpen" Title="@_order.OrderNumber" Eyebrow="Order timeline">
+        @if (TimelineItems.Count == 0)
+        {
+            <EmptyState Title="No timeline yet"
+                        Description="No status history has been recorded for this order."
+                        Icon="@Icons.Material.Outlined.Timeline" />
+        }
+        else
+        {
+            <Timeline Items="@TimelineItems" />
+        }
     </Drawer>
 }
 
 @code {
-    [Parameter] public string? OrderNumber { get; set; }
+    [Parameter] public Guid OrderId { get; set; }
 
+    private bool _loading = true;
     private bool _drawerOpen;
-    private OrderModel? Order => MockData.FindOrder(OrderNumber);
+    private string? _errorMessage;
+    private UserOrderDetailDto? _order;
+
+    private PaymentHistoryDto? LatestPayment =>
+        _order is null ? null : UserOrderDisplay.LatestPayment(_order);
+
+    private IReadOnlyList<TimelineItem> TimelineItems =>
+        _order is null
+            ? Array.Empty<TimelineItem>()
+            : UserOrderDisplay.TimelineItems(_order.StatusHistory);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await OrdersClient.GetOrderAsync(OrderId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _order = result.Success ? result.Data : null;
+        _errorMessage = result.ErrorMessage;
+        _loading = false;
+    }
 
     private void OpenDrawer()
     {
         _drawerOpen = true;
-    }
-
-    private static string ToneFor(string status)
-    {
-        return status switch
-        {
-            "Completed" => "success",
-            "Failed" => "danger",
-            "Pending" => "warning",
-            "Processing" => "info",
-            _ => "neutral"
-        };
     }
 }

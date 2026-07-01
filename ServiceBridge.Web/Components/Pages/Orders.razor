@@ -1,13 +1,15 @@
 @page "/ui/orders"
-@inject ServiceBridgeMockDataProvider MockData
+@attribute [Authorize(Roles = AppConstants.Roles.User)]
+@inject UserOrdersClient OrdersClient
+@inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Orders", null) })" />
 
 <PageHeader Eyebrow="Orders"
-            Title="Order tracking"
-            Description="Track payment, assignment, fulfillment, and credential attention with mock order data.">
+            Title="My orders"
+            Description="Track payment, fulfillment state, and order history for your service requests.">
     <Actions>
-        <MudButton Href="/ui/checkout/chatgpt-plus" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Add">
+        <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Add">
             New order
         </MudButton>
     </Actions>
@@ -15,83 +17,160 @@
 
 <PageSection MaxWidth="wide">
     <DataGridToolbar Title="Orders"
-                     Description="Operational table with search, filters, and row actions."
-                     Search="@_search"
-                     SearchChanged="OnSearchChanged"
-                     SearchPlaceholder="Search by order, service, or customer">
+                     Description="Newest orders are shown first."
+                     ShowSearch="false">
         <Actions>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.FilterList" OnClick="ToggleFilters">
-                Filters
-            </MudButton>
+            <MudSelect T="OrderStatus?"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_status"
+                       ValueChanged="OnStatusChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="OrderStatus?" Value="null">All statuses</MudSelectItem>
+                @foreach (var status in Enum.GetValues<OrderStatus>())
+                {
+                    <MudSelectItem T="OrderStatus?" Value="@status">
+                        @UserOrderDisplay.OrderStatusLabel(status.ToString())
+                    </MudSelectItem>
+                }
+            </MudSelect>
         </Actions>
     </DataGridToolbar>
-    @if (_showFilters)
+
+    @if (_loading)
     {
-        <FilterPanel />
+        <LoadingState Text="Loading orders" />
     }
-    <MudTable Items="@FilteredOrders" Hover="true" Dense="true" Class="sb-data-table">
-        <HeaderContent>
-            <MudTh>Order</MudTh>
-            <MudTh>Service</MudTh>
-            <MudTh>Customer</MudTh>
-            <MudTh>Status</MudTh>
-            <MudTh>Payment</MudTh>
-            <MudTh>Total</MudTh>
-            <MudTh>Actions</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Order">
-                <strong>@context.OrderNumber</strong>
-                <span class="sb-table-subtext">@context.CreatedAt.ToString("MMM d, HH:mm")</span>
-            </MudTd>
-            <MudTd DataLabel="Service">@context.ServiceName</MudTd>
-            <MudTd DataLabel="Customer">
-                @context.CustomerName
-                <span class="sb-table-subtext">@context.CustomerEmail</span>
-            </MudTd>
-            <MudTd DataLabel="Status"><StatusBadge Text="@context.Status" Tone="@ToneFor(context.Status)" /></MudTd>
-            <MudTd DataLabel="Payment">@context.PaymentStatus</MudTd>
-            <MudTd DataLabel="Total">@context.TotalIrr.ToString("N0") IRR</MudTd>
-            <MudTd DataLabel="Actions">
-                <MudButton Href="@($"/ui/orders/{context.OrderNumber}")" Variant="Variant.Text" Color="Color.Primary" Size="Size.Small">
-                    Details
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_errorMessage</MudAlert>
+    }
+    else if (_orders.Items.Count == 0)
+    {
+        <EmptyState Title="No orders found"
+                    Description="@EmptyDescription"
+                    Icon="@Icons.Material.Outlined.ReceiptLong">
+            <Actions>
+                <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary">
+                    Browse catalog
                 </MudButton>
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
+            </Actions>
+        </EmptyState>
+    }
+    else
+    {
+        <MudTable Items="@_orders.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Order</MudTh>
+                <MudTh>Service</MudTh>
+                <MudTh>Variant</MudTh>
+                <MudTh>Final IRR price</MudTh>
+                <MudTh>Payment</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Created</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Order"><strong>@context.OrderNumber</strong></MudTd>
+                <MudTd DataLabel="Service">
+                    @context.ServiceName
+                    <span class="sb-table-subtext">@context.Provider</span>
+                </MudTd>
+                <MudTd DataLabel="Variant">@UserOrderDisplay.VariantLabel(context.PlanName, context.PlanDurationDays, context.PlanRegionCode)</MudTd>
+                <MudTd DataLabel="Final IRR price">@context.FinalPriceIrr.ToString("N0") IRR</MudTd>
+                <MudTd DataLabel="Payment">
+                    <StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(context.PaymentStatus)"
+                                 Tone="@UserOrderDisplay.PaymentTone(context.PaymentStatus)" />
+                </MudTd>
+                <MudTd DataLabel="Status">
+                    <StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(context.Status)"
+                                 Tone="@UserOrderDisplay.OrderTone(context.Status)" />
+                </MudTd>
+                <MudTd DataLabel="Created">@UserOrderDisplay.FormatDateTime(context.CreatedAt)</MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudButton Href="@($"/ui/orders/{context.OrderId}")"
+                               Variant="Variant.Text"
+                               Color="Color.Primary"
+                               Size="Size.Small">
+                        Details
+                    </MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        @if (_orders.TotalPages > 1)
+        {
+            <div class="sb-pagination">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_orders.Page <= 1 || _loading)"
+                           StartIcon="@Icons.Material.Outlined.ChevronLeft"
+                           OnClick="PreviousPage">
+                    Previous
+                </MudButton>
+                <span>Page @_orders.Page of @_orders.TotalPages</span>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_orders.Page >= _orders.TotalPages || _loading)"
+                           EndIcon="@Icons.Material.Outlined.ChevronRight"
+                           OnClick="NextPage">
+                    Next
+                </MudButton>
+            </div>
+        }
+    }
 </PageSection>
 
 @code {
-    private string? _search;
-    private bool _showFilters;
+    private const int PageSize = 20;
 
-    private IEnumerable<OrderModel> FilteredOrders => string.IsNullOrWhiteSpace(_search)
-        ? MockData.Orders
-        : MockData.Orders.Where(order =>
-            order.OrderNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-            order.ServiceName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-            order.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+    private bool _loading = true;
+    private string? _errorMessage;
+    private OrderStatus? _status;
+    private PagedResultDto<UserOrderListItemDto> _orders = new();
 
-    private void ToggleFilters()
+    private string EmptyDescription => _status.HasValue
+        ? "No orders match the selected status."
+        : "Your service requests will appear here after checkout.";
+
+    protected override async Task OnInitializedAsync()
     {
-        _showFilters = !_showFilters;
+        await LoadOrdersAsync();
     }
 
-    private Task OnSearchChanged(string? value)
+    private async Task OnStatusChanged(OrderStatus? status)
     {
-        _search = value;
-        return Task.CompletedTask;
+        _status = status;
+        await LoadOrdersAsync(1);
     }
 
-    private static string ToneFor(string status)
+    private Task PreviousPage()
     {
-        return status switch
+        return LoadOrdersAsync(Math.Max(_orders.Page - 1, 1));
+    }
+
+    private Task NextPage()
+    {
+        return LoadOrdersAsync(_orders.Page + 1);
+    }
+
+    private async Task LoadOrdersAsync(int page = 1)
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await OrdersClient.GetOrdersAsync(page, PageSize, _status);
+        if (result.RequiresAuthentication)
         {
-            "Completed" => "success",
-            "Failed" => "danger",
-            "Pending" => "warning",
-            "Processing" => "info",
-            _ => "neutral"
-        };
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _orders = result.Success && result.Data is not null
+            ? result.Data
+            : new PagedResultDto<UserOrderListItemDto>();
+        _errorMessage = result.ErrorMessage;
+        _loading = false;
     }
 }

@@ -1,6 +1,20 @@
 <Router AppAssembly="@typeof(Program).Assembly">
     <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+            <NotAuthorized>
+                <LayoutView Layout="@typeof(MainLayout)">
+                    <EmptyState Title="Sign in required"
+                                Description="Sign in with your user account to view this workspace."
+                                Icon="@Icons.Material.Outlined.Lock">
+                        <Actions>
+                            <MudButton Href="/Account/Login" Variant="Variant.Filled" Color="Color.Primary">
+                                Sign in
+                            </MudButton>
+                        </Actions>
+                    </EmptyState>
+                </LayoutView>
+            </NotAuthorized>
+        </AuthorizeRouteView>
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
     <NotFound>

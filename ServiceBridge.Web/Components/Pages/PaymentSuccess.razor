@@ -34,7 +34,7 @@ else
                 Title="Payment confirmed"
                 Description="@($"{_order.OrderNumber} is {_order.Status}.")">
         <Actions>
-            <MudButton Href="@($"/Orders/Details/{OrderId}")"
+            <MudButton Href="@($"/ui/orders/{OrderId}")"
                        Variant="Variant.Filled"
                        Color="Color.Primary"
                        StartIcon="@Icons.Material.Outlined.ReceiptLong">

@@ -10,7 +10,7 @@ public sealed class ServiceBridgeMockDataProvider
     public IReadOnlyList<DigitalServiceModel> Services { get; }
     public IReadOnlyList<OrderModel> Orders { get; }
     public IReadOnlyList<MetricModel> DashboardMetrics { get; }
-    public IReadOnlyList<ActivityModel> Activity { get; }
+    public IReadOnlyList<TimelineItem> Activity { get; }
 
     public ServiceBridgeMockDataProvider()
     {
@@ -211,4 +211,3 @@ public sealed record OrderModel(
 
 public sealed record MetricModel(string Label, string Value, string Description, string Tone, string Icon);
 
-public sealed record ActivityModel(string Title, string Description, string Time, string Tone);

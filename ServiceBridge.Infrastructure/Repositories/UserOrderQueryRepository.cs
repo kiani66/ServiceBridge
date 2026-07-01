@@ -35,12 +35,12 @@ public class UserOrderQueryRepository : IUserOrderQueryRepository
         }
 
         var totalCount = await query.CountAsync();
-        var items = await query
+        var rows = await query
             .OrderByDescending(x => x.CreatedAt)
             .ThenByDescending(x => x.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new UserOrderListItemDto
+            .Select(x => new
             {
                 OrderId = x.Id,
                 OrderNumber = x.OrderNumber,
@@ -57,6 +57,50 @@ public class UserOrderQueryRepository : IUserOrderQueryRepository
                 CreatedAt = x.CreatedAt
             })
             .ToListAsync();
+
+        var orderIds = rows
+            .Select(x => x.OrderId)
+            .ToArray();
+        var paymentStatuses = await _context.Payments
+            .AsNoTracking()
+            .Where(payment => orderIds.Contains(payment.OrderId))
+            .OrderByDescending(payment => payment.CreatedAt)
+            .ThenByDescending(payment => payment.Id)
+            .Select(payment => new
+            {
+                payment.OrderId,
+                payment.Status
+            })
+            .ToListAsync();
+        var latestPaymentStatuses = paymentStatuses
+            .GroupBy(payment => payment.OrderId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().Status);
+
+        var items = rows
+            .Select(x => new UserOrderListItemDto
+            {
+                OrderId = x.OrderId,
+                OrderNumber = x.OrderNumber,
+                ServiceName = x.ServiceName,
+                Provider = x.Provider,
+                FulfillmentMode = x.FulfillmentMode,
+                ServiceVariantId = x.ServiceVariantId,
+                PlanName = x.PlanName,
+                PlanDurationDays = x.PlanDurationDays,
+                PlanRegionCode = x.PlanRegionCode,
+                BasePriceUsdSnapshot = x.BasePriceUsdSnapshot,
+                FinalPriceIrr = x.FinalPriceIrr,
+                PaymentStatus = latestPaymentStatuses.TryGetValue(
+                    x.OrderId,
+                    out var paymentStatus)
+                    ? paymentStatus.ToString()
+                    : "Not started",
+                Status = x.Status,
+                CreatedAt = x.CreatedAt
+            })
+            .ToList();
 
         return new PagedResultDto<UserOrderListItemDto>
         {
