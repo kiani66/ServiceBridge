@@ -13,6 +13,7 @@ public class UserOrderListItemDto
     public string? PlanRegionCode { get; set; }
     public decimal BasePriceUsdSnapshot { get; set; }
     public decimal FinalPriceIrr { get; set; }
+    public string PaymentStatus { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public bool CanCancel { get; set; }

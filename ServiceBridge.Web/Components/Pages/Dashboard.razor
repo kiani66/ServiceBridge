@@ -1,30 +1,93 @@
 @page "/ui/dashboard"
-@inject ServiceBridgeMockDataProvider MockData
+@attribute [Authorize(Roles = AppConstants.Roles.User)]
+@inject UserOrdersClient OrdersClient
+@inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Dashboard", null) })" />
 
 <PageHeader Eyebrow="User workspace"
             Title="Dashboard"
-            Description="A mock user dashboard focused on payment state, fulfillment progress, and credential attention." />
+            Description="Your recent service requests, payment state, and fulfillment progress." />
 
 <PageSection MaxWidth="standard">
-    <div class="sb-stat-grid">
-        @foreach (var metric in MockData.DashboardMetrics)
-        {
-            <StatCard Label="@metric.Label" Value="@metric.Value" Description="@metric.Description" Tone="@metric.Tone" Icon="@metric.Icon" />
-        }
-    </div>
+    @if (_loading)
+    {
+        <LoadingState Text="Loading dashboard" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_errorMessage</MudAlert>
+    }
+    else if (_summary is not null)
+    {
+        <div class="sb-stat-grid">
+            <StatCard Label="Total orders" Value="@_summary.TotalOrders.ToString("N0")" Description="All orders created by your account" Tone="neutral" Icon="@Icons.Material.Outlined.ReceiptLong" />
+            <StatCard Label="Pending" Value="@_summary.PendingOrders.ToString("N0")" Description="Waiting for payment" Tone="warning" Icon="@Icons.Material.Outlined.Payments" />
+            <StatCard Label="Processing" Value="@_summary.ProcessingOrders.ToString("N0")" Description="Currently in fulfillment" Tone="info" Icon="@Icons.Material.Outlined.ManageHistory" />
+            <StatCard Label="Completed" Value="@_summary.CompletedOrders.ToString("N0")" Description="Fulfilled service requests" Tone="success" Icon="@Icons.Material.Outlined.CheckCircle" />
+            <StatCard Label="Failed" Value="@_summary.FailedOrders.ToString("N0")" Description="Orders that could not be completed" Tone="danger" Icon="@Icons.Material.Outlined.ErrorOutline" />
+        </div>
+    }
 </PageSection>
 
-<PageSection Title="Recent orders" Description="Mock user-facing order summaries." MaxWidth="standard">
-    <div class="sb-order-grid">
-        @foreach (var order in MockData.Orders.Take(3))
+@if (!_loading && string.IsNullOrWhiteSpace(_errorMessage) && _summary is not null)
+{
+    <PageSection Title="Recent orders" Description="Newest service requests for your account." MaxWidth="standard">
+        @if (_summary.RecentOrders.Count == 0)
         {
-            <OrderCard Order="@order" />
+            <EmptyState Title="No orders yet"
+                        Description="Your service requests will appear here after checkout."
+                        Icon="@Icons.Material.Outlined.ReceiptLong">
+                <Actions>
+                    <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Apps">
+                        Browse catalog
+                    </MudButton>
+                </Actions>
+            </EmptyState>
         }
-    </div>
-</PageSection>
+        else
+        {
+            <div class="sb-order-grid">
+                @foreach (var order in _summary.RecentOrders)
+                {
+                    <article class="sb-order-card">
+                        <div class="sb-order-card-head">
+                            <strong>@order.OrderNumber</strong>
+                            <StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(order.Status)"
+                                         Tone="@UserOrderDisplay.OrderTone(order.Status)" />
+                        </div>
+                        <dl class="sb-card-facts">
+                            <div><dt>Service</dt><dd>@order.ServiceName</dd></div>
+                            <div><dt>Variant</dt><dd>@UserOrderDisplay.VariantLabel(order.PlanName, order.PlanDurationDays, order.PlanRegionCode)</dd></div>
+                            <div><dt>Payment</dt><dd><StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(order.PaymentStatus)" Tone="@UserOrderDisplay.PaymentTone(order.PaymentStatus)" /></dd></div>
+                            <div><dt>Total</dt><dd>@order.FinalPriceIrr.ToString("N0") IRR</dd></div>
+                        </dl>
+                        <MudButton Href="@($"/ui/orders/{order.OrderId}")" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Outlined.ArrowForward">
+                            Inspect order
+                        </MudButton>
+                    </article>
+                }
+            </div>
+        }
+    </PageSection>
+}
 
-<PageSection Title="Timeline" Description="Recent fulfillment activity from mock order data." MaxWidth="standard">
-    <Timeline Items="@MockData.Activity" />
-</PageSection>
+@code {
+    private bool _loading = true;
+    private string? _errorMessage;
+    private UserDashboardSummary? _summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await OrdersClient.GetDashboardAsync();
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _summary = result.Success ? result.Data : null;
+        _errorMessage = result.ErrorMessage;
+        _loading = false;
+    }
+}

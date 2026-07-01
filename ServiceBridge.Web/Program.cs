@@ -19,11 +19,13 @@ builder.Services.AddRazorPages(options =>
 // Blazor Web App foundation
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddMudServices();
 builder.Services.AddSingleton<ServiceBridgeMockDataProvider>();
 builder.Services.AddScoped<PublicCatalogClient>();
 builder.Services.AddScoped<CheckoutClient>();
 builder.Services.AddScoped<PaymentClient>();
+builder.Services.AddScoped<UserOrdersClient>();
 
 // Cookie Authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
