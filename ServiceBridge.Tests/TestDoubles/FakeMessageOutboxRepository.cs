@@ -1,12 +1,14 @@
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Domain.Entities;
+using ServiceBridge.Domain.Enums;
 
 namespace ServiceBridge.Tests.TestDoubles;
 
 internal class FakeMessageOutboxRepository : IMessageOutboxRepository
 {
     private readonly Dictionary<Guid, MessageOutbox> _messages = new();
+    private readonly List<MessageOutbox> _dueMessagesOverride = new();
 
     public int SaveChangesCallCount { get; private set; }
     public bool SaveChangesResult { get; set; } = true;
@@ -23,6 +25,28 @@ internal class FakeMessageOutboxRepository : IMessageOutboxRepository
         return Task.FromResult(_messages.GetValueOrDefault(id));
     }
 
+    public Task<IReadOnlyList<MessageOutbox>> GetDuePendingAsync(
+        DateTime dueAtUtc,
+        int batchSize,
+        CancellationToken cancellationToken = default)
+    {
+        if (_dueMessagesOverride.Count > 0)
+        {
+            return Task.FromResult<IReadOnlyList<MessageOutbox>>(
+                _dueMessagesOverride.Take(batchSize).ToArray());
+        }
+
+        var messages = _messages.Values
+            .Where(x => x.Status == MessageStatus.Pending)
+            .Where(x => x.NextAttemptAt == null || x.NextAttemptAt <= dueAtUtc)
+            .OrderBy(x => x.CreatedAt)
+            .ThenBy(x => x.Id)
+            .Take(batchSize)
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyList<MessageOutbox>>(messages);
+    }
+
     public Task<MessageOutboxDto?> GetByIdAsync(Guid id)
     {
         return Task.FromResult(
@@ -31,7 +55,7 @@ internal class FakeMessageOutboxRepository : IMessageOutboxRepository
                 : null);
     }
 
-    public Task<bool> SaveChangesAsync()
+    public Task<bool> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         SaveChangesCallCount++;
         return Task.FromResult(SaveChangesResult);
@@ -40,6 +64,11 @@ internal class FakeMessageOutboxRepository : IMessageOutboxRepository
     public void Seed(MessageOutbox message)
     {
         _messages[message.Id] = message;
+    }
+
+    public void SeedDueOverride(params MessageOutbox[] messages)
+    {
+        _dueMessagesOverride.AddRange(messages);
     }
 
     private static MessageOutboxDto Map(MessageOutbox message)

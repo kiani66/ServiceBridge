@@ -7,6 +7,7 @@ using ServiceBridge.Api.Middleware;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Orders;
 using ServiceBridge.Application.Services;
+using ServiceBridge.Application.Settings;
 using ServiceBridge.Infrastructure.Data;
 using ServiceBridge.Infrastructure.Repositories;
 using ServiceBridge.Infrastructure.Services;
@@ -20,6 +21,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddDataProtection();
+builder.Services.Configure<MessageOutboxSettings>(
+    builder.Configuration.GetSection(MessageOutboxSettings.SectionName));
 
 // EF Core with SQL Server
 builder.Services.AddDbContext<ServiceBridgeDbContext>(options =>
@@ -63,6 +66,9 @@ builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IMessageOutboxRepository, MessageOutboxRepository>();
 builder.Services.AddScoped<IMessageOutboxService, MessageOutboxService>();
+builder.Services.AddScoped<IMessageDeliveryProvider, NoOpMessageDeliveryProvider>();
+builder.Services.AddScoped<IMessageOutboxProcessor, MessageOutboxProcessor>();
+builder.Services.AddHostedService<MessageOutboxBackgroundService>();
 builder.Services.AddScoped<IAdminOrderQueryRepository, AdminOrderQueryRepository>();
 builder.Services.AddScoped<IAdminOrderCommandRepository, AdminOrderCommandRepository>();
 builder.Services.AddScoped<IAdminOrderQueryService, AdminOrderQueryService>();
