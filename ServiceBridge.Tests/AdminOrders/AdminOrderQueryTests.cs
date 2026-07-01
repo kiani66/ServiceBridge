@@ -29,6 +29,19 @@ public class AdminOrderQueryTests
         public int? LastPage { get; private set; }
         public int? LastPageSize { get; private set; }
 
+        public Task<PagedResultDto<AdminOrderListItemDto>> GetOrdersAsync(
+            int page,
+            int pageSize,
+            OrderStatus? status,
+            string? search)
+        {
+            return Task.FromResult(new PagedResultDto<AdminOrderListItemDto>
+            {
+                Page = page,
+                PageSize = pageSize
+            });
+        }
+
         public Task<PagedResultDto<AdminAssignableOrderDto>>
             GetPaidUnassignedOrdersAsync(int page, int pageSize)
         {
@@ -50,6 +63,26 @@ public class AdminOrderQueryTests
         public Task<AdminOrderDashboardSummaryDto> GetDashboardSummaryAsync()
         {
             return Task.FromResult(new AdminOrderDashboardSummaryDto());
+        }
+
+        public Task<AdminOrderDetailDto?> GetOrderDetailAsync(
+            Guid adminId,
+            Guid orderId)
+        {
+            return Task.FromResult<AdminOrderDetailDto?>(null);
+        }
+
+        public Task<PagedResultDto<AdminPaymentListItemDto>> GetPaymentsAsync(
+            int page,
+            int pageSize,
+            PaymentStatus? status,
+            string? search)
+        {
+            return Task.FromResult(new PagedResultDto<AdminPaymentListItemDto>
+            {
+                Page = page,
+                PageSize = pageSize
+            });
         }
     }
 }

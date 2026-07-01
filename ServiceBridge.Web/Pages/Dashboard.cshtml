@@ -23,7 +23,11 @@
 
     <div class="pb-stats-grid">
         <div class="pb-summary-stat">
-            <span>Pending payments</span>
+            <span>Total orders</span>
+            <strong>@Model.Summary.TotalOrderCount</strong>
+        </div>
+        <div class="pb-summary-stat">
+            <span>Pending payment</span>
             <strong>@Model.Summary.PendingPaymentOrderCount</strong>
         </div>
         <div class="pb-summary-stat">
@@ -31,8 +35,16 @@
             <strong>@Model.Summary.PaidOrderCount</strong>
         </div>
         <div class="pb-summary-stat">
-            <span>Unassigned</span>
-            <strong>@Model.Summary.UnassignedOrderCount</strong>
+            <span>Processing</span>
+            <strong>@Model.Summary.ProcessingOrderCount</strong>
+        </div>
+        <div class="pb-summary-stat">
+            <span>Completed</span>
+            <strong>@Model.Summary.CompletedOrderCount</strong>
+        </div>
+        <div class="pb-summary-stat">
+            <span>Failed</span>
+            <strong>@Model.Summary.FailedOrderCount</strong>
         </div>
     </div>
 </div>

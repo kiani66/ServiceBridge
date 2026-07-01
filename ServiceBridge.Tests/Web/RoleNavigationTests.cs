@@ -18,8 +18,8 @@ public class RoleNavigationTests
         "/ui/agent|/User/UserProfile")]
     [InlineData(
         AppConstants.Roles.Admin,
-        "Dashboard|Assignment Queue|Users|Catalog|Pricing|Profile",
-        "/Dashboard|/Admin/Orders/Index|/Admin/Users/Index|/Admin/Catalog/Index|/Admin/Pricing/Index|/User/UserProfile")]
+        "Admin Workspace|Assignment Queue|Users|Catalog|Pricing|Profile",
+        "/ui/admin|/Admin/Orders/Index|/Admin/Users/Index|/Admin/Catalog/Index|/Admin/Pricing/Index|/User/UserProfile")]
     public void GetItems_ReturnsOnlyItemsForRole(
         string role,
         string expectedText,
@@ -34,7 +34,7 @@ public class RoleNavigationTests
     [Theory]
     [InlineData(AppConstants.Roles.User, "/Orders/Index")]
     [InlineData(AppConstants.Roles.Agent, "/ui/agent")]
-    [InlineData(AppConstants.Roles.Admin, "/Dashboard")]
+    [InlineData(AppConstants.Roles.Admin, "/ui/admin")]
     public void GetLandingPage_ReturnsTaskWorkspace(
         string role,
         string expectedPage)
