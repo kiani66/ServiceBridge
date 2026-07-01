@@ -98,6 +98,35 @@ public class MessageOutbox : BaseEntity
         UpdatedAt = failedAtUtc;
     }
 
+    public void MarkPendingRetry(
+        string error,
+        DateTime failedAtUtc,
+        DateTime nextAttemptAtUtc)
+    {
+        if (Status != MessageStatus.Processing)
+        {
+            throw new InvalidOperationException(
+                "Only processing outbox messages can be queued for retry.");
+        }
+
+        if (string.IsNullOrWhiteSpace(error))
+        {
+            throw new InvalidOperationException("Outbox failure error is required.");
+        }
+
+        if (nextAttemptAtUtc <= failedAtUtc)
+        {
+            throw new InvalidOperationException(
+                "Next attempt must be after the failure time.");
+        }
+
+        Status = MessageStatus.Pending;
+        Error = error.Trim();
+        NextAttemptAt = nextAttemptAtUtc;
+        ProcessedAt = null;
+        UpdatedAt = failedAtUtc;
+    }
+
     public void Cancel(DateTime cancelledAtUtc, string? reason)
     {
         if (Status is MessageStatus.Sent or MessageStatus.Cancelled)

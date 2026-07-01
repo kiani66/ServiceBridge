@@ -26,6 +26,20 @@ public class MessageOutboxRepository : IMessageOutboxRepository
         return _context.MessageOutbox.FirstOrDefaultAsync(x => x.Id == id);
     }
 
+    public async Task<IReadOnlyList<MessageOutbox>> GetDuePendingAsync(
+        DateTime dueAtUtc,
+        int batchSize,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.MessageOutbox
+            .Where(x => x.Status == Domain.Enums.MessageStatus.Pending)
+            .Where(x => x.NextAttemptAt == null || x.NextAttemptAt <= dueAtUtc)
+            .OrderBy(x => x.CreatedAt)
+            .ThenBy(x => x.Id)
+            .Take(batchSize)
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<MessageOutboxDto?> GetByIdAsync(Guid id)
     {
         return _context.MessageOutbox
@@ -51,11 +65,11 @@ public class MessageOutboxRepository : IMessageOutboxRepository
             .FirstOrDefaultAsync();
     }
 
-    public async Task<bool> SaveChangesAsync()
+    public async Task<bool> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(cancellationToken);
             return true;
         }
         catch (DbUpdateConcurrencyException)
