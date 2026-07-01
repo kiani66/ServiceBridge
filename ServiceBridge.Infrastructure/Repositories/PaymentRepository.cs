@@ -22,11 +22,12 @@ public class PaymentRepository : IPaymentRepository
             .FirstOrDefaultAsync(x => x.Id == orderId);
     }
 
-    public Task<bool> PendingPaymentExistsAsync(Guid orderId)
+    public Task<Payment?> GetPendingPaymentForOrderAsync(Guid orderId)
     {
-        return _context.Payments.AnyAsync(x =>
-            x.OrderId == orderId &&
-            x.Status == PaymentStatus.Pending);
+        return _context.Payments
+            .FirstOrDefaultAsync(x =>
+                x.OrderId == orderId &&
+                x.Status == PaymentStatus.Pending);
     }
 
     public Task<bool> PaymentExistsAsync(Guid paymentId)

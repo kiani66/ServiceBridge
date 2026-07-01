@@ -120,21 +120,74 @@ public class PaymentServiceTests
     }
 
     [Fact]
-    public async Task InitiateAsync_WhenPendingPaymentExists_ReturnsConflict()
+    public async Task InitiateAsync_WhenPendingPaymentExists_ReturnsExistingPayment()
     {
         var userId = Guid.NewGuid();
         var order = CreateOrder(userId, OrderStatus.WaitingForPayment);
+        var existingPayment = CreatePayment(order);
         var service = CreateService(new FakePaymentRepository
         {
             Order = order,
-            HasPendingPayment = true
+            ExistingPendingPayment = existingPayment
         });
 
         var result = await service.InitiateAsync(userId, ValidRequest(order.Id));
 
-        Assert.False(result.Success);
-        Assert.Equal(409, result.StatusCode);
-        Assert.Equal(AppConstants.ErrorCodes.Conflict, result.ErrorCode);
+        Assert.True(result.Success);
+        Assert.Equal(200, result.StatusCode);
+        Assert.Equal(existingPayment.Id, result.Data!.PaymentId);
+    }
+
+    [Fact]
+    public async Task InitiateAsync_WhenPendingPaymentExists_DoesNotCreateDuplicatePayment()
+    {
+        var userId = Guid.NewGuid();
+        var order = CreateOrder(userId, OrderStatus.WaitingForPayment);
+        var existingPayment = CreatePayment(order);
+        var repository = new FakePaymentRepository
+        {
+            Order = order,
+            ExistingPendingPayment = existingPayment
+        };
+        var service = CreateService(repository);
+
+        var result = await service.InitiateAsync(userId, ValidRequest(order.Id));
+
+        Assert.True(result.Success);
+        Assert.Equal(existingPayment.Id, result.Data!.PaymentId);
+        Assert.Null(repository.AddedPayment);
+        Assert.Equal(0, repository.SaveCount);
+    }
+
+    [Fact]
+    public async Task ProcessMockAsync_WhenReusedPendingPaymentSucceeds_ConfirmsAndMarksOrderPaid()
+    {
+        var userId = Guid.NewGuid();
+        var order = CreateOrder(userId, OrderStatus.WaitingForPayment);
+        var existingPayment = CreatePayment(order);
+        var repository = new FakePaymentRepository
+        {
+            Order = order,
+            Payment = existingPayment,
+            ExistingPendingPayment = existingPayment
+        };
+        var service = CreateService(repository);
+
+        var initiated = await service.InitiateAsync(userId, ValidRequest(order.Id));
+        var processed = await service.ProcessMockAsync(
+            userId,
+            new MockPaymentRequest
+            {
+                PaymentId = initiated.Data!.PaymentId,
+                Succeed = true
+            });
+
+        Assert.True(initiated.Success);
+        Assert.True(processed.Success);
+        Assert.Equal(existingPayment.Id, processed.Data!.PaymentId);
+        Assert.Equal(PaymentStatus.Completed, existingPayment.Status);
+        Assert.Equal(OrderStatus.Paid, order.Status);
+        Assert.Equal(1, repository.SaveCount);
     }
 
     [Fact]
