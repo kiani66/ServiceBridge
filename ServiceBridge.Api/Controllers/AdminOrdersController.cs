@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Results;
+using ServiceBridge.Domain.Enums;
 using ServiceBridge.Shared.Constants;
 using ServiceBridge.Shared.Messages;
 
@@ -22,6 +23,20 @@ public class AdminOrdersController : BaseApiController
     {
         _queryService = queryService;
         _assignmentService = assignmentService;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetOrders(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = IAdminOrderQueryService.DefaultPageSize,
+        [FromQuery] OrderStatus? status = null,
+        [FromQuery] string? search = null)
+    {
+        return ToActionResult(await _queryService.GetOrdersAsync(
+            page,
+            pageSize,
+            status,
+            search));
     }
 
     [HttpGet("paid-unassigned")]
@@ -43,6 +58,38 @@ public class AdminOrdersController : BaseApiController
     public async Task<IActionResult> GetDashboardSummary()
     {
         return ToActionResult(await _queryService.GetDashboardSummaryAsync());
+    }
+
+    [HttpGet("payments")]
+    public async Task<IActionResult> GetPayments(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = IAdminOrderQueryService.DefaultPageSize,
+        [FromQuery] PaymentStatus? status = null,
+        [FromQuery] string? search = null)
+    {
+        return ToActionResult(await _queryService.GetPaymentsAsync(
+            page,
+            pageSize,
+            status,
+            search));
+    }
+
+    [HttpGet("{orderId:guid}")]
+    public async Task<IActionResult> GetOrderDetail(Guid orderId)
+    {
+        if (!Guid.TryParse(
+                User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var adminId))
+        {
+            return ToActionResult(ServiceResult.Fail(
+                AppMessages.UnauthorizedAccess,
+                AppConstants.ErrorCodes.Unauthorized,
+                401));
+        }
+
+        return ToActionResult(await _queryService.GetOrderDetailAsync(
+            adminId,
+            orderId));
     }
 
     [HttpPost("{orderId:guid}/assign")]

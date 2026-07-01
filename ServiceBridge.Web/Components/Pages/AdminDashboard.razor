@@ -1,104 +1,794 @@
 @page "/ui/admin"
-@inject ServiceBridgeMockDataProvider MockData
+@attribute [Authorize(Roles = AppConstants.Roles.Admin)]
+@inject AdminOrdersClient AdminOrdersClient
+@inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", null) })" />
 
 <PageHeader Eyebrow="Admin operations"
-            Title="Admin dashboard"
-            Description="Mock admin dashboard for catalog, pricing, assignment, payments, and order supervision.">
-    <Actions>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.AssignmentInd">
-            Assign selected
-        </MudButton>
-    </Actions>
-</PageHeader>
+            Title="Admin workspace"
+            Description="Operational order queues, assignment, payments, agents, and order detail review." />
 
 <PageSection MaxWidth="wide">
-    <div class="sb-stat-grid">
-        @foreach (var metric in MockData.DashboardMetrics)
-        {
-            <StatCard Label="@metric.Label" Value="@metric.Value" Description="@metric.Description" Tone="@metric.Tone" Icon="@metric.Icon" />
-        }
-    </div>
+    @if (_summaryLoading)
+    {
+        <LoadingState Text="Loading admin home" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_summaryError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_summaryError</MudAlert>
+    }
+    else if (_summary is not null)
+    {
+        <div class="sb-stat-grid">
+            <StatCard Label="Total orders" Value="@_summary.TotalOrderCount.ToString("N0")" Description="All orders in the workspace" Tone="neutral" Icon="@Icons.Material.Outlined.ReceiptLong" />
+            <StatCard Label="Pending payment" Value="@_summary.PendingPaymentOrderCount.ToString("N0")" Description="Waiting for customer payment" Tone="warning" Icon="@Icons.Material.Outlined.Payments" />
+            <StatCard Label="Paid orders" Value="@_summary.PaidOrderCount.ToString("N0")" Description="Ready for assignment" Tone="success" Icon="@Icons.Material.Outlined.Paid" />
+            <StatCard Label="Processing" Value="@_summary.ProcessingOrderCount.ToString("N0")" Description="Currently in fulfillment" Tone="info" Icon="@Icons.Material.Outlined.ManageHistory" />
+            <StatCard Label="Completed" Value="@_summary.CompletedOrderCount.ToString("N0")" Description="Fulfilled service requests" Tone="success" Icon="@Icons.Material.Outlined.CheckCircle" />
+            <StatCard Label="Failed" Value="@_summary.FailedOrderCount.ToString("N0")" Description="Orders that could not be completed" Tone="danger" Icon="@Icons.Material.Outlined.ErrorOutline" />
+        </div>
+    }
 </PageSection>
 
 <PageSection MaxWidth="wide">
-    <DataGridToolbar Title="Admin order queue"
-                     Description="Dense operational view for payment and assignment state."
-                     SearchPlaceholder="Search admin queue">
+    <DataGridToolbar Title="Orders management"
+                     Description="Newest orders are shown first."
+                     Search="@_orderSearch"
+                     SearchChanged="OnOrderSearchChanged"
+                     SearchPlaceholder="Search order, customer, service, variant">
         <Actions>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Download">
-                Export
-            </MudButton>
+            <MudSelect T="OrderStatus?"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_orderStatus"
+                       ValueChanged="OnOrderStatusChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="OrderStatus?" Value="null">All statuses</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.WaitingForPayment">Waiting for payment</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Paid">Paid</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Assigned">Assigned</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Processing">Processing</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Completed">Completed</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Failed">Failed</MudSelectItem>
+            </MudSelect>
         </Actions>
     </DataGridToolbar>
-    <MudTable Items="@MockData.Orders" Hover="true" Dense="true" Class="sb-data-table">
-        <HeaderContent>
-            <MudTh>Order</MudTh>
-            <MudTh>Payment</MudTh>
-            <MudTh>Status</MudTh>
-            <MudTh>Assignment</MudTh>
-            <MudTh>Credential</MudTh>
-            <MudTh>Action</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Order"><strong>@context.OrderNumber</strong><span class="sb-table-subtext">@context.ServiceName</span></MudTd>
-            <MudTd DataLabel="Payment">@context.PaymentStatus</MudTd>
-            <MudTd DataLabel="Status"><StatusBadge Text="@context.Status" Tone="@ToneFor(context.Status)" /></MudTd>
-            <MudTd DataLabel="Assignment">@context.Assignment</MudTd>
-            <MudTd DataLabel="Credential">
-                @if (context.RequiresCredentialReview)
+
+    @if (_ordersLoading)
+    {
+        <LoadingState Text="Loading orders" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_ordersError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_ordersError</MudAlert>
+    }
+    else if (_orders.Items.Count == 0)
+    {
+        <EmptyState Title="No orders found"
+                    Description="@(_orderStatus.HasValue || !string.IsNullOrWhiteSpace(_orderSearch) ? "No orders match the current filters." : "Orders will appear here after checkout.")"
+                    Icon="@Icons.Material.Outlined.ReceiptLong" />
+    }
+    else
+    {
+        <MudTable Items="@_orders.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Order number</MudTh>
+                <MudTh>Customer</MudTh>
+                <MudTh>Service</MudTh>
+                <MudTh>Variant</MudTh>
+                <MudTh>Payment status</MudTh>
+                <MudTh>Order status</MudTh>
+                <MudTh>Assigned agent</MudTh>
+                <MudTh>Created date</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Order number"><strong>@context.OrderNumber</strong></MudTd>
+                <MudTd DataLabel="Customer">@context.CustomerName<span class="sb-table-subtext">@context.CustomerEmail</span></MudTd>
+                <MudTd DataLabel="Service">@context.ServiceName</MudTd>
+                <MudTd DataLabel="Variant">@UserOrderDisplay.VariantLabel(context.PlanName, context.PlanDurationDays, context.PlanRegionCode)</MudTd>
+                <MudTd DataLabel="Payment status"><StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(context.PaymentStatus)" Tone="@UserOrderDisplay.PaymentTone(context.PaymentStatus)" /></MudTd>
+                <MudTd DataLabel="Order status"><StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(context.OrderStatus)" Tone="@UserOrderDisplay.OrderTone(context.OrderStatus)" /></MudTd>
+                <MudTd DataLabel="Assigned agent">@(context.AssignedAgentName ?? "-")</MudTd>
+                <MudTd DataLabel="Created date">@UserOrderDisplay.FormatDateTime(context.CreatedAt)</MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               EndIcon="@Icons.Material.Outlined.ArrowForward"
+                               OnClick="@(() => OpenOrderAsync(context.OrderId))">
+                        Details
+                    </MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+        @OrderPager
+    }
+</PageSection>
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Paid orders queue"
+                     Description="Paid, unassigned orders ready for agent assignment."
+                     ShowSearch="false" />
+
+    @if (!string.IsNullOrWhiteSpace(_assignmentMessage))
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">@_assignmentMessage</MudAlert>
+    }
+    @if (!string.IsNullOrWhiteSpace(_assignmentError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_assignmentError</MudAlert>
+    }
+
+    @if (_paidQueueLoading)
+    {
+        <LoadingState Text="Loading paid orders" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_paidQueueError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_paidQueueError</MudAlert>
+    }
+    else if (_paidQueue.Items.Count == 0)
+    {
+        <EmptyState Title="Paid queue is clear"
+                    Description="Paid orders will appear here until an admin assigns them."
+                    Icon="@Icons.Material.Outlined.AssignmentTurnedIn" />
+    }
+    else if (_agents.Count == 0)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+            No active agents are available. Activate an agent before assigning paid orders.
+        </MudAlert>
+    }
+    else
+    {
+        <MudTable Items="@_paidQueue.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Order</MudTh>
+                <MudTh>Customer</MudTh>
+                <MudTh>Service</MudTh>
+                <MudTh>Paid date</MudTh>
+                <MudTh>Amount</MudTh>
+                <MudTh>Agent assignment</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Order"><strong>@context.OrderNumber</strong></MudTd>
+                <MudTd DataLabel="Customer">@context.CustomerName</MudTd>
+                <MudTd DataLabel="Service">@context.ServiceName<span class="sb-table-subtext">@UserOrderDisplay.VariantLabel(context.PlanName, context.PlanDurationDays, context.PlanRegionCode)</span></MudTd>
+                <MudTd DataLabel="Paid date">@UserOrderDisplay.FormatDateTime(context.PaidAt)</MudTd>
+                <MudTd DataLabel="Amount">@context.FinalAmountIrr.ToString("N0") IRR</MudTd>
+                <MudTd DataLabel="Agent assignment">
+                    <div class="sb-grid-toolbar-actions">
+                        <MudSelect T="Guid?"
+                                   Label="Agent"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Value="@GetSelectedAgentId(context.OrderId)"
+                                   ValueChanged="@((Guid? value) => SetSelectedAgentId(context.OrderId, value))"
+                                   Class="sb-search-compact">
+                            <MudSelectItem T="Guid?" Value="null">Select agent</MudSelectItem>
+                            @foreach (var agent in _agents)
+                            {
+                                <MudSelectItem T="Guid?" Value="@agent.AgentId">
+                                    @agent.FullName (@agent.ActiveOrderCount active)
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudTextField T="string"
+                                      Label="Notes"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      MaxLength="1000"
+                                      Value="@GetAssignmentNotes(context.OrderId)"
+                                      ValueChanged="@((string? value) => SetAssignmentNotes(context.OrderId, value))" />
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Disabled="@_assignmentBusy"
+                                   StartIcon="@Icons.Material.Outlined.AssignmentInd"
+                                   OnClick="@(() => AssignAsync(context.OrderId))">
+                            Assign
+                        </MudButton>
+                    </div>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+        @PaidQueuePager
+    }
+</PageSection>
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Agent list"
+                     Description="Active agents and current workload."
+                     ShowSearch="false" />
+
+    @if (_agentsLoading)
+    {
+        <LoadingState Text="Loading agents" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_agentsError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_agentsError</MudAlert>
+    }
+    else if (_agents.Count == 0)
+    {
+        <EmptyState Title="No active agents"
+                    Description="Active agents will appear here after account setup."
+                    Icon="@Icons.Material.Outlined.SupportAgent" />
+    }
+    else
+    {
+        <MudTable Items="@_agents" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Agent</MudTh>
+                <MudTh>Email</MudTh>
+                <MudTh>Current workload</MudTh>
+                <MudTh>Assigned order count</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Agent"><strong>@context.FullName</strong></MudTd>
+                <MudTd DataLabel="Email">@context.Email</MudTd>
+                <MudTd DataLabel="Current workload">@context.ActiveOrderCount.ToString("N0")</MudTd>
+                <MudTd DataLabel="Assigned order count">@context.AssignedOrderCount.ToString("N0")</MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</PageSection>
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Payment list"
+                     Description="Newest payment records are shown first."
+                     Search="@_paymentSearch"
+                     SearchChanged="OnPaymentSearchChanged"
+                     SearchPlaceholder="Search order, customer, transaction">
+        <Actions>
+            <MudSelect T="PaymentStatus?"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_paymentStatus"
+                       ValueChanged="OnPaymentStatusChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="PaymentStatus?" Value="null">All statuses</MudSelectItem>
+                <MudSelectItem T="PaymentStatus?" Value="@PaymentStatus.Pending">Pending</MudSelectItem>
+                <MudSelectItem T="PaymentStatus?" Value="@PaymentStatus.Completed">Completed</MudSelectItem>
+                <MudSelectItem T="PaymentStatus?" Value="@PaymentStatus.Failed">Failed</MudSelectItem>
+                <MudSelectItem T="PaymentStatus?" Value="@PaymentStatus.Refunded">Refunded</MudSelectItem>
+            </MudSelect>
+        </Actions>
+    </DataGridToolbar>
+
+    @if (_paymentsLoading)
+    {
+        <LoadingState Text="Loading payments" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_paymentsError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_paymentsError</MudAlert>
+    }
+    else if (_payments.Items.Count == 0)
+    {
+        <EmptyState Title="No payments found"
+                    Description="@(_paymentStatus.HasValue || !string.IsNullOrWhiteSpace(_paymentSearch) ? "No payments match the current filters." : "Payments will appear here after checkout.")"
+                    Icon="@Icons.Material.Outlined.Payments" />
+    }
+    else
+    {
+        <MudTable Items="@_payments.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Payment status</MudTh>
+                <MudTh>Amount</MudTh>
+                <MudTh>Transaction number</MudTh>
+                <MudTh>Payment date</MudTh>
+                <MudTh>Order</MudTh>
+                <MudTh>Customer</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Payment status"><StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(context.Status)" Tone="@UserOrderDisplay.PaymentTone(context.Status)" /></MudTd>
+                <MudTd DataLabel="Amount">@context.AmountIrr.ToString("N0") IRR</MudTd>
+                <MudTd DataLabel="Transaction number">@(context.TransactionNumber ?? "-")</MudTd>
+                <MudTd DataLabel="Payment date">@UserOrderDisplay.FormatDateTime(context.PaymentDate)</MudTd>
+                <MudTd DataLabel="Order">
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               OnClick="@(() => OpenOrderAsync(context.OrderId))">
+                        @context.OrderNumber
+                    </MudButton>
+                </MudTd>
+                <MudTd DataLabel="Customer">@context.CustomerName</MudTd>
+            </RowTemplate>
+        </MudTable>
+        @PaymentPager
+    }
+</PageSection>
+
+<Drawer @bind-Open="_drawerOpen" Title="@(_selectedOrder?.OrderNumber ?? "Order details")" Eyebrow="Admin order review">
+    @if (_detailLoading)
+    {
+        <LoadingState Text="Loading order details" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_detailError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_detailError</MudAlert>
+    }
+    else if (_selectedOrder is not null)
+    {
+        <div class="sb-note-list">
+            <div class="sb-detail-panel">
+                <h2>Customer</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Name</dt><dd>@_selectedOrder.CustomerName</dd></div>
+                    <div><dt>Email</dt><dd>@_selectedOrder.CustomerEmail</dd></div>
+                    <div><dt>Status</dt><dd><StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(_selectedOrder.Status)" Tone="@UserOrderDisplay.OrderTone(_selectedOrder.Status)" /></dd></div>
+                    <div><dt>Assigned agent</dt><dd>@(_selectedOrder.AssignedAgentName ?? "-")</dd></div>
+                </dl>
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Service</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Service</dt><dd>@_selectedOrder.ServiceName</dd></div>
+                    <div><dt>Provider</dt><dd>@_selectedOrder.Provider</dd></div>
+                    <div><dt>Variant</dt><dd>@UserOrderDisplay.VariantLabel(_selectedOrder.PlanName, _selectedOrder.PlanDurationDays, _selectedOrder.PlanRegionCode)</dd></div>
+                    <div><dt>Fulfillment</dt><dd>@_selectedOrder.FulfillmentMode</dd></div>
+                </dl>
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Pricing snapshot</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Foreign price</dt><dd>@_selectedOrder.BasePriceUsdSnapshot.ToString("0.##") USD</dd></div>
+                    <div><dt>Exchange rate</dt><dd>@_selectedOrder.ExchangeRateSnapshot.ToString("N0") IRR</dd></div>
+                    <div><dt>Margin</dt><dd>@_selectedOrder.MarginSnapshot.ToString("0.##")%</dd></div>
+                    <div><dt>Final price</dt><dd>@_selectedOrder.FinalPriceIrr.ToString("N0") IRR</dd></div>
+                </dl>
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Payment summary</h2>
+                @if (_selectedOrder.Payments.Count == 0)
                 {
-                    <StatusBadge Text="Review" Tone="warning" Icon="@Icons.Material.Outlined.Security" />
+                    <p>No payment records are attached to this order.</p>
                 }
                 else
                 {
-                    <StatusBadge Text="Clear" Tone="success" />
+                    <dl class="sb-fact-list">
+                        @foreach (var payment in _selectedOrder.Payments)
+                        {
+                            <div><dt>@UserOrderDisplay.FormatDateTime(payment.CreatedAt)</dt><dd><StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(payment.Status)" Tone="@UserOrderDisplay.PaymentTone(payment.Status)" /> @payment.AmountIrr.ToString("N0") IRR / @(payment.GatewayReference ?? "-")</dd></div>
+                        }
+                    </dl>
                 }
-            </MudTd>
-            <MudTd DataLabel="Action">
-                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenDrawer(context))">Inspect</MudButton>
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
-</PageSection>
+            </div>
 
-<PageSection Title="Catalog coverage" Description="Prototype services by provider." MaxWidth="wide">
-    <div class="sb-service-grid">
-        @foreach (var service in MockData.Services)
-        {
-            <ServiceCard Service="@service" />
-        }
-    </div>
-</PageSection>
+            <div class="sb-detail-panel">
+                <h2>Credentials</h2>
+                @if (_selectedOrder.Credentials.Count == 0)
+                {
+                    <p>No credentials are attached to this order.</p>
+                }
+                else
+                {
+                    <dl class="sb-fact-list">
+                        @foreach (var field in _selectedOrder.Credentials.OrderBy(field => field.DisplayOrder))
+                        {
+                            <div>
+                                <dt>@field.FieldLabel</dt>
+                                <dd>@field.Value</dd>
+                            </div>
+                        }
+                    </dl>
+                }
+            </div>
 
-<Drawer @bind-Open="_drawerOpen" Title="@(_selectedOrder?.OrderNumber ?? "Order")" Eyebrow="Admin review">
-    @if (_selectedOrder is not null)
-    {
-        <OrderCard Order="@_selectedOrder" />
-        <LoadingSkeleton Lines="4" />
+            <div class="sb-detail-panel">
+                <h2>Timeline</h2>
+                @if (TimelineItems.Count == 0)
+                {
+                    <p>No timeline entries have been recorded.</p>
+                }
+                else
+                {
+                    <Timeline Items="@TimelineItems" />
+                }
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Agent notes</h2>
+                @if (_selectedOrder.Notes.Count == 0)
+                {
+                    <p>No agent notes have been added.</p>
+                }
+                else
+                {
+                    <div class="sb-note-list">
+                        @foreach (var note in _selectedOrder.Notes)
+                        {
+                            <article>
+                                <p>@note.Text</p>
+                                <span>@note.AuthorName - @UserOrderDisplay.FormatDateTime(note.CreatedAt) - @(note.IsVisibleToCustomer ? "Customer visible" : "Internal")</span>
+                            </article>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Assignment history</h2>
+                @if (_selectedOrder.Assignments.Count == 0)
+                {
+                    <p>No assignment history has been recorded.</p>
+                }
+                else
+                {
+                    <dl class="sb-fact-list">
+                        @foreach (var assignment in _selectedOrder.Assignments)
+                        {
+                            <div>
+                                <dt>@assignment.AgentName</dt>
+                                <dd>@UserOrderDisplay.FormatDateTime(assignment.AssignedAt) / @(assignment.AssignedByAdminName ?? "Admin") / @(assignment.Notes ?? "-")</dd>
+                            </div>
+                        }
+                    </dl>
+                }
+            </div>
+        </div>
     }
 </Drawer>
 
 @code {
-    private bool _drawerOpen;
-    private OrderModel? _selectedOrder;
+    private const int PageSize = 20;
 
-    private void OpenDrawer(OrderModel order)
+    private bool _summaryLoading = true;
+    private bool _ordersLoading = true;
+    private bool _paidQueueLoading = true;
+    private bool _agentsLoading = true;
+    private bool _paymentsLoading = true;
+    private bool _detailLoading;
+    private bool _drawerOpen;
+    private bool _assignmentBusy;
+    private string? _summaryError;
+    private string? _ordersError;
+    private string? _paidQueueError;
+    private string? _agentsError;
+    private string? _paymentsError;
+    private string? _detailError;
+    private string? _assignmentError;
+    private string? _assignmentMessage;
+    private string? _orderSearch;
+    private string? _paymentSearch;
+    private OrderStatus? _orderStatus;
+    private PaymentStatus? _paymentStatus;
+    private AdminOrderDashboardSummaryDto? _summary;
+    private PagedResultDto<AdminOrderListItemDto> _orders = new();
+    private PagedResultDto<AdminAssignableOrderDto> _paidQueue = new();
+    private PagedResultDto<AdminPaymentListItemDto> _payments = new();
+    private IReadOnlyCollection<AgentSummaryDto> _agents = Array.Empty<AgentSummaryDto>();
+    private AdminOrderDetailDto? _selectedOrder;
+    private readonly Dictionary<Guid, Guid?> _assignmentAgents = new();
+    private readonly Dictionary<Guid, string?> _assignmentNotes = new();
+
+    private IReadOnlyList<TimelineItem> TimelineItems =>
+        _selectedOrder is null
+            ? Array.Empty<TimelineItem>()
+            : UserOrderDisplay.TimelineItems(_selectedOrder.StatusHistory);
+
+    private RenderFragment OrderPager => builder => BuildPager(
+        builder,
+        _orders.Page,
+        _orders.TotalPages,
+        _ordersLoading,
+        PreviousOrdersPage,
+        NextOrdersPage);
+
+    private RenderFragment PaidQueuePager => builder => BuildPager(
+        builder,
+        _paidQueue.Page,
+        _paidQueue.TotalPages,
+        _paidQueueLoading,
+        PreviousPaidQueuePage,
+        NextPaidQueuePage);
+
+    private RenderFragment PaymentPager => builder => BuildPager(
+        builder,
+        _payments.Page,
+        _payments.TotalPages,
+        _paymentsLoading,
+        PreviousPaymentsPage,
+        NextPaymentsPage);
+
+    protected override async Task OnInitializedAsync()
     {
-        _selectedOrder = order;
-        _drawerOpen = true;
+        await LoadSummaryAsync();
+        await LoadOrdersAsync();
+        await LoadAgentsAsync();
+        await LoadPaidQueueAsync();
+        await LoadPaymentsAsync();
     }
 
-    private static string ToneFor(string status)
+    private async Task OnOrderSearchChanged(string? search)
     {
-        return status switch
+        _orderSearch = search;
+        await LoadOrdersAsync(1);
+    }
+
+    private async Task OnOrderStatusChanged(OrderStatus? status)
+    {
+        _orderStatus = status;
+        await LoadOrdersAsync(1);
+    }
+
+    private async Task OnPaymentSearchChanged(string? search)
+    {
+        _paymentSearch = search;
+        await LoadPaymentsAsync(1);
+    }
+
+    private async Task OnPaymentStatusChanged(PaymentStatus? status)
+    {
+        _paymentStatus = status;
+        await LoadPaymentsAsync(1);
+    }
+
+    private Task PreviousOrdersPage()
+    {
+        return LoadOrdersAsync(Math.Max(_orders.Page - 1, 1));
+    }
+
+    private Task NextOrdersPage()
+    {
+        return LoadOrdersAsync(_orders.Page + 1);
+    }
+
+    private Task PreviousPaidQueuePage()
+    {
+        return LoadPaidQueueAsync(Math.Max(_paidQueue.Page - 1, 1));
+    }
+
+    private Task NextPaidQueuePage()
+    {
+        return LoadPaidQueueAsync(_paidQueue.Page + 1);
+    }
+
+    private Task PreviousPaymentsPage()
+    {
+        return LoadPaymentsAsync(Math.Max(_payments.Page - 1, 1));
+    }
+
+    private Task NextPaymentsPage()
+    {
+        return LoadPaymentsAsync(_payments.Page + 1);
+    }
+
+    private async Task LoadSummaryAsync()
+    {
+        _summaryLoading = true;
+        _summaryError = null;
+
+        var result = await AdminOrdersClient.GetDashboardSummaryAsync();
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
         {
-            "Completed" => "success",
-            "Failed" => "danger",
-            "Pending" => "warning",
-            "Processing" => "info",
-            _ => "neutral"
-        };
+            return;
+        }
+
+        _summary = result.Success ? result.Data : null;
+        _summaryError = result.ErrorMessage;
+        _summaryLoading = false;
+    }
+
+    private async Task LoadOrdersAsync(int page = 1)
+    {
+        _ordersLoading = true;
+        _ordersError = null;
+
+        var result = await AdminOrdersClient.GetOrdersAsync(
+            page,
+            PageSize,
+            _orderStatus,
+            _orderSearch);
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        _orders = result.Success && result.Data is not null
+            ? result.Data
+            : new PagedResultDto<AdminOrderListItemDto>();
+        _ordersError = result.ErrorMessage;
+        _ordersLoading = false;
+    }
+
+    private async Task LoadPaidQueueAsync(int page = 1)
+    {
+        _paidQueueLoading = true;
+        _paidQueueError = null;
+
+        var result = await AdminOrdersClient.GetPaidUnassignedOrdersAsync(
+            page,
+            PageSize);
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        _paidQueue = result.Success && result.Data is not null
+            ? result.Data
+            : new PagedResultDto<AdminAssignableOrderDto>();
+        _paidQueueError = result.ErrorMessage;
+        _paidQueueLoading = false;
+    }
+
+    private async Task LoadAgentsAsync()
+    {
+        _agentsLoading = true;
+        _agentsError = null;
+
+        var result = await AdminOrdersClient.GetActiveAgentsAsync();
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        _agents = result.Success && result.Data is not null
+            ? result.Data
+            : Array.Empty<AgentSummaryDto>();
+        _agentsError = result.ErrorMessage;
+        _agentsLoading = false;
+    }
+
+    private async Task LoadPaymentsAsync(int page = 1)
+    {
+        _paymentsLoading = true;
+        _paymentsError = null;
+
+        var result = await AdminOrdersClient.GetPaymentsAsync(
+            page,
+            PageSize,
+            _paymentStatus,
+            _paymentSearch);
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        _payments = result.Success && result.Data is not null
+            ? result.Data
+            : new PagedResultDto<AdminPaymentListItemDto>();
+        _paymentsError = result.ErrorMessage;
+        _paymentsLoading = false;
+    }
+
+    private async Task OpenOrderAsync(Guid orderId)
+    {
+        _drawerOpen = true;
+        _detailLoading = true;
+        _detailError = null;
+        _selectedOrder = null;
+
+        var result = await AdminOrdersClient.GetOrderAsync(orderId);
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        _selectedOrder = result.Success ? result.Data : null;
+        _detailError = result.ErrorMessage;
+        _detailLoading = false;
+    }
+
+    private async Task AssignAsync(Guid orderId)
+    {
+        _assignmentError = null;
+        _assignmentMessage = null;
+
+        var agentId = GetSelectedAgentId(orderId);
+        if (!agentId.HasValue)
+        {
+            _assignmentError = "Select an agent before assigning the order.";
+            return;
+        }
+
+        _assignmentBusy = true;
+        var result = await AdminOrdersClient.AssignAsync(
+            orderId,
+            agentId.Value,
+            GetAssignmentNotes(orderId));
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _assignmentError = result.ErrorMessage ?? "Unable to assign the order.";
+            _assignmentBusy = false;
+            return;
+        }
+
+        _assignmentAgents.Remove(orderId);
+        _assignmentNotes.Remove(orderId);
+        _assignmentMessage = "Order assigned successfully.";
+
+        await LoadSummaryAsync();
+        await LoadOrdersAsync(_orders.Page);
+        await LoadAgentsAsync();
+        await LoadPaidQueueAsync(_paidQueue.Page);
+        _assignmentBusy = false;
+    }
+
+    private Guid? GetSelectedAgentId(Guid orderId)
+    {
+        return _assignmentAgents.TryGetValue(orderId, out var agentId)
+            ? agentId
+            : null;
+    }
+
+    private void SetSelectedAgentId(Guid orderId, Guid? agentId)
+    {
+        _assignmentAgents[orderId] = agentId;
+    }
+
+    private string? GetAssignmentNotes(Guid orderId)
+    {
+        return _assignmentNotes.TryGetValue(orderId, out var notes)
+            ? notes
+            : null;
+    }
+
+    private void SetAssignmentNotes(Guid orderId, string? notes)
+    {
+        _assignmentNotes[orderId] = notes;
+    }
+
+    private bool RedirectIfAuthRequired(bool requiresAuthentication)
+    {
+        if (!requiresAuthentication)
+        {
+            return false;
+        }
+
+        Navigation.NavigateTo("/Account/Login");
+        return true;
+    }
+
+    private void BuildPager(
+        RenderTreeBuilder builder,
+        int page,
+        int totalPages,
+        bool loading,
+        Func<Task> previous,
+        Func<Task> next)
+    {
+        if (totalPages <= 1)
+        {
+            return;
+        }
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "sb-pagination");
+        builder.OpenComponent<MudButton>(2);
+        builder.AddAttribute(3, "Variant", Variant.Outlined);
+        builder.AddAttribute(4, "Color", Color.Primary);
+        builder.AddAttribute(5, "Disabled", page <= 1 || loading);
+        builder.AddAttribute(6, "StartIcon", Icons.Material.Outlined.ChevronLeft);
+        builder.AddAttribute(7, "OnClick", EventCallback.Factory.Create(this, previous));
+        builder.AddAttribute(8, "ChildContent", (RenderFragment)(contentBuilder =>
+            contentBuilder.AddContent(0, "Previous")));
+        builder.CloseComponent();
+        builder.OpenElement(9, "span");
+        builder.AddContent(10, $"Page {page} of {totalPages}");
+        builder.CloseElement();
+        builder.OpenComponent<MudButton>(11);
+        builder.AddAttribute(12, "Variant", Variant.Outlined);
+        builder.AddAttribute(13, "Color", Color.Primary);
+        builder.AddAttribute(14, "Disabled", page >= totalPages || loading);
+        builder.AddAttribute(15, "EndIcon", Icons.Material.Outlined.ChevronRight);
+        builder.AddAttribute(16, "OnClick", EventCallback.Factory.Create(this, next));
+        builder.AddAttribute(17, "ChildContent", (RenderFragment)(contentBuilder =>
+            contentBuilder.AddContent(0, "Next")));
+        builder.CloseComponent();
+        builder.CloseElement();
     }
 }

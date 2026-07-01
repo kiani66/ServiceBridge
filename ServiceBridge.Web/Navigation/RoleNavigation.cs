@@ -16,7 +16,7 @@ public static class RoleNavigation
         {
             return
             [
-                new("Dashboard", "/Dashboard"),
+                new("Admin Workspace", "/ui/admin"),
                 new("Assignment Queue", "/Admin/Orders/Index"),
                 new("Users", "/Admin/Users/Index"),
                 new("Catalog", "/Admin/Catalog/Index"),
@@ -51,7 +51,7 @@ public static class RoleNavigation
     {
         if (user.IsInRole(AppConstants.Roles.Admin))
         {
-            return "/Dashboard";
+            return "/ui/admin";
         }
 
         if (user.IsInRole(AppConstants.Roles.Agent))
@@ -71,7 +71,7 @@ public static class RoleNavigation
     {
         return role switch
         {
-            AppConstants.Roles.Admin => "/Dashboard",
+            AppConstants.Roles.Admin => "/ui/admin",
             AppConstants.Roles.Agent => "/ui/agent",
             AppConstants.Roles.User => "/Orders/Index",
             _ => null

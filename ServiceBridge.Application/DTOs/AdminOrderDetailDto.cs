@@ -1,0 +1,36 @@
+namespace ServiceBridge.Application.DTOs;
+
+public class AdminOrderDetailDto
+{
+    public Guid OrderId { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public string CustomerName { get; set; } = string.Empty;
+    public string CustomerEmail { get; set; } = string.Empty;
+    public string ServiceName { get; set; } = string.Empty;
+    public string Provider { get; set; } = string.Empty;
+    public string FulfillmentMode { get; set; } = string.Empty;
+    public Guid? ServiceVariantId { get; set; }
+    public string? PlanName { get; set; }
+    public int? PlanDurationDays { get; set; }
+    public string? PlanRegionCode { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string? AssignedAgentName { get; set; }
+    public decimal BasePriceUsdSnapshot { get; set; }
+    public decimal ExchangeRateSnapshot { get; set; }
+    public decimal MarginSnapshot { get; set; }
+    public decimal FinalPriceIrr { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? PaidAt { get; set; }
+    public DateTime? AssignedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public IReadOnlyCollection<AgentOrderFieldDto> Credentials { get; set; } =
+        Array.Empty<AgentOrderFieldDto>();
+    public IReadOnlyCollection<PaymentHistoryDto> Payments { get; set; } =
+        Array.Empty<PaymentHistoryDto>();
+    public IReadOnlyCollection<OrderStatusHistoryDto> StatusHistory { get; set; } =
+        Array.Empty<OrderStatusHistoryDto>();
+    public IReadOnlyCollection<AgentOrderNoteDto> Notes { get; set; } =
+        Array.Empty<AgentOrderNoteDto>();
+    public IReadOnlyCollection<AdminOrderAssignmentHistoryDto> Assignments { get; set; } =
+        Array.Empty<AdminOrderAssignmentHistoryDto>();
+}

@@ -7,17 +7,44 @@
 </div>
 
 <MudNavMenu Class="sb-nav-menu">
-    <MudText Typo="Typo.caption" Class="sb-nav-group">Prototype</MudText>
-    <MudNavLink Href="/ui" Icon="@Icons.Material.Outlined.Home" Match="NavLinkMatch.All">Home</MudNavLink>
-    <MudNavLink Href="/ui/catalog" Icon="@Icons.Material.Outlined.Apps">Catalog</MudNavLink>
-    <MudNavLink Href="/ui/checkout/chatgpt-plus" Icon="@Icons.Material.Outlined.Lock">Checkout</MudNavLink>
-    <MudNavLink Href="/ui/dashboard" Icon="@Icons.Material.Outlined.SpaceDashboard">Dashboard</MudNavLink>
-    <MudNavLink Href="/ui/orders" Icon="@Icons.Material.Outlined.ReceiptLong">Orders</MudNavLink>
+    <AuthorizeView Roles="@AppConstants.Roles.User">
+        <Authorized>
+            <MudText Typo="Typo.caption" Class="sb-nav-group">Customer</MudText>
+            <MudNavLink Href="/ui" Icon="@Icons.Material.Outlined.Home" Match="NavLinkMatch.All">Home</MudNavLink>
+            <MudNavLink Href="/ui/catalog" Icon="@Icons.Material.Outlined.Apps">Catalog</MudNavLink>
+            <MudNavLink Href="/ui/checkout/chatgpt-plus" Icon="@Icons.Material.Outlined.Lock">Checkout</MudNavLink>
+            <MudNavLink Href="/ui/dashboard" Icon="@Icons.Material.Outlined.SpaceDashboard">Dashboard</MudNavLink>
+            <MudNavLink Href="/ui/orders" Icon="@Icons.Material.Outlined.ReceiptLong">Orders</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
 
-    <MudText Typo="Typo.caption" Class="sb-nav-group">Operations</MudText>
-    <MudNavLink Href="/ui/admin" Icon="@Icons.Material.Outlined.AdminPanelSettings">Admin</MudNavLink>
-    <MudNavLink Href="/ui/agent" Icon="@Icons.Material.Outlined.SupportAgent">Agent</MudNavLink>
-    <MudNavLink Href="/Services" Icon="@Icons.Material.Outlined.OpenInNew">Legacy catalog</MudNavLink>
+    <AuthorizeView Roles="@AppConstants.Roles.Admin">
+        <Authorized>
+            <MudText Typo="Typo.caption" Class="sb-nav-group">Admin operations</MudText>
+            <MudNavLink Href="/ui/admin" Icon="@Icons.Material.Outlined.AdminPanelSettings">Workspace</MudNavLink>
+            <MudNavLink Href="/Dashboard" Icon="@Icons.Material.Outlined.SpaceDashboard">Legacy dashboard</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="@AppConstants.Roles.Agent">
+        <Authorized>
+            <MudText Typo="Typo.caption" Class="sb-nav-group">Agent operations</MudText>
+            <MudNavLink Href="/ui/agent" Icon="@Icons.Material.Outlined.SupportAgent">Workspace</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView>
+        <Authorized>
+            <MudText Typo="Typo.caption" Class="sb-nav-group">Account</MudText>
+            <MudNavLink Href="/User/UserProfile" Icon="@Icons.Material.Outlined.Person">Profile</MudNavLink>
+        </Authorized>
+        <NotAuthorized>
+            <MudText Typo="Typo.caption" Class="sb-nav-group">Public</MudText>
+            <MudNavLink Href="/ui" Icon="@Icons.Material.Outlined.Home" Match="NavLinkMatch.All">Home</MudNavLink>
+            <MudNavLink Href="/ui/catalog" Icon="@Icons.Material.Outlined.Apps">Catalog</MudNavLink>
+            <MudNavLink Href="/Account/Login" Icon="@Icons.Material.Outlined.Login">Sign in</MudNavLink>
+        </NotAuthorized>
+    </AuthorizeView>
 </MudNavMenu>
 
 @code {

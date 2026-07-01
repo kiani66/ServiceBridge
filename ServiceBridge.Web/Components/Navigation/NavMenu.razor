@@ -7,20 +7,32 @@
 </div>
 
 <MudNavMenu Class="sb-nav-menu">
-    <MudNavLink Href="/ui" Icon="@Icons.Material.Outlined.Home" Match="NavLinkMatch.All">
-        Foundation
-    </MudNavLink>
-    <MudNavLink Href="/Services" Icon="@Icons.Material.Outlined.Storefront">
-        Public Catalog
-    </MudNavLink>
-    <MudNavLink Href="/Orders" Icon="@Icons.Material.Outlined.ReceiptLong">
-        Orders
-    </MudNavLink>
-    <MudNavLink Href="/Agent/Orders" Icon="@Icons.Material.Outlined.SupportAgent">
-        Agent
-    </MudNavLink>
-    <MudNavLink Href="/Admin/Orders" Icon="@Icons.Material.Outlined.Dashboard">
-        Admin
-    </MudNavLink>
+    <AuthorizeView Roles="@AppConstants.Roles.User">
+        <Authorized>
+            <MudNavLink Href="/ui" Icon="@Icons.Material.Outlined.Home" Match="NavLinkMatch.All">
+                Home
+            </MudNavLink>
+            <MudNavLink Href="/Services" Icon="@Icons.Material.Outlined.Storefront">
+                Public Catalog
+            </MudNavLink>
+            <MudNavLink Href="/Orders" Icon="@Icons.Material.Outlined.ReceiptLong">
+                Orders
+            </MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+    <AuthorizeView Roles="@AppConstants.Roles.Agent">
+        <Authorized>
+            <MudNavLink Href="/ui/agent" Icon="@Icons.Material.Outlined.SupportAgent">
+                Agent
+            </MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+    <AuthorizeView Roles="@AppConstants.Roles.Admin">
+        <Authorized>
+            <MudNavLink Href="/ui/admin" Icon="@Icons.Material.Outlined.AdminPanelSettings">
+                Admin
+            </MudNavLink>
+        </Authorized>
+    </AuthorizeView>
 </MudNavMenu>
 
