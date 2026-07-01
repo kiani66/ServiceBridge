@@ -349,6 +349,7 @@ public class PaymentServiceTests
     {
         return new PaymentService(
             repository,
-            gateway ?? new FakeMockPaymentGateway());
+            gateway ?? new FakeMockPaymentGateway(),
+            new FakeNotificationService());
     }
 }

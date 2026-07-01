@@ -59,6 +59,8 @@ builder.Services.AddScoped<IUserOrderCommandRepository, UserOrderCommandReposito
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IMockPaymentGateway, MockPaymentGateway>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IAdminOrderQueryRepository, AdminOrderQueryRepository>();
 builder.Services.AddScoped<IAdminOrderCommandRepository, AdminOrderCommandRepository>();
 builder.Services.AddScoped<IAdminOrderQueryService, AdminOrderQueryService>();

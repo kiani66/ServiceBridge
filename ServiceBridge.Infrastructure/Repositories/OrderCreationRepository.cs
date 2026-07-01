@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Domain.Entities;
@@ -73,6 +74,19 @@ public class OrderCreationRepository : IOrderCreationRepository
     public async Task AddOrderAsync(Order order)
     {
         await _context.Orders.AddAsync(order);
-        await _context.SaveChangesAsync();
+    }
+
+    public async Task<bool> SaveChangesAsync()
+    {
+        try
+        {
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            return false;
+        }
     }
 }

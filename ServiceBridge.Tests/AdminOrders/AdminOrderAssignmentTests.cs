@@ -17,7 +17,9 @@ public class AdminOrderAssignmentTests
         var agentId = Guid.NewGuid();
         var order = CreateOrder(OrderStatus.Paid);
         var repository = new FakeAdminOrderCommandRepository { Order = order };
-        var service = new AdminOrderAssignmentService(repository);
+        var service = new AdminOrderAssignmentService(
+            repository,
+            new FakeNotificationService());
 
         var result = await service.AssignAsync(
             adminId,
@@ -42,7 +44,8 @@ public class AdminOrderAssignmentTests
     public async Task AssignAsync_WhenOrderDoesNotExist_ReturnsNotFound()
     {
         var service = new AdminOrderAssignmentService(
-            new FakeAdminOrderCommandRepository());
+            new FakeAdminOrderCommandRepository(),
+            new FakeNotificationService());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -62,7 +65,9 @@ public class AdminOrderAssignmentTests
             Order = order,
             AgentExists = false
         };
-        var service = new AdminOrderAssignmentService(repository);
+        var service = new AdminOrderAssignmentService(
+            repository,
+            new FakeNotificationService());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -84,7 +89,9 @@ public class AdminOrderAssignmentTests
     {
         var order = CreateOrder(status);
         var repository = new FakeAdminOrderCommandRepository { Order = order };
-        var service = new AdminOrderAssignmentService(repository);
+        var service = new AdminOrderAssignmentService(
+            repository,
+            new FakeNotificationService());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -106,7 +113,9 @@ public class AdminOrderAssignmentTests
             Order = order,
             SaveSucceeds = false
         };
-        var service = new AdminOrderAssignmentService(repository);
+        var service = new AdminOrderAssignmentService(
+            repository,
+            new FakeNotificationService());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -124,7 +133,9 @@ public class AdminOrderAssignmentTests
         var order = CreateOrder(OrderStatus.Paid);
         order.AssignedAgentId = Guid.NewGuid();
         var repository = new FakeAdminOrderCommandRepository { Order = order };
-        var service = new AdminOrderAssignmentService(repository);
+        var service = new AdminOrderAssignmentService(
+            repository,
+            new FakeNotificationService());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),

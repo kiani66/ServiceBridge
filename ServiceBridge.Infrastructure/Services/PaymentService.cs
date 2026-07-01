@@ -12,13 +12,16 @@ public class PaymentService : IPaymentService
 {
     private readonly IPaymentRepository _repository;
     private readonly IMockPaymentGateway _mockPaymentGateway;
+    private readonly INotificationService _notificationService;
 
     public PaymentService(
         IPaymentRepository repository,
-        IMockPaymentGateway mockPaymentGateway)
+        IMockPaymentGateway mockPaymentGateway,
+        INotificationService notificationService)
     {
         _repository = repository;
         _mockPaymentGateway = mockPaymentGateway;
+        _notificationService = notificationService;
     }
 
     public async Task<ServiceResult<PaymentInitiatedResponse>> InitiateAsync(
@@ -214,6 +217,13 @@ public class PaymentService : IPaymentService
                     request.GatewayReference,
                     callbackPayload,
                     confirmedAtUtc);
+                await _notificationService.QueuePaymentCompletedAsync(
+                    payment.Order.UserId,
+                    payment.Order.Id,
+                    payment.Order.OrderNumber);
+                await _notificationService.QueueOrderReadyForAssignmentAsync(
+                    payment.Order.Id,
+                    payment.Order.OrderNumber);
             }
             else
             {

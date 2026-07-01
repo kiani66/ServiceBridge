@@ -11,4 +11,5 @@ public interface IOrderCreationRepository
         Guid? serviceId);
     Task<bool> OrderNumberExistsAsync(string orderNumber);
     Task AddOrderAsync(Order order);
+    Task<bool> SaveChangesAsync();
 }

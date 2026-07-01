@@ -28,6 +28,7 @@ builder.Services.AddScoped<PaymentClient>();
 builder.Services.AddScoped<UserOrdersClient>();
 builder.Services.AddScoped<AgentOrdersClient>();
 builder.Services.AddScoped<AdminOrdersClient>();
+builder.Services.AddScoped<NotificationsClient>();
 
 // Cookie Authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
