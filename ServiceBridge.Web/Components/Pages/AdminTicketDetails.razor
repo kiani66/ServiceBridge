@@ -1,0 +1,302 @@
+@page "/ui/admin/tickets/{TicketId:guid}"
+@attribute [Authorize(Roles = AppConstants.Roles.Admin)]
+@inject TicketsClient TicketsClient
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <PageHeader Eyebrow="Admin support" Title="Loading ticket" Description="Fetching support ticket details." />
+    <PageSection MaxWidth="standard">
+        <LoadingState Text="Loading ticket" />
+    </PageSection>
+}
+else if (_ticket is null)
+{
+    <EmptyState Title="Ticket unavailable"
+                Description="@(_error ?? "The requested ticket could not be loaded.")"
+                Icon="@Icons.Material.Outlined.SearchOff">
+        <Actions>
+            <MudButton Href="/ui/admin/tickets" Variant="Variant.Filled" Color="Color.Primary">Back to tickets</MudButton>
+        </Actions>
+    </EmptyState>
+}
+else
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Support tickets", "/ui/admin/tickets"), (_ticket.TicketNumber, null) })" />
+
+    <PageHeader Eyebrow="Admin support"
+                Title="@_ticket.TicketNumber"
+                Description="@_ticket.Subject">
+        <Actions>
+            <MudButton Href="/ui/admin/tickets" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.ArrowBack">
+                Tickets
+            </MudButton>
+        </Actions>
+    </PageHeader>
+
+    <PageSection MaxWidth="wide">
+        <div class="sb-detail-grid">
+            <div class="sb-detail-panel">
+                <h2>Ticket summary</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Status</dt><dd><StatusBadge Text="@TicketDisplay.StatusLabel(_ticket.Status)" Tone="@TicketDisplay.StatusTone(_ticket.Status)" /></dd></div>
+                    <div><dt>Priority</dt><dd><StatusBadge Text="@TicketDisplay.PriorityLabel(_ticket.Priority)" Tone="@TicketDisplay.PriorityTone(_ticket.Priority)" /></dd></div>
+                    <div><dt>Linked order</dt><dd>@(_ticket.OrderNumber ?? "-")</dd></div>
+                    <div><dt>Assigned agent</dt><dd>@(_ticket.AssignedAgentName ?? "-")</dd></div>
+                    <div><dt>Created</dt><dd>@TicketDisplay.FormatDateTime(_ticket.CreatedAt)</dd></div>
+                    <div><dt>First response</dt><dd>@TicketDisplay.FormatDateTime(_ticket.FirstResponseAt)</dd></div>
+                    <div><dt>Closed</dt><dd>@TicketDisplay.FormatDateTime(_ticket.ClosedAt)</dd></div>
+                </dl>
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Customer</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Name</dt><dd>@_ticket.CustomerName</dd></div>
+                    <div><dt>Email</dt><dd>@_ticket.CustomerEmail</dd></div>
+                </dl>
+            </div>
+        </div>
+    </PageSection>
+
+    <PageSection Title="Admin controls" Description="Update ticket priority or close the ticket." MaxWidth="wide">
+        @if (!string.IsNullOrWhiteSpace(_actionMessage))
+        {
+            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">@_actionMessage</MudAlert>
+        }
+        @if (!string.IsNullOrWhiteSpace(_actionError))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_actionError</MudAlert>
+        }
+
+        <div class="sb-grid-toolbar-actions">
+            <MudSelect T="TicketPriority"
+                       Label="Priority"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_selectedPriority"
+                       ValueChanged="OnSelectedPriorityChanged"
+                       Class="sb-search-compact">
+                @foreach (var priority in Enum.GetValues<TicketPriority>())
+                {
+                    <MudSelectItem T="TicketPriority" Value="@priority">
+                        @TicketDisplay.PriorityLabel(priority.ToString())
+                    </MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Disabled="@_actionBusy"
+                       StartIcon="@Icons.Material.Outlined.PriorityHigh"
+                       OnClick="UpdatePriorityAsync">
+                Update priority
+            </MudButton>
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Error"
+                       Disabled="@(_actionBusy || _ticket.Status == nameof(TicketStatus.Closed))"
+                       StartIcon="@Icons.Material.Outlined.Lock"
+                       OnClick="CloseAsync">
+                Close ticket
+            </MudButton>
+        </div>
+    </PageSection>
+
+    <PageSection Title="Conversation" Description="Public replies and internal support notes." MaxWidth="wide">
+        @if (_ticket.Messages.Count == 0)
+        {
+            <EmptyState Title="No messages yet"
+                        Description="Messages will appear after the ticket is created."
+                        Icon="@Icons.Material.Outlined.Forum" />
+        }
+        else
+        {
+            <div class="sb-note-list">
+                @foreach (var message in _ticket.Messages)
+                {
+                    <article class="sb-detail-panel">
+                        <p>@message.Body</p>
+                        <span>
+                            @message.AuthorName - @message.AuthorRole - @TicketDisplay.FormatDateTime(message.CreatedAt)
+                            @if (message.IsInternal)
+                            {
+                                <span> - Internal</span>
+                            }
+                        </span>
+                    </article>
+                }
+            </div>
+        }
+    </PageSection>
+
+    <PageSection Title="Reply" Description="Send a public reply or add an internal support note." MaxWidth="standard">
+        @if (!string.IsNullOrWhiteSpace(_replyError))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_replyError</MudAlert>
+        }
+
+        <div class="sb-detail-panel">
+            @if (_ticket.Status == nameof(TicketStatus.Closed))
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                    This ticket is closed and cannot receive new messages.
+                </MudAlert>
+            }
+            else
+            {
+                <MudCheckBox T="bool"
+                             Label="Internal note"
+                             Value="@_isInternal"
+                             ValueChanged="@((bool value) => _isInternal = value)" />
+                <MudTextField T="string"
+                              Label="@(_isInternal ? "Internal note" : "Public reply")"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Lines="5"
+                              MaxLength="4000"
+                              Value="@_replyBody"
+                              ValueChanged="@((string? value) => _replyBody = value ?? string.Empty)" />
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@_replying"
+                           StartIcon="@Icons.Material.Outlined.Send"
+                           OnClick="ReplyAsync">
+                    Add message
+                </MudButton>
+            }
+        </div>
+    </PageSection>
+}
+
+@code {
+    [Parameter] public Guid TicketId { get; set; }
+
+    private bool _loading = true;
+    private bool _replying;
+    private bool _actionBusy;
+    private bool _isInternal;
+    private string? _error;
+    private string? _replyError;
+    private string? _actionError;
+    private string? _actionMessage;
+    private string _replyBody = string.Empty;
+    private TicketPriority _selectedPriority = TicketPriority.Normal;
+    private TicketDetailDto? _ticket;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadTicketAsync();
+    }
+
+    private void OnSelectedPriorityChanged(TicketPriority priority)
+    {
+        _selectedPriority = priority;
+    }
+
+    private async Task LoadTicketAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        var result = await TicketsClient.GetAdminTicketAsync(TicketId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _ticket = result.Success ? result.Data : null;
+        _error = result.ErrorMessage;
+        if (_ticket is not null &&
+            Enum.TryParse<TicketPriority>(_ticket.Priority, out var priority))
+        {
+            _selectedPriority = priority;
+        }
+
+        _loading = false;
+    }
+
+    private async Task ReplyAsync()
+    {
+        _replying = true;
+        _replyError = null;
+        _actionMessage = null;
+
+        var result = await TicketsClient.AddAdminMessageAsync(
+            TicketId,
+            new CreateTicketMessageRequest
+            {
+                Body = _replyBody,
+                IsInternal = _isInternal
+            });
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _replyError = result.ErrorMessage ?? "Unable to add this message.";
+            _replying = false;
+            return;
+        }
+
+        _replyBody = string.Empty;
+        _isInternal = false;
+        _actionMessage = "Message added.";
+        await LoadTicketAsync();
+        _replying = false;
+    }
+
+    private async Task CloseAsync()
+    {
+        _actionBusy = true;
+        _actionError = null;
+        _actionMessage = null;
+
+        var result = await TicketsClient.CloseTicketAsync(TicketId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _actionError = result.ErrorMessage ?? "Unable to close this ticket.";
+            _actionBusy = false;
+            return;
+        }
+
+        _actionMessage = "Ticket closed.";
+        await LoadTicketAsync();
+        _actionBusy = false;
+    }
+
+    private async Task UpdatePriorityAsync()
+    {
+        _actionBusy = true;
+        _actionError = null;
+        _actionMessage = null;
+
+        var result = await TicketsClient.UpdatePriorityAsync(
+            TicketId,
+            _selectedPriority);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _actionError = result.ErrorMessage ?? "Unable to update priority.";
+            _actionBusy = false;
+            return;
+        }
+
+        _actionMessage = "Priority updated.";
+        await LoadTicketAsync();
+        _actionBusy = false;
+    }
+}

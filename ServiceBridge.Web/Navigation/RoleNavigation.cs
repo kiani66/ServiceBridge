@@ -21,6 +21,7 @@ public static class RoleNavigation
                 new("Pricing", "/Admin/Pricing"),
                 new("Users", "/Admin/Users"),
                 new("Orders", "/Admin/Orders"),
+                new("Support", "/ui/admin/tickets"),
                 new("Profile", "/ui/profile")
             ];
         }
@@ -42,6 +43,7 @@ public static class RoleNavigation
             [
                 new("Services", "/ui/catalog"),
                 new("Orders", "/ui/orders"),
+                new("Support", "/ui/tickets"),
                 new("Profile", "/ui/profile")
             ];
         }

@@ -10,16 +10,16 @@ public class RoleNavigationTests
     [Theory]
     [InlineData(
         AppConstants.Roles.User,
-        "Services|Orders|Profile",
-        "/ui/catalog|/ui/orders|/ui/profile")]
+        "Services|Orders|Support|Profile",
+        "/ui/catalog|/ui/orders|/ui/tickets|/ui/profile")]
     [InlineData(
         AppConstants.Roles.Agent,
         "Assigned Orders|Processing|Completed|Profile",
         "/Agent/Orders?status=Assigned|/Agent/Orders?status=Processing|/Agent/Orders?status=Completed|/ui/profile")]
     [InlineData(
         AppConstants.Roles.Admin,
-        "Dashboard|Catalog|Pricing|Users|Orders|Profile",
-        "/ui/admin|/Admin/Catalog|/Admin/Pricing|/Admin/Users|/Admin/Orders|/ui/profile")]
+        "Dashboard|Catalog|Pricing|Users|Orders|Support|Profile",
+        "/ui/admin|/Admin/Catalog|/Admin/Pricing|/Admin/Users|/Admin/Orders|/ui/admin/tickets|/ui/profile")]
     public void GetItems_ReturnsOnlyItemsForRole(
         string role,
         string expectedText,
