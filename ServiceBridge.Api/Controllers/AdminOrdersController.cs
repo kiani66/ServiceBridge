@@ -1,12 +1,9 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
-using ServiceBridge.Application.Results;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Shared.Constants;
-using ServiceBridge.Shared.Messages;
 
 namespace ServiceBridge.Api.Controllers;
 
@@ -90,14 +87,9 @@ public class AdminOrdersController : BaseApiController
     [HttpGet("{orderId:guid}")]
     public async Task<IActionResult> GetOrderDetail(Guid orderId)
     {
-        if (!Guid.TryParse(
-                User.FindFirstValue(ClaimTypes.NameIdentifier),
-                out var adminId))
+        if (!TryGetUserId(out var adminId))
         {
-            return ToActionResult(ServiceResult.Fail(
-                AppMessages.UnauthorizedAccess,
-                AppConstants.ErrorCodes.Unauthorized,
-                401));
+            return UnauthorizedServiceResult();
         }
 
         return ToActionResult(await _queryService.GetOrderDetailAsync(
@@ -110,14 +102,9 @@ public class AdminOrdersController : BaseApiController
         Guid orderId,
         [FromBody] AssignOrderRequest request)
     {
-        if (!Guid.TryParse(
-                User.FindFirstValue(ClaimTypes.NameIdentifier),
-                out var adminId))
+        if (!TryGetUserId(out var adminId))
         {
-            return ToActionResult(ServiceResult.Fail(
-                AppMessages.UnauthorizedAccess,
-                AppConstants.ErrorCodes.Unauthorized,
-                401));
+            return UnauthorizedServiceResult();
         }
 
         var result = await _assignmentService.AssignAsync(

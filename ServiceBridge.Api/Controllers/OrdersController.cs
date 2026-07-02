@@ -1,13 +1,10 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Orders;
-using ServiceBridge.Application.Results;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Shared.Constants;
-using ServiceBridge.Shared.Messages;
 
 namespace ServiceBridge.Api.Controllers;
 
@@ -40,7 +37,7 @@ public class OrdersController : BaseApiController
     {
         if (!TryGetUserId(out var userId))
         {
-            return UnauthorizedResult();
+            return UnauthorizedServiceResult();
         }
 
         var result = await _orderCreationService.CreateAsync(userId, request);
@@ -55,7 +52,7 @@ public class OrdersController : BaseApiController
     {
         if (!TryGetUserId(out var userId))
         {
-            return UnauthorizedResult();
+            return UnauthorizedServiceResult();
         }
 
         var result = await _getMyOrdersQuery.ExecuteAsync(
@@ -71,7 +68,7 @@ public class OrdersController : BaseApiController
     {
         if (!TryGetUserId(out var userId))
         {
-            return UnauthorizedResult();
+            return UnauthorizedServiceResult();
         }
 
         var result = await _getMyOrderDetailQuery.ExecuteAsync(userId, orderId);
@@ -83,7 +80,7 @@ public class OrdersController : BaseApiController
     {
         if (!TryGetUserId(out var userId))
         {
-            return UnauthorizedResult();
+            return UnauthorizedServiceResult();
         }
 
         var result = await _cancelMyOrderCommand.ExecuteAsync(userId, orderId);
@@ -97,7 +94,7 @@ public class OrdersController : BaseApiController
     {
         if (!TryGetUserId(out var userId))
         {
-            return UnauthorizedResult();
+            return UnauthorizedServiceResult();
         }
 
         var result = await _respondToCustomerActionCommand.ExecuteAsync(
@@ -105,20 +102,5 @@ public class OrdersController : BaseApiController
             orderId,
             request);
         return ToActionResult(result);
-    }
-
-    private bool TryGetUserId(out Guid userId)
-    {
-        return Guid.TryParse(
-            User.FindFirstValue(ClaimTypes.NameIdentifier),
-            out userId);
-    }
-
-    private IActionResult UnauthorizedResult()
-    {
-        return ToActionResult(ServiceResult.Fail(
-            AppMessages.UnauthorizedAccess,
-            AppConstants.ErrorCodes.Unauthorized,
-            401));
     }
 }

@@ -182,22 +182,39 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
 
     public async Task<AdminOrderDashboardSummaryDto> GetDashboardSummaryAsync()
     {
+        var countsByStatus = await _context.Orders
+            .AsNoTracking()
+            .GroupBy(x => x.Status)
+            .Select(group => new
+            {
+                Status = group.Key,
+                Count = group.Count()
+            })
+            .ToDictionaryAsync(x => x.Status, x => x.Count);
+
+        var unassignedOrderCount = await _context.Orders
+            .AsNoTracking()
+            .CountAsync(x =>
+                x.Status == OrderStatus.Paid &&
+                x.AssignedAgentId == null);
+
         return new AdminOrderDashboardSummaryDto
         {
-            TotalOrderCount = await _context.Orders.CountAsync(),
-            PendingPaymentOrderCount = await _context.Orders.CountAsync(
-                x => x.Status == OrderStatus.WaitingForPayment),
-            PaidOrderCount = await _context.Orders.CountAsync(
-                x => x.Status == OrderStatus.Paid),
-            ProcessingOrderCount = await _context.Orders.CountAsync(
-                x => x.Status == OrderStatus.Processing),
-            CompletedOrderCount = await _context.Orders.CountAsync(
-                x => x.Status == OrderStatus.Completed),
-            FailedOrderCount = await _context.Orders.CountAsync(
-                x => x.Status == OrderStatus.Failed),
-            UnassignedOrderCount = await _context.Orders.CountAsync(
-                x => x.Status == OrderStatus.Paid && x.AssignedAgentId == null)
+            TotalOrderCount = countsByStatus.Values.Sum(),
+            PendingPaymentOrderCount = GetCount(OrderStatus.WaitingForPayment),
+            PaidOrderCount = GetCount(OrderStatus.Paid),
+            ProcessingOrderCount = GetCount(OrderStatus.Processing),
+            CompletedOrderCount = GetCount(OrderStatus.Completed),
+            FailedOrderCount = GetCount(OrderStatus.Failed),
+            UnassignedOrderCount = unassignedOrderCount
         };
+
+        int GetCount(OrderStatus status)
+        {
+            return countsByStatus.TryGetValue(status, out var count)
+                ? count
+                : 0;
+        }
     }
 
     public async Task<AdminOrderDetailDto?> GetOrderDetailAsync(

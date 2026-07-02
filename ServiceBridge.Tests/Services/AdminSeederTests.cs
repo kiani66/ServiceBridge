@@ -49,6 +49,27 @@ public class AdminSeederTests
     }
 
     [Fact]
+    public async Task SeedAsync_WhenAdminExists_DoesNotRequireSeedConfiguration()
+    {
+        var repository = new FakeUserRepository();
+        repository.Seed(new User
+        {
+            Email = "existing@servicebridge.test",
+            FullName = "Existing Admin",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Existing123!"),
+            Role = UserRole.Admin,
+            IsActive = true
+        });
+        var configuration = new ConfigurationBuilder().Build();
+        var seeder = CreateSeeder(repository, configuration);
+
+        await seeder.SeedAsync();
+
+        Assert.Single(repository.Users);
+        Assert.Equal(0, repository.AddCallCount);
+    }
+
+    [Fact]
     public async Task SeedAsync_WhenConfigurationIsMissing_ThrowsClearException()
     {
         var repository = new FakeUserRepository();

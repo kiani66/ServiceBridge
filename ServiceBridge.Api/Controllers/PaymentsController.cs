@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -26,14 +25,9 @@ public class PaymentsController : BaseApiController
     public async Task<IActionResult> Initiate(
         [FromBody] InitiatePaymentRequest request)
     {
-        if (!Guid.TryParse(
-                User.FindFirstValue(ClaimTypes.NameIdentifier),
-                out var userId))
+        if (!TryGetUserId(out var userId))
         {
-            return ToActionResult(ServiceResult.Fail(
-                AppMessages.UnauthorizedAccess,
-                AppConstants.ErrorCodes.Unauthorized,
-                401));
+            return UnauthorizedServiceResult();
         }
 
         var result = await _paymentService.InitiateAsync(userId, request);
@@ -45,14 +39,9 @@ public class PaymentsController : BaseApiController
     public async Task<IActionResult> Mock(
         [FromBody] MockPaymentRequest request)
     {
-        if (!Guid.TryParse(
-                User.FindFirstValue(ClaimTypes.NameIdentifier),
-                out var userId))
+        if (!TryGetUserId(out var userId))
         {
-            return ToActionResult(ServiceResult.Fail(
-                AppMessages.UnauthorizedAccess,
-                AppConstants.ErrorCodes.Unauthorized,
-                401));
+            return UnauthorizedServiceResult();
         }
 
         var result = await _paymentService.ProcessMockAsync(userId, request);

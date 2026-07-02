@@ -1,11 +1,7 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
-using ServiceBridge.Application.Results;
-using ServiceBridge.Shared.Constants;
-using ServiceBridge.Shared.Messages;
 
 namespace ServiceBridge.Api.Controllers;
 
@@ -44,14 +40,9 @@ public class AuthController : BaseApiController
     public async Task<IActionResult> ChangePassword(
         [FromBody] AuthChangePasswordRequest request)
     {
-        if (!Guid.TryParse(
-                User.FindFirstValue(ClaimTypes.NameIdentifier),
-                out var userId))
+        if (!TryGetUserId(out var userId))
         {
-            return ToActionResult(ServiceResult<bool>.Fail(
-                AppMessages.UnauthorizedAccess,
-                AppConstants.ErrorCodes.Unauthorized,
-                401));
+            return UnauthorizedServiceResult();
         }
 
         var result = await _passwordResetService.ChangeOwnPasswordAsync(

@@ -25,12 +25,12 @@ public class AdminSeeder : IAdminSeeder
 
     public async Task SeedAsync()
     {
-        var settings = GetRequiredSettings();
-
         if (await _userRepository.AdminExistsAsync())
         {
             return;
         }
+
+        var settings = GetRequiredSettings();
 
         await _userRepository.AddAsync(new User
         {
