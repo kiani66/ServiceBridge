@@ -1,0 +1,173 @@
+@page "/ui/tickets/{TicketId:guid}"
+@attribute [Authorize(Roles = AppConstants.Roles.User)]
+@inject TicketsClient TicketsClient
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <PageHeader Eyebrow="Support" Title="Loading ticket" Description="Fetching the ticket conversation." />
+    <PageSection MaxWidth="standard">
+        <LoadingState Text="Loading ticket" />
+    </PageSection>
+}
+else if (_ticket is null)
+{
+    <EmptyState Title="Ticket unavailable"
+                Description="@(_error ?? "The requested ticket could not be loaded.")"
+                Icon="@Icons.Material.Outlined.SearchOff">
+        <Actions>
+            <MudButton Href="/ui/tickets" Variant="Variant.Filled" Color="Color.Primary">Back to tickets</MudButton>
+        </Actions>
+    </EmptyState>
+}
+else
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Support tickets", "/ui/tickets"), (_ticket.TicketNumber, null) })" />
+
+    <PageHeader Eyebrow="Support ticket"
+                Title="@_ticket.TicketNumber"
+                Description="@_ticket.Subject">
+        <Actions>
+            <MudButton Href="/ui/tickets" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.ArrowBack">
+                Tickets
+            </MudButton>
+        </Actions>
+    </PageHeader>
+
+    <PageSection MaxWidth="wide">
+        <div class="sb-detail-grid">
+            <div class="sb-detail-panel">
+                <h2>Ticket summary</h2>
+                <dl class="sb-fact-list">
+                    <div><dt>Status</dt><dd><StatusBadge Text="@TicketDisplay.StatusLabel(_ticket.Status)" Tone="@TicketDisplay.StatusTone(_ticket.Status)" /></dd></div>
+                    <div><dt>Priority</dt><dd><StatusBadge Text="@TicketDisplay.PriorityLabel(_ticket.Priority)" Tone="@TicketDisplay.PriorityTone(_ticket.Priority)" /></dd></div>
+                    <div><dt>Linked order</dt><dd>@(_ticket.OrderNumber ?? "-")</dd></div>
+                    <div><dt>Created</dt><dd>@TicketDisplay.FormatDateTime(_ticket.CreatedAt)</dd></div>
+                    <div><dt>Last activity</dt><dd>@TicketDisplay.FormatDateTime(_ticket.LastActivityAt)</dd></div>
+                    <div><dt>Closed</dt><dd>@TicketDisplay.FormatDateTime(_ticket.ClosedAt)</dd></div>
+                </dl>
+            </div>
+        </div>
+    </PageSection>
+
+    <PageSection Title="Conversation" Description="Customer-visible support messages." MaxWidth="wide">
+        @if (_ticket.Messages.Count == 0)
+        {
+            <EmptyState Title="No messages yet"
+                        Description="Messages will appear after the ticket is created."
+                        Icon="@Icons.Material.Outlined.Forum" />
+        }
+        else
+        {
+            <div class="sb-note-list">
+                @foreach (var message in _ticket.Messages)
+                {
+                    <article class="sb-detail-panel">
+                        <p>@message.Body</p>
+                        <span>@message.AuthorName - @message.AuthorRole - @TicketDisplay.FormatDateTime(message.CreatedAt)</span>
+                    </article>
+                }
+            </div>
+        }
+    </PageSection>
+
+    <PageSection Title="Reply" Description="Add a message for support." MaxWidth="standard">
+        @if (!string.IsNullOrWhiteSpace(_replyError))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_replyError</MudAlert>
+        }
+        @if (!string.IsNullOrWhiteSpace(_replyMessage))
+        {
+            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">@_replyMessage</MudAlert>
+        }
+
+        <div class="sb-detail-panel">
+            @if (TicketDisplay.IsClosed(_ticket.Status))
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                    This ticket is closed and cannot receive customer replies.
+                </MudAlert>
+            }
+            else
+            {
+                <MudTextField T="string"
+                              Label="Message"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Lines="5"
+                              MaxLength="4000"
+                              Value="@_replyBody"
+                              ValueChanged="@((string? value) => _replyBody = value ?? string.Empty)" />
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@_replying"
+                           StartIcon="@Icons.Material.Outlined.Send"
+                           OnClick="ReplyAsync">
+                    Send reply
+                </MudButton>
+            }
+        </div>
+    </PageSection>
+}
+
+@code {
+    [Parameter] public Guid TicketId { get; set; }
+
+    private bool _loading = true;
+    private bool _replying;
+    private string? _error;
+    private string? _replyError;
+    private string? _replyMessage;
+    private string _replyBody = string.Empty;
+    private TicketDetailDto? _ticket;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadTicketAsync();
+    }
+
+    private async Task LoadTicketAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        var result = await TicketsClient.GetMyTicketAsync(TicketId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _ticket = result.Success ? result.Data : null;
+        _error = result.ErrorMessage;
+        _loading = false;
+    }
+
+    private async Task ReplyAsync()
+    {
+        _replying = true;
+        _replyError = null;
+        _replyMessage = null;
+
+        var result = await TicketsClient.AddMyMessageAsync(
+            TicketId,
+            new CreateTicketMessageRequest { Body = _replyBody, IsInternal = false });
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _replyError = result.ErrorMessage ?? "Unable to submit this reply.";
+            _replying = false;
+            return;
+        }
+
+        _replyBody = string.Empty;
+        _replyMessage = "Reply submitted.";
+        await LoadTicketAsync();
+        _replying = false;
+    }
+}

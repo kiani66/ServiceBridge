@@ -29,6 +29,9 @@ public class ServiceBridgeDbContext : DbContext
     public DbSet<OrderCredentialAccessLog> OrderCredentialAccessLogs { get; set; } = null!;
     public DbSet<Notification> Notifications { get; set; } = null!;
     public DbSet<MessageOutbox> MessageOutbox { get; set; } = null!;
+    public DbSet<Ticket> Tickets { get; set; } = null!;
+    public DbSet<TicketMessage> TicketMessages { get; set; } = null!;
+    public DbSet<TicketCategory> TicketCategories { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

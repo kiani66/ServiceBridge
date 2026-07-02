@@ -243,10 +243,7 @@
             await NotificationsClient.MarkAsReadAsync(notification.Id);
         }
 
-        Navigation.NavigateTo(
-            _orderRoute == "/ui/orders"
-                ? $"/ui/orders/{notification.RelatedEntityId}"
-                : _orderRoute);
+        Navigation.NavigateTo(RelatedRoute(notification));
     }
 
     private static string TypeLabel(string type)
@@ -260,8 +257,25 @@
             nameof(NotificationType.OrderCompleted) => "Order completed",
             nameof(NotificationType.OrderFailed) => "Order failed",
             nameof(NotificationType.CustomerActionRequested) => "Action requested",
+            nameof(NotificationType.TicketCreated) => "Ticket created",
+            nameof(NotificationType.TicketReplied) => "Ticket replied",
+            nameof(NotificationType.TicketClosed) => "Ticket closed",
             _ => type
         };
+    }
+
+    private string RelatedRoute(NotificationDto notification)
+    {
+        if (notification.RelatedEntityType == "Ticket")
+        {
+            return _orderRoute == "/ui/admin"
+                ? $"/ui/admin/tickets/{notification.RelatedEntityId}"
+                : $"/ui/tickets/{notification.RelatedEntityId}";
+        }
+
+        return _orderRoute == "/ui/orders"
+            ? $"/ui/orders/{notification.RelatedEntityId}"
+            : _orderRoute;
     }
 
     private static string FormatDateTime(DateTime value)

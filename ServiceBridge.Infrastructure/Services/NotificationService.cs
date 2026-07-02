@@ -10,6 +10,7 @@ namespace ServiceBridge.Infrastructure.Services;
 public class NotificationService : INotificationService
 {
     private const string OrderEntityType = "Order";
+    private const string TicketEntityType = "Ticket";
 
     private readonly INotificationRepository _repository;
 
@@ -201,6 +202,50 @@ public class NotificationService : INotificationService
             orderId);
     }
 
+    public async Task QueueTicketCreatedForAdminsAsync(
+        Guid ticketId,
+        string ticketNumber)
+    {
+        var adminIds = await _repository.GetActiveAdminUserIdsAsync();
+        var notifications = adminIds.Select(adminId => Create(
+            adminId,
+            NotificationType.TicketCreated,
+            "New support ticket",
+            $"Ticket {ticketNumber} was created and is waiting for support.",
+            TicketEntityType,
+            ticketId));
+
+        await _repository.AddRangeAsync(notifications);
+    }
+
+    public Task QueueTicketPublicReplyForUserAsync(
+        Guid userId,
+        Guid ticketId,
+        string ticketNumber)
+    {
+        return QueueAsync(
+            userId,
+            NotificationType.TicketReplied,
+            "Support replied",
+            $"Support replied to ticket {ticketNumber}.",
+            TicketEntityType,
+            ticketId);
+    }
+
+    public Task QueueTicketClosedForUserAsync(
+        Guid userId,
+        Guid ticketId,
+        string ticketNumber)
+    {
+        return QueueAsync(
+            userId,
+            NotificationType.TicketClosed,
+            "Ticket closed",
+            $"Ticket {ticketNumber} was closed by support.",
+            TicketEntityType,
+            ticketId);
+    }
+
     private Task QueueAsync(
         Guid userId,
         NotificationType type,
@@ -208,7 +253,24 @@ public class NotificationService : INotificationService
         string message,
         Guid orderId)
     {
-        return _repository.AddAsync(Create(userId, type, title, message, orderId));
+        return QueueAsync(userId, type, title, message, OrderEntityType, orderId);
+    }
+
+    private Task QueueAsync(
+        Guid userId,
+        NotificationType type,
+        string title,
+        string message,
+        string relatedEntityType,
+        Guid relatedEntityId)
+    {
+        return _repository.AddAsync(Create(
+            userId,
+            type,
+            title,
+            message,
+            relatedEntityType,
+            relatedEntityId));
     }
 
     private static Notification Create(
@@ -218,6 +280,17 @@ public class NotificationService : INotificationService
         string message,
         Guid orderId)
     {
+        return Create(userId, type, title, message, OrderEntityType, orderId);
+    }
+
+    private static Notification Create(
+        Guid userId,
+        NotificationType type,
+        string title,
+        string message,
+        string relatedEntityType,
+        Guid relatedEntityId)
+    {
         return new Notification
         {
             Id = Guid.NewGuid(),
@@ -225,8 +298,8 @@ public class NotificationService : INotificationService
             Title = title,
             Message = message,
             Type = type,
-            RelatedEntityType = OrderEntityType,
-            RelatedEntityId = orderId,
+            RelatedEntityType = relatedEntityType,
+            RelatedEntityId = relatedEntityId,
             CreatedAt = DateTime.UtcNow
         };
     }

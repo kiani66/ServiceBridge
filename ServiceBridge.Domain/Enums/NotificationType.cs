@@ -8,5 +8,8 @@ public enum NotificationType
     AgentStartedProcessing = 4,
     OrderCompleted = 5,
     OrderFailed = 6,
-    CustomerActionRequested = 7
+    CustomerActionRequested = 7,
+    TicketCreated = 8,
+    TicketReplied = 9,
+    TicketClosed = 10
 }

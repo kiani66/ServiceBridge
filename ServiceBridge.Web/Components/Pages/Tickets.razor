@@ -1,0 +1,171 @@
+@page "/ui/tickets"
+@attribute [Authorize(Roles = AppConstants.Roles.User)]
+@inject TicketsClient TicketsClient
+@inject NavigationManager Navigation
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Support tickets", null) })" />
+
+<PageHeader Eyebrow="Support"
+            Title="Support tickets"
+            Description="Create and track support requests for your service orders.">
+    <Actions>
+        <MudButton Href="/ui/tickets/new"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.AddComment">
+            New ticket
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Tickets"
+                     Description="Newest ticket activity is shown first."
+                     ShowSearch="false">
+        <Actions>
+            <MudSelect T="TicketStatus?"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_status"
+                       ValueChanged="OnStatusChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="TicketStatus?" Value="null">All statuses</MudSelectItem>
+                @foreach (var status in Enum.GetValues<TicketStatus>())
+                {
+                    <MudSelectItem T="TicketStatus?" Value="@status">
+                        @TicketDisplay.StatusLabel(status.ToString())
+                    </MudSelectItem>
+                }
+            </MudSelect>
+        </Actions>
+    </DataGridToolbar>
+
+    @if (_loading)
+    {
+        <LoadingState Text="Loading tickets" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+    }
+    else if (_tickets.Items.Count == 0)
+    {
+        <EmptyState Title="No support tickets found"
+                    Description="@(_status.HasValue ? "No tickets match the selected status." : "Support requests will appear here after you create a ticket.")"
+                    Icon="@Icons.Material.Outlined.SupportAgent">
+            <Actions>
+                <MudButton Href="/ui/tickets/new" Variant="Variant.Filled" Color="Color.Primary">
+                    Create ticket
+                </MudButton>
+            </Actions>
+        </EmptyState>
+    }
+    else
+    {
+        <MudTable Items="@_tickets.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Ticket</MudTh>
+                <MudTh>Subject</MudTh>
+                <MudTh>Linked order</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Priority</MudTh>
+                <MudTh>Last activity</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Ticket"><strong>@context.TicketNumber</strong></MudTd>
+                <MudTd DataLabel="Subject">@context.Subject</MudTd>
+                <MudTd DataLabel="Linked order">@(context.OrderNumber ?? "-")</MudTd>
+                <MudTd DataLabel="Status">
+                    <StatusBadge Text="@TicketDisplay.StatusLabel(context.Status)"
+                                 Tone="@TicketDisplay.StatusTone(context.Status)" />
+                </MudTd>
+                <MudTd DataLabel="Priority">
+                    <StatusBadge Text="@TicketDisplay.PriorityLabel(context.Priority)"
+                                 Tone="@TicketDisplay.PriorityTone(context.Priority)" />
+                </MudTd>
+                <MudTd DataLabel="Last activity">@TicketDisplay.FormatDateTime(context.LastActivityAt)</MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudButton Href="@($"/ui/tickets/{context.TicketId}")"
+                               Variant="Variant.Text"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               EndIcon="@Icons.Material.Outlined.ArrowForward">
+                        Details
+                    </MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        @if (_tickets.TotalPages > 1)
+        {
+            <div class="sb-pagination">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_tickets.Page <= 1 || _loading)"
+                           StartIcon="@Icons.Material.Outlined.ChevronLeft"
+                           OnClick="PreviousPage">
+                    Previous
+                </MudButton>
+                <span>Page @_tickets.Page of @_tickets.TotalPages</span>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_tickets.Page >= _tickets.TotalPages || _loading)"
+                           EndIcon="@Icons.Material.Outlined.ChevronRight"
+                           OnClick="NextPage">
+                    Next
+                </MudButton>
+            </div>
+        }
+    }
+</PageSection>
+
+@code {
+    private const int PageSize = 20;
+
+    private bool _loading = true;
+    private string? _error;
+    private TicketStatus? _status;
+    private PagedResultDto<TicketListItemDto> _tickets = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTicketsAsync();
+    }
+
+    private async Task OnStatusChanged(TicketStatus? status)
+    {
+        _status = status;
+        await LoadTicketsAsync();
+    }
+
+    private Task PreviousPage()
+    {
+        return LoadTicketsAsync(Math.Max(_tickets.Page - 1, 1));
+    }
+
+    private Task NextPage()
+    {
+        return LoadTicketsAsync(_tickets.Page + 1);
+    }
+
+    private async Task LoadTicketsAsync(int page = 1)
+    {
+        _loading = true;
+        _error = null;
+
+        var result = await TicketsClient.GetMyTicketsAsync(page, PageSize, _status);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _tickets = result.Success && result.Data is not null
+            ? result.Data
+            : new PagedResultDto<TicketListItemDto>();
+        _error = result.ErrorMessage;
+        _loading = false;
+    }
+}

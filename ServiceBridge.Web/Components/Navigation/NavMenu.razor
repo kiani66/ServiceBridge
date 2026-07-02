@@ -18,6 +18,9 @@
             <MudNavLink Href="/Orders" Icon="@Icons.Material.Outlined.ReceiptLong">
                 Orders
             </MudNavLink>
+            <MudNavLink Href="/ui/tickets" Icon="@Icons.Material.Outlined.ContactSupport">
+                Support
+            </MudNavLink>
         </Authorized>
     </AuthorizeView>
     <AuthorizeView Roles="@AppConstants.Roles.Agent">
@@ -31,6 +34,9 @@
         <Authorized>
             <MudNavLink Href="/ui/admin" Icon="@Icons.Material.Outlined.AdminPanelSettings">
                 Admin
+            </MudNavLink>
+            <MudNavLink Href="/ui/admin/tickets" Icon="@Icons.Material.Outlined.ContactSupport">
+                Support
             </MudNavLink>
         </Authorized>
     </AuthorizeView>

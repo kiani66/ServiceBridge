@@ -1,0 +1,139 @@
+@page "/ui/tickets/new"
+@attribute [Authorize(Roles = AppConstants.Roles.User)]
+@inject TicketsClient TicketsClient
+@inject UserOrdersClient OrdersClient
+@inject NavigationManager Navigation
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Support tickets", "/ui/tickets"), ("New", null) })" />
+
+<PageHeader Eyebrow="Support"
+            Title="Create support ticket"
+            Description="Send a service support request to the operations team." />
+
+<PageSection MaxWidth="standard">
+    <div class="sb-detail-panel">
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+        }
+
+        <MudForm @ref="_form">
+            <MudTextField T="string"
+                          Label="Subject"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          MaxLength="200"
+                          Required="true"
+                          Value="@_request.Subject"
+                          ValueChanged="@((string? value) => _request.Subject = value ?? string.Empty)" />
+            @FieldError(nameof(CreateTicketRequest.Subject))
+
+            <MudSelect T="Guid?"
+                       Label="Linked order"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="@_request.OrderId"
+                       ValueChanged="@((Guid? value) => _request.OrderId = value)">
+                <MudSelectItem T="Guid?" Value="null">No linked order</MudSelectItem>
+                @foreach (var order in _orders)
+                {
+                    <MudSelectItem T="Guid?" Value="@order.OrderId">
+                        @order.OrderNumber - @order.ServiceName
+                    </MudSelectItem>
+                }
+            </MudSelect>
+            @FieldError(nameof(CreateTicketRequest.OrderId))
+
+            <MudTextField T="string"
+                          Label="Message"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Lines="7"
+                          MaxLength="4000"
+                          Required="true"
+                          Value="@_request.Body"
+                          ValueChanged="@((string? value) => _request.Body = value ?? string.Empty)" />
+            @FieldError(nameof(CreateTicketRequest.Body))
+
+            <div class="sb-grid-toolbar-actions">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@_saving"
+                           StartIcon="@Icons.Material.Outlined.Send"
+                           OnClick="CreateAsync">
+                    Create ticket
+                </MudButton>
+                <MudButton Href="/ui/tickets"
+                           Variant="Variant.Text"
+                           Color="Color.Primary"
+                           Disabled="@_saving">
+                    Cancel
+                </MudButton>
+            </div>
+        </MudForm>
+    </div>
+</PageSection>
+
+@code {
+    private MudForm? _form;
+    private bool _saving;
+    private string? _error;
+    private CreateTicketRequest _request = new();
+    private IReadOnlyCollection<UserOrderListItemDto> _orders =
+        Array.Empty<UserOrderListItemDto>();
+    private Dictionary<string, string[]>? _validationErrors;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ordersResult = await OrdersClient.GetOrdersAsync(1, 100, null);
+        if (ordersResult.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _orders = ordersResult.Success && ordersResult.Data is not null
+            ? ordersResult.Data.Items
+            : Array.Empty<UserOrderListItemDto>();
+    }
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        _error = null;
+        _validationErrors = null;
+
+        var result = await TicketsClient.CreateTicketAsync(_request);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success || result.Data is null)
+        {
+            _error = result.ErrorMessage ?? "Unable to create this ticket.";
+            _validationErrors = result.ValidationErrors;
+            _saving = false;
+            return;
+        }
+
+        Navigation.NavigateTo($"/ui/tickets/{result.Data.TicketId}");
+    }
+
+    private RenderFragment FieldError(string fieldName) => builder =>
+    {
+        if (_validationErrors == null ||
+            !_validationErrors.TryGetValue(fieldName, out var messages))
+        {
+            return;
+        }
+
+        builder.OpenComponent<MudText>(0);
+        builder.AddAttribute(1, "Color", Color.Error);
+        builder.AddAttribute(2, "Typo", Typo.caption);
+        builder.AddAttribute(3, "ChildContent", (RenderFragment)(content =>
+            content.AddContent(0, string.Join(" ", messages))));
+        builder.CloseComponent();
+    };
+}
