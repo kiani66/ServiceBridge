@@ -9,4 +9,7 @@ public class InitiatePaymentRequest
 
     [Required(ErrorMessage = "Payment ID is required.")]
     public Guid PaymentId { get; set; }
+
+    [MaxLength(50, ErrorMessage = "Gateway provider cannot exceed 50 characters.")]
+    public string? GatewayProvider { get; set; }
 }

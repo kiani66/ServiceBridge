@@ -1,8 +1,12 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ServiceBridge.Application.DTOs;
+using ServiceBridge.Application.Payments;
+using ServiceBridge.Application.Results;
 using ServiceBridge.Domain.Entities;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Infrastructure.Services;
 using ServiceBridge.Shared.Constants;
+using ServiceBridge.Shared.Messages;
 using ServiceBridge.Tests.TestDoubles;
 using Xunit;
 
@@ -16,7 +20,8 @@ public class PaymentServiceTests
         var userId = Guid.NewGuid();
         var order = CreateOrder(userId, OrderStatus.WaitingForPayment);
         var repository = new FakePaymentRepository { Order = order };
-        var service = CreateService(repository);
+        var gateway = new FakePaymentGateway();
+        var service = CreateService(repository, paymentGateway: gateway);
         var paymentId = Guid.NewGuid();
 
         var result = await service.InitiateAsync(userId, new InitiatePaymentRequest
@@ -36,6 +41,43 @@ public class PaymentServiceTests
         Assert.Equal(order.ExchangeRateSnapshot, payment.ExchangeRateSnapshot);
         Assert.Equal(PaymentEventType.Initiated, Assert.Single(payment.Events).EventType);
         Assert.Equal(1, repository.SaveCount);
+        Assert.Equal(1, gateway.InitiateCallCount);
+        Assert.Equal(order.FinalAmountIrr, gateway.LastInitiateRequest!.AmountIRR);
+        Assert.Equal("Mock", result.Data!.Provider);
+        Assert.Equal("Mock-init", result.Data.GatewayReference);
+    }
+
+    [Fact]
+    public async Task InitiateAsync_WhenSelectedGatewayIsDisabled_ReturnsControlledFailure()
+    {
+        var userId = Guid.NewGuid();
+        var order = CreateOrder(userId, OrderStatus.WaitingForPayment);
+        var repository = new FakePaymentRepository { Order = order };
+        var gateway = new FakePaymentGateway
+        {
+            Provider = PaymentGatewayProviders.Real,
+            InitiateResult = ServiceResult<PaymentGatewayInitiateResult>.Fail(
+                AppMessages.PaymentGatewayDisabled,
+                AppConstants.ErrorCodes.PaymentGatewayUnavailable,
+                503)
+        };
+        var service = CreateService(repository, paymentGateway: gateway);
+
+        var result = await service.InitiateAsync(
+            userId,
+            new InitiatePaymentRequest
+            {
+                OrderId = order.Id,
+                PaymentId = Guid.NewGuid(),
+                GatewayProvider = PaymentGatewayProviders.Real
+            });
+
+        Assert.False(result.Success);
+        Assert.Equal(503, result.StatusCode);
+        Assert.Equal(AppConstants.ErrorCodes.PaymentGatewayUnavailable, result.ErrorCode);
+        Assert.Null(repository.AddedPayment);
+        Assert.Equal(0, repository.SaveCount);
+        Assert.Equal(1, gateway.InitiateCallCount);
     }
 
     [Fact]
@@ -121,6 +163,29 @@ public class PaymentServiceTests
     }
 
     [Fact]
+    public async Task ConfirmAsync_WhenPayloadContainsSecrets_RedactsStoredPayload()
+    {
+        var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
+        var payment = CreatePayment(order);
+        var repository = new FakePaymentRepository { Payment = payment };
+        var service = CreateService(repository);
+
+        var result = await service.ConfirmAsync(
+            new ConfirmPaymentRequest
+            {
+                PaymentId = payment.Id,
+                GatewayReference = "gateway-123"
+            },
+            """{"paymentId":"test","apiKey":"secret-value","nested":{"token":"token-value"}}""");
+
+        Assert.True(result.Success);
+        var paymentEvent = Assert.Single(payment.Events);
+        Assert.Contains("[REDACTED]", paymentEvent.Payload);
+        Assert.DoesNotContain("secret-value", paymentEvent.Payload);
+        Assert.DoesNotContain("token-value", paymentEvent.Payload);
+    }
+
+    [Fact]
     public async Task ConfirmAsync_WhenPaymentDoesNotExist_ReturnsNotFound()
     {
         var service = CreateService(new FakePaymentRepository());
@@ -197,6 +262,43 @@ public class PaymentServiceTests
         Assert.Equal(
             PaymentEventType.Failed,
             Assert.Single(payment.Events).EventType);
+    }
+
+    [Fact]
+    public async Task VerifyCallbackAsync_WhenGatewayVerificationFails_RecordsFailureSafely()
+    {
+        var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
+        var payment = CreatePayment(order);
+        var repository = new FakePaymentRepository { Payment = payment };
+        var rawPayload =
+            $$"""{"paymentId":"{{payment.Id}}","apiKey":"secret-value","status":"Rejected"}""";
+        var gateway = new FakePaymentGateway
+        {
+            VerifyResult = new PaymentGatewayVerifyResult
+            {
+                Provider = PaymentGatewayProviders.Mock,
+                IsVerified = false,
+                PaymentId = payment.Id,
+                Status = PaymentStatus.Failed,
+                FailureReason = "Gateway signature verification failed.",
+                SanitizedPayload = PaymentGatewayPayloadSanitizer.Sanitize(rawPayload)
+            }
+        };
+        var service = CreateService(repository, paymentGateway: gateway);
+
+        var result = await service.VerifyCallbackAsync(
+            new PaymentGatewayVerifyRequest(
+                PaymentGatewayProviders.Mock,
+                rawPayload));
+
+        Assert.True(result.Success);
+        Assert.Equal(PaymentStatus.Failed, payment.Status);
+        Assert.Equal(OrderStatus.WaitingForPayment, order.Status);
+        var paymentEvent = Assert.Single(payment.Events);
+        Assert.Equal(PaymentEventType.Failed, paymentEvent.EventType);
+        Assert.Contains("[REDACTED]", paymentEvent.Payload);
+        Assert.DoesNotContain("secret-value", paymentEvent.Payload);
+        Assert.Equal(1, gateway.VerifyCallCount);
     }
 
     [Fact]
@@ -345,11 +447,16 @@ public class PaymentServiceTests
 
     private static PaymentService CreateService(
         FakePaymentRepository repository,
-        FakeMockPaymentGateway? gateway = null)
+        FakeMockPaymentGateway? gateway = null,
+        FakePaymentGateway? paymentGateway = null)
     {
+        paymentGateway ??= new FakePaymentGateway();
+
         return new PaymentService(
             repository,
             gateway ?? new FakeMockPaymentGateway(),
-            new FakeNotificationService());
+            new FakePaymentGatewayFactory([paymentGateway]),
+            new FakeNotificationService(),
+            NullLogger<PaymentService>.Instance);
     }
 }
