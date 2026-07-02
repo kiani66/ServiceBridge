@@ -28,6 +28,21 @@ builder.Services.AddSingleton<IValidateOptions<EmailOptions>, EmailOptionsValida
 builder.Services.AddOptions<EmailOptions>()
     .Bind(builder.Configuration.GetSection(EmailOptions.SectionName))
     .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<SmsOptions>, SmsOptionsValidator>();
+builder.Services.AddOptions<SmsOptions>()
+    .Bind(builder.Configuration.GetSection(SmsOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddHttpClient<HttpSmsProvider>((serviceProvider, client) =>
+{
+    var options = serviceProvider.GetRequiredService<IOptions<SmsOptions>>().Value;
+    client.Timeout = Timeout.InfiniteTimeSpan;
+
+    if (!string.IsNullOrWhiteSpace(options.BaseUrl) &&
+        Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUri))
+    {
+        client.BaseAddress = new Uri(baseUri.GetLeftPart(UriPartial.Authority));
+    }
+});
 
 var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(defaultConnectionString))
@@ -80,7 +95,10 @@ builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IMessageOutboxRepository, MessageOutboxRepository>();
 builder.Services.AddScoped<IMessageOutboxService, MessageOutboxService>();
-builder.Services.AddScoped<IMessageDeliveryProvider, SmtpEmailProvider>();
+builder.Services.AddScoped<SmtpEmailProvider>();
+builder.Services.AddScoped<ISmsProvider>(serviceProvider =>
+    serviceProvider.GetRequiredService<HttpSmsProvider>());
+builder.Services.AddScoped<IMessageDeliveryProvider, MessageDeliveryProvider>();
 builder.Services.AddScoped<IMessageOutboxProcessor, MessageOutboxProcessor>();
 builder.Services.AddHostedService<MessageOutboxBackgroundService>();
 builder.Services.AddScoped<ITicketRepository, TicketRepository>();
