@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
 using ServiceBridge.Api.Middleware;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Orders;
@@ -23,6 +24,10 @@ builder.Services.AddControllers();
 builder.Services.AddDataProtection();
 builder.Services.Configure<MessageOutboxSettings>(
     builder.Configuration.GetSection(MessageOutboxSettings.SectionName));
+builder.Services.AddSingleton<IValidateOptions<EmailOptions>, EmailOptionsValidator>();
+builder.Services.AddOptions<EmailOptions>()
+    .Bind(builder.Configuration.GetSection(EmailOptions.SectionName))
+    .ValidateOnStart();
 
 var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(defaultConnectionString))
@@ -75,7 +80,7 @@ builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IMessageOutboxRepository, MessageOutboxRepository>();
 builder.Services.AddScoped<IMessageOutboxService, MessageOutboxService>();
-builder.Services.AddScoped<IMessageDeliveryProvider, NoOpMessageDeliveryProvider>();
+builder.Services.AddScoped<IMessageDeliveryProvider, SmtpEmailProvider>();
 builder.Services.AddScoped<IMessageOutboxProcessor, MessageOutboxProcessor>();
 builder.Services.AddHostedService<MessageOutboxBackgroundService>();
 builder.Services.AddScoped<IAdminOrderQueryRepository, AdminOrderQueryRepository>();
