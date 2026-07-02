@@ -1,12 +1,10 @@
-using System.ComponentModel.DataAnnotations;
-using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
+using ServiceBridge.Application.Payments;
 using ServiceBridge.Application.Results;
 using ServiceBridge.Shared.Constants;
-using ServiceBridge.Shared.Messages;
 
 namespace ServiceBridge.Api.Controllers;
 
@@ -51,24 +49,10 @@ public class PaymentsController : BaseApiController
     [AllowAnonymous]
     [HttpPost("callback")]
     public async Task<IActionResult> Callback(
-        [FromBody] JsonElement callbackPayload)
+        [FromBody] System.Text.Json.JsonElement callbackPayload,
+        [FromQuery] string? provider = null)
     {
-        ConfirmPaymentRequest? request;
-        try
-        {
-            request = callbackPayload.Deserialize<ConfirmPaymentRequest>(
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        }
-        catch (JsonException)
-        {
-            return ToActionResult(ServiceResult.ValidationFailed(
-                new Dictionary<string, string[]>
-                {
-                    ["body"] = ["The callback payload is invalid."]
-                }));
-        }
-
-        if (request == null)
+        if (callbackPayload.ValueKind is System.Text.Json.JsonValueKind.Undefined)
         {
             return ToActionResult(ServiceResult.ValidationFailed(
                 new Dictionary<string, string[]>
@@ -77,32 +61,10 @@ public class PaymentsController : BaseApiController
                 }));
         }
 
-        var validationResults = new List<ValidationResult>();
-        if (!Validator.TryValidateObject(
-                request,
-                new ValidationContext(request),
-                validationResults,
-                validateAllProperties: true))
-        {
-            var errors = validationResults
-                .SelectMany(
-                    result => result.MemberNames.DefaultIfEmpty("body"),
-                    (result, memberName) => new
-                    {
-                        MemberName = memberName,
-                        Message = result.ErrorMessage ?? AppMessages.ValidationFailed
-                    })
-                .GroupBy(x => x.MemberName)
-                .ToDictionary(
-                    group => group.Key,
-                    group => group.Select(x => x.Message).ToArray());
-
-            return ToActionResult(ServiceResult.ValidationFailed(errors));
-        }
-
-        var result = await _paymentService.ConfirmAsync(
-            request,
-            callbackPayload.GetRawText());
+        var result = await _paymentService.VerifyCallbackAsync(
+            new PaymentGatewayVerifyRequest(
+                provider,
+                callbackPayload.GetRawText()));
         return ToActionResult(result);
     }
 }

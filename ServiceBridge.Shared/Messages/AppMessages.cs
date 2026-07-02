@@ -54,6 +54,14 @@ public static class AppMessages
     public const string PaymentFailed = "Payment failure recorded.";
     public const string PaymentRefunded = "Payment refund recorded.";
     public const string PaymentNotFound = "Payment not found.";
+    public const string PaymentGatewayDisabled =
+        "The selected payment gateway is currently disabled.";
+    public const string PaymentGatewayUnavailable =
+        "The selected payment gateway is currently unavailable.";
+    public const string PaymentGatewayUnsupported =
+        "The selected payment gateway is not supported.";
+    public const string PaymentGatewayVerificationFailed =
+        "Payment gateway verification failed.";
     public const string PaymentOrderForbidden =
         "You are not allowed to initiate payment for this order.";
     public const string PaymentOrderNotPending =

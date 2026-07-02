@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Logging;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
+using ServiceBridge.Application.Payments;
 using ServiceBridge.Application.Results;
 using ServiceBridge.Domain.Entities;
 using ServiceBridge.Domain.Enums;
@@ -12,16 +14,22 @@ public class PaymentService : IPaymentService
 {
     private readonly IPaymentRepository _repository;
     private readonly IMockPaymentGateway _mockPaymentGateway;
+    private readonly IPaymentGatewayFactory _gatewayFactory;
     private readonly INotificationService _notificationService;
+    private readonly ILogger<PaymentService> _logger;
 
     public PaymentService(
         IPaymentRepository repository,
         IMockPaymentGateway mockPaymentGateway,
-        INotificationService notificationService)
+        IPaymentGatewayFactory gatewayFactory,
+        INotificationService notificationService,
+        ILogger<PaymentService> logger)
     {
         _repository = repository;
         _mockPaymentGateway = mockPaymentGateway;
+        _gatewayFactory = gatewayFactory;
         _notificationService = notificationService;
+        _logger = logger;
     }
 
     public async Task<ServiceResult<PaymentInitiatedResponse>> InitiateAsync(
@@ -67,6 +75,30 @@ public class PaymentService : IPaymentService
                 409);
         }
 
+        var gatewayResult = _gatewayFactory.GetGateway(request.GatewayProvider);
+        if (!gatewayResult.Success || gatewayResult.Data == null)
+        {
+            return FromFailure<PaymentInitiatedResponse>(gatewayResult);
+        }
+
+        var gatewayInitiation = await gatewayResult.Data.InitiateAsync(
+            new PaymentGatewayInitiateRequest(
+                request.PaymentId,
+                order.Id,
+                userId,
+                order.FinalAmountIrr,
+                order.ForeignPrice,
+                order.ExchangeRateSnapshot));
+        if (!gatewayInitiation.Success || gatewayInitiation.Data == null)
+        {
+            _logger.LogWarning(
+                "Payment gateway initiation failed for payment {PaymentId} through provider {Provider}.",
+                request.PaymentId,
+                gatewayResult.Data.Provider);
+
+            return FromFailure<PaymentInitiatedResponse>(gatewayInitiation);
+        }
+
         var payment = new Payment
         {
             Id = request.PaymentId,
@@ -88,7 +120,15 @@ public class PaymentService : IPaymentService
         }
 
         return ServiceResult<PaymentInitiatedResponse>.Created(
-            new PaymentInitiatedResponse { PaymentId = payment.Id },
+            new PaymentInitiatedResponse
+            {
+                PaymentId = payment.Id,
+                Provider = gatewayInitiation.Data.Provider,
+                GatewayReference = gatewayInitiation.Data.GatewayReference,
+                RedirectUrl = gatewayInitiation.Data.RedirectUrl,
+                RequiresRedirect = gatewayInitiation.Data.RequiresRedirect,
+                ExpiresAtUtc = gatewayInitiation.Data.ExpiresAtUtc
+            },
             AppMessages.PaymentInitiated);
     }
 
@@ -146,6 +186,30 @@ public class PaymentService : IPaymentService
         ConfirmPaymentRequest request,
         string callbackPayload)
     {
+        var sanitizedCallbackPayload =
+            PaymentGatewayPayloadSanitizer.Sanitize(callbackPayload);
+
+        if (!Enum.IsDefined(request.Status))
+        {
+            return ValidationFailedCallback(
+                nameof(request.Status),
+                "Invalid payment status.");
+        }
+
+        if (request.GatewayReference?.Length > 200)
+        {
+            return ValidationFailedCallback(
+                nameof(request.GatewayReference),
+                "Gateway reference cannot exceed 200 characters.");
+        }
+
+        if (request.FailureReason?.Length > 1000)
+        {
+            return ValidationFailedCallback(
+                nameof(request.FailureReason),
+                "Failure reason cannot exceed 1000 characters.");
+        }
+
         var payment = await _repository.GetPaymentWithOrderAsync(request.PaymentId);
         if (payment == null)
         {
@@ -168,7 +232,7 @@ public class PaymentService : IPaymentService
             {
                 payment.Refund(
                     request.GatewayReference,
-                    callbackPayload,
+                    sanitizedCallbackPayload,
                     request.FailureReason,
                     DateTime.UtcNow);
             }
@@ -215,7 +279,7 @@ public class PaymentService : IPaymentService
                     AppMessages.OrderPaidByConfirmedPayment);
                 payment.Complete(
                     request.GatewayReference,
-                    callbackPayload,
+                    sanitizedCallbackPayload,
                     confirmedAtUtc);
                 await _notificationService.QueuePaymentCompletedAsync(
                     payment.Order.UserId,
@@ -229,7 +293,7 @@ public class PaymentService : IPaymentService
             {
                 payment.Fail(
                     request.GatewayReference,
-                    callbackPayload,
+                    sanitizedCallbackPayload,
                     request.FailureReason ?? "Payment gateway reported failure.",
                     confirmedAtUtc);
             }
@@ -254,6 +318,55 @@ public class PaymentService : IPaymentService
             request.Status == PaymentStatus.Completed
                 ? AppMessages.PaymentConfirmed
                 : AppMessages.PaymentFailed);
+    }
+
+    public async Task<ServiceResult> VerifyCallbackAsync(
+        PaymentGatewayVerifyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var gatewayResult = _gatewayFactory.GetGateway(request.Provider);
+        if (!gatewayResult.Success || gatewayResult.Data == null)
+        {
+            return ToFailure(gatewayResult);
+        }
+
+        var verification = await gatewayResult.Data.VerifyAsync(
+            request,
+            cancellationToken);
+        if (!verification.Success || verification.Data == null)
+        {
+            _logger.LogWarning(
+                "Payment gateway callback verification failed before confirmation for provider {Provider}.",
+                gatewayResult.Data.Provider);
+
+            return ToFailure(verification);
+        }
+
+        if (verification.Data.PaymentId == null ||
+            verification.Data.PaymentId == Guid.Empty)
+        {
+            return ServiceResult.Fail(
+                AppMessages.PaymentGatewayVerificationFailed,
+                AppConstants.ErrorCodes.ValidationFailed,
+                400);
+        }
+
+        var confirmRequest = new ConfirmPaymentRequest
+        {
+            PaymentId = verification.Data.PaymentId.Value,
+            GatewayReference = verification.Data.GatewayReference,
+            Status = verification.Data.IsVerified
+                ? verification.Data.Status
+                : PaymentStatus.Failed,
+            FailureReason = verification.Data.IsVerified
+                ? verification.Data.FailureReason
+                : verification.Data.FailureReason ??
+                  AppMessages.PaymentGatewayVerificationFailed
+        };
+
+        return await ConfirmAsync(
+            confirmRequest,
+            verification.Data.SanitizedPayload);
     }
 
     private static ServiceResult<PaymentInitiatedResponse> ValidationFailed(
@@ -283,6 +396,18 @@ public class PaymentService : IPaymentService
     private static ServiceResult<T> FromFailure<T>(ServiceResult result)
     {
         return new ServiceResult<T>
+        {
+            Success = false,
+            Message = result.Message,
+            ErrorCode = result.ErrorCode,
+            StatusCode = result.StatusCode,
+            ValidationErrors = result.ValidationErrors
+        };
+    }
+
+    private static ServiceResult ToFailure(ServiceResult result)
+    {
+        return new ServiceResult
         {
             Success = false,
             Message = result.Message,

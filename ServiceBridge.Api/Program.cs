@@ -32,6 +32,10 @@ builder.Services.AddSingleton<IValidateOptions<SmsOptions>, SmsOptionsValidator>
 builder.Services.AddOptions<SmsOptions>()
     .Bind(builder.Configuration.GetSection(SmsOptions.SectionName))
     .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<PaymentGatewayOptions>, PaymentGatewayOptionsValidator>();
+builder.Services.AddOptions<PaymentGatewayOptions>()
+    .Bind(builder.Configuration.GetSection(PaymentGatewayOptions.SectionName))
+    .ValidateOnStart();
 builder.Services.AddHttpClient<HttpSmsProvider>((serviceProvider, client) =>
 {
     var options = serviceProvider.GetRequiredService<IOptions<SmsOptions>>().Value;
@@ -89,7 +93,15 @@ builder.Services.AddScoped<IOrderCreationService, OrderCreationService>();
 builder.Services.AddScoped<IUserOrderQueryRepository, UserOrderQueryRepository>();
 builder.Services.AddScoped<IUserOrderCommandRepository, UserOrderCommandRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
-builder.Services.AddScoped<IMockPaymentGateway, MockPaymentGateway>();
+builder.Services.AddScoped<MockPaymentGateway>();
+builder.Services.AddScoped<IMockPaymentGateway>(serviceProvider =>
+    serviceProvider.GetRequiredService<MockPaymentGateway>());
+builder.Services.AddScoped<IPaymentGateway>(serviceProvider =>
+    serviceProvider.GetRequiredService<MockPaymentGateway>());
+builder.Services.AddScoped<RealPaymentGateway>();
+builder.Services.AddScoped<IPaymentGateway>(serviceProvider =>
+    serviceProvider.GetRequiredService<RealPaymentGateway>());
+builder.Services.AddScoped<IPaymentGatewayFactory, PaymentGatewayFactory>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();

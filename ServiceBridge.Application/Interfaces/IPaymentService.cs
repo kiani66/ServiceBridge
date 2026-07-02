@@ -1,4 +1,5 @@
 using ServiceBridge.Application.DTOs;
+using ServiceBridge.Application.Payments;
 using ServiceBridge.Application.Results;
 
 namespace ServiceBridge.Application.Interfaces;
@@ -16,4 +17,8 @@ public interface IPaymentService
     Task<ServiceResult> ConfirmAsync(
         ConfirmPaymentRequest request,
         string callbackPayload);
+
+    Task<ServiceResult> VerifyCallbackAsync(
+        PaymentGatewayVerifyRequest request,
+        CancellationToken cancellationToken = default);
 }
