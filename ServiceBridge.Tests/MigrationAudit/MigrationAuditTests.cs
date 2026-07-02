@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Xml.Linq;
 using Xunit;
 
@@ -49,6 +50,24 @@ public class MigrationAuditTests
         Assert.Empty(matches);
     }
 
+    [Theory]
+    [InlineData("appsettings.json")]
+    [InlineData("appsettings.Development.json")]
+    public void ApiAppSettings_DoNotContainCommittedRuntimeSecrets(
+        string fileName)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(RepositoryRoot, "ServiceBridge.Api", fileName)));
+        var root = document.RootElement;
+
+        Assert.Empty(GetOptionalString(
+            root,
+            "ConnectionStrings",
+            "DefaultConnection"));
+        Assert.Empty(GetOptionalString(root, "Jwt", "SigningKey"));
+        Assert.Empty(GetOptionalString(root, "AdminSeed", "Password"));
+    }
+
     private static void AssertProjectReferences(string projectName, string[] expectedProjectNames)
     {
         var projectPath = Path.Combine(RepositoryRoot, projectName, $"{projectName}.csproj");
@@ -97,6 +116,21 @@ public class MigrationAuditTests
             segment.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
             segment.Equals("obj", StringComparison.OrdinalIgnoreCase) ||
             segment.Equals(".dotnet_cli_home", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string GetOptionalString(
+        JsonElement root,
+        string sectionName,
+        string propertyName)
+    {
+        if (!root.TryGetProperty(sectionName, out var section) ||
+            !section.TryGetProperty(propertyName, out var property) ||
+            property.ValueKind != JsonValueKind.String)
+        {
+            return string.Empty;
+        }
+
+        return property.GetString() ?? string.Empty;
     }
 
     private static string FindRepositoryRoot()

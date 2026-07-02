@@ -1,12 +1,9 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
-using ServiceBridge.Application.Results;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Shared.Constants;
-using ServiceBridge.Shared.Messages;
 
 namespace ServiceBridge.Api.Controllers;
 
@@ -28,9 +25,9 @@ public class AgentOrdersController : BaseApiController
     [HttpGet("dashboard")]
     public async Task<IActionResult> GetDashboardSummary()
     {
-        return TryGetAgentId(out var agentId)
+        return TryGetUserId(out var agentId)
             ? ToActionResult(await _queryService.GetDashboardSummaryAsync(agentId))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpGet]
@@ -40,7 +37,7 @@ public class AgentOrdersController : BaseApiController
         [FromQuery] OrderStatus? status = null,
         [FromQuery] string? search = null)
     {
-        return TryGetAgentId(out var agentId)
+        return TryGetUserId(out var agentId)
             ? ToActionResult(
                 await _queryService.GetAssignedOrdersAsync(
                     agentId,
@@ -48,16 +45,16 @@ public class AgentOrdersController : BaseApiController
                     pageSize,
                     status,
                     search))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpGet("{orderId:guid}")]
     public async Task<IActionResult> GetAssignedOrder(Guid orderId)
     {
-        return TryGetAgentId(out var agentId)
+        return TryGetUserId(out var agentId)
             ? ToActionResult(
                 await _queryService.GetAssignedOrderDetailAsync(agentId, orderId))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpPost("{orderId:guid}/start")]
@@ -65,13 +62,13 @@ public class AgentOrdersController : BaseApiController
         Guid orderId,
         [FromBody] AgentOrderTransitionRequest request)
     {
-        return TryGetAgentId(out var agentId)
+        return TryGetUserId(out var agentId)
             ? ToActionResult(
                 await _processingService.StartProcessingAsync(
                     agentId,
                     orderId,
                     request))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpPost("{orderId:guid}/request-customer-action")]
@@ -79,13 +76,13 @@ public class AgentOrdersController : BaseApiController
         Guid orderId,
         [FromBody] RequestCustomerActionRequest request)
     {
-        return TryGetAgentId(out var agentId)
+        return TryGetUserId(out var agentId)
             ? ToActionResult(
                 await _processingService.RequestCustomerActionAsync(
                     agentId,
                     orderId,
                     request))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpPost("{orderId:guid}/resume")]
@@ -93,13 +90,13 @@ public class AgentOrdersController : BaseApiController
         Guid orderId,
         [FromBody] AgentOrderTransitionRequest request)
     {
-        return TryGetAgentId(out var agentId)
+        return TryGetUserId(out var agentId)
             ? ToActionResult(
                 await _processingService.ResumeProcessingAsync(
                     agentId,
                     orderId,
                     request))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpPost("{orderId:guid}/complete")]
@@ -107,13 +104,13 @@ public class AgentOrdersController : BaseApiController
         Guid orderId,
         [FromBody] AgentOrderTransitionRequest request)
     {
-        return TryGetAgentId(out var agentId)
+        return TryGetUserId(out var agentId)
             ? ToActionResult(
                 await _processingService.CompleteAsync(
                     agentId,
                     orderId,
                     request))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpPost("{orderId:guid}/delivery-credentials")]
@@ -121,13 +118,13 @@ public class AgentOrdersController : BaseApiController
         Guid orderId,
         [FromBody] SaveAgentDeliveryCredentialsRequest request)
     {
-        return TryGetAgentId(out var agentId)
+        return TryGetUserId(out var agentId)
             ? ToActionResult(
                 await _processingService.SaveDeliveryCredentialsAsync(
                     agentId,
                     orderId,
                     request))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpPost("{orderId:guid}/fail")]
@@ -135,13 +132,13 @@ public class AgentOrdersController : BaseApiController
         Guid orderId,
         [FromBody] FailOrderRequest request)
     {
-        return TryGetAgentId(out var agentId)
+        return TryGetUserId(out var agentId)
             ? ToActionResult(
                 await _processingService.FailAsync(
                     agentId,
                     orderId,
                     request))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpPost("{orderId:guid}/notes")]
@@ -149,24 +146,9 @@ public class AgentOrdersController : BaseApiController
         Guid orderId,
         [FromBody] AddAgentOrderNoteRequest request)
     {
-        return TryGetAgentId(out var agentId)
+        return TryGetUserId(out var agentId)
             ? ToActionResult(
                 await _processingService.AddNoteAsync(agentId, orderId, request))
-            : UnauthorizedResult();
-    }
-
-    private bool TryGetAgentId(out Guid agentId)
-    {
-        return Guid.TryParse(
-            User.FindFirstValue(ClaimTypes.NameIdentifier),
-            out agentId);
-    }
-
-    private IActionResult UnauthorizedResult()
-    {
-        return ToActionResult(ServiceResult.Fail(
-            AppMessages.UnauthorizedAccess,
-            AppConstants.ErrorCodes.Unauthorized,
-            401));
+            : UnauthorizedServiceResult();
     }
 }

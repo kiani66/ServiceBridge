@@ -1,10 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ServiceBridge.Application.Interfaces;
-using ServiceBridge.Application.Results;
-using ServiceBridge.Shared.Constants;
-using ServiceBridge.Shared.Messages;
 
 namespace ServiceBridge.Api.Controllers;
 
@@ -31,7 +27,7 @@ public class NotificationsController : BaseApiController
                 page,
                 pageSize,
                 unreadOnly))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpGet("unread-count")]
@@ -39,7 +35,7 @@ public class NotificationsController : BaseApiController
     {
         return TryGetUserId(out var userId)
             ? ToActionResult(await _notificationService.GetUnreadCountAsync(userId))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpPost("{id:guid}/read")]
@@ -47,7 +43,7 @@ public class NotificationsController : BaseApiController
     {
         return TryGetUserId(out var userId)
             ? ToActionResult(await _notificationService.MarkAsReadAsync(userId, id))
-            : UnauthorizedResult();
+            : UnauthorizedServiceResult();
     }
 
     [HttpPost("read-all")]
@@ -55,21 +51,6 @@ public class NotificationsController : BaseApiController
     {
         return TryGetUserId(out var userId)
             ? ToActionResult(await _notificationService.MarkAllAsReadAsync(userId))
-            : UnauthorizedResult();
-    }
-
-    private bool TryGetUserId(out Guid userId)
-    {
-        return Guid.TryParse(
-            User.FindFirstValue(ClaimTypes.NameIdentifier),
-            out userId);
-    }
-
-    private IActionResult UnauthorizedResult()
-    {
-        return ToActionResult(ServiceResult.Fail(
-            AppMessages.UnauthorizedAccess,
-            AppConstants.ErrorCodes.Unauthorized,
-            401));
+            : UnauthorizedServiceResult();
     }
 }

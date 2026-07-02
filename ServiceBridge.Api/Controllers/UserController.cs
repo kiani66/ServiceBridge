@@ -1,10 +1,7 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
-using ServiceBridge.Shared.Constants;
-using ServiceBridge.Shared.Messages;
 
 namespace ServiceBridge.Api.Controllers;
 
@@ -26,84 +23,54 @@ public class UserController : BaseApiController
     [HttpGet("profile")]
     public async Task<IActionResult> GetProfile()
     {
-        var userId = GetUserIdFromClaims();
-        if (userId == null)
+        if (!TryGetUserId(out var userId))
         {
-            return StatusCode(401, ServiceBridge.Application.Results.ServiceResult.Fail(
-                AppMessages.UnauthorizedAccess,
-                AppConstants.ErrorCodes.Unauthorized,
-                401
-            ));
+            return UnauthorizedServiceResult();
         }
 
-        var result = await _userService.GetProfileAsync(userId.Value);
+        var result = await _userService.GetProfileAsync(userId);
         return ToActionResult(result);
     }
 
     [HttpPut("profile")]
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
     {
-        var userId = GetUserIdFromClaims();
-        if (userId == null)
+        if (!TryGetUserId(out var userId))
         {
-            return StatusCode(401, ServiceBridge.Application.Results.ServiceResult.Fail(
-                AppMessages.UnauthorizedAccess,
-                AppConstants.ErrorCodes.Unauthorized,
-                401
-            ));
+            return UnauthorizedServiceResult();
         }
 
-        var result = await _userService.UpdateProfileAsync(userId.Value, request);
+        var result = await _userService.UpdateProfileAsync(userId, request);
         return ToActionResult(result);
     }
 
     [HttpPut("photo")]
     public async Task<IActionResult> UpdateProfilePhoto([FromBody] UpdateProfilePhotoRequest request)
     {
-        var userId = GetUserIdFromClaims();
-        if (userId == null)
+        if (!TryGetUserId(out var userId))
         {
-            return StatusCode(401, ServiceBridge.Application.Results.ServiceResult.Fail(
-                AppMessages.UnauthorizedAccess,
-                AppConstants.ErrorCodes.Unauthorized,
-                401
-            ));
+            return UnauthorizedServiceResult();
         }
 
-        var result = await _userService.UpdateProfilePhotoAsync(userId.Value, request);
+        var result = await _userService.UpdateProfilePhotoAsync(userId, request);
         return ToActionResult(result);
     }
 
     [HttpPut("password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
-        var userId = GetUserIdFromClaims();
-        if (userId == null)
+        if (!TryGetUserId(out var userId))
         {
-            return StatusCode(401, ServiceBridge.Application.Results.ServiceResult.Fail(
-                AppMessages.UnauthorizedAccess,
-                AppConstants.ErrorCodes.Unauthorized,
-                401
-            ));
+            return UnauthorizedServiceResult();
         }
 
         var result = await _passwordResetService.ChangeOwnPasswordAsync(
-            userId.Value,
+            userId,
             new AuthChangePasswordRequest
             {
                 CurrentPassword = request.CurrentPassword,
                 NewPassword = request.NewPassword
             });
         return ToActionResult(result);
-    }
-
-    private Guid? GetUserIdFromClaims()
-    {
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
-        {
-            return null;
-        }
-        return userId;
     }
 }

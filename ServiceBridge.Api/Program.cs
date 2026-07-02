@@ -24,15 +24,24 @@ builder.Services.AddDataProtection();
 builder.Services.Configure<MessageOutboxSettings>(
     builder.Configuration.GetSection(MessageOutboxSettings.SectionName));
 
+var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(defaultConnectionString))
+{
+    throw new InvalidOperationException(
+        "Connection string 'DefaultConnection' must be configured.");
+}
+
 // EF Core with SQL Server
 builder.Services.AddDbContext<ServiceBridgeDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(defaultConnectionString));
 
 // JWT settings
-var jwtIssuer = builder.Configuration["Jwt:Issuer"]!;
-var jwtAudience = builder.Configuration["Jwt:Audience"]!;
-var jwtSigningKey = builder.Configuration["Jwt:SigningKey"]!;
-var jwtExpirationMinutes = int.Parse(builder.Configuration["Jwt:ExpirationMinutes"]!);
+var jwtIssuer = GetRequiredConfigurationValue(builder.Configuration, "Jwt:Issuer");
+var jwtAudience = GetRequiredConfigurationValue(builder.Configuration, "Jwt:Audience");
+var jwtSigningKey = GetRequiredConfigurationValue(builder.Configuration, "Jwt:SigningKey");
+var jwtExpirationMinutes = GetRequiredIntConfigurationValue(
+    builder.Configuration,
+    "Jwt:ExpirationMinutes");
 
 // Application services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -320,3 +329,31 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
 });
 
 app.Run();
+
+static string GetRequiredConfigurationValue(
+    IConfiguration configuration,
+    string key)
+{
+    var value = configuration[key];
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        throw new InvalidOperationException(
+            $"Configuration value '{key}' must be configured.");
+    }
+
+    return value;
+}
+
+static int GetRequiredIntConfigurationValue(
+    IConfiguration configuration,
+    string key)
+{
+    var value = GetRequiredConfigurationValue(configuration, key);
+    if (!int.TryParse(value, out var parsedValue))
+    {
+        throw new InvalidOperationException(
+            $"Configuration value '{key}' must be a valid integer.");
+    }
+
+    return parsedValue;
+}
