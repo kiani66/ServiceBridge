@@ -13,7 +13,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task StartProcessing_WhenAssigned_TransitionsAndWritesAgentLog()
     {
-        var (agentId, order, service, repository) =
+        var (agentId, order, service, repository, realtimeNotifier) =
             CreateService(OrderStatus.Assigned);
 
         var result = await service.StartProcessingAsync(
@@ -24,13 +24,18 @@ public class AgentOrderProcessingTests
         Assert.True(result.Success);
         Assert.Equal(OrderStatus.Processing, order.Status);
         Assert.Equal(1, repository.SaveCount);
+        var message = Assert.Single(realtimeNotifier.Messages);
+        Assert.Equal(order.Id, message.OrderId);
+        Assert.Equal(OrderStatus.Processing.ToString(), message.NewStatus);
+        Assert.Equal(order.UserId, message.UserId);
+        Assert.Equal(agentId, message.AgentId);
         AssertAgentLog(order, agentId, OrderStatus.Assigned, OrderStatus.Processing);
     }
 
     [Fact]
     public async Task RequestCustomerAction_WhenProcessing_StaysProcessingAndCreatesRequest()
     {
-        var (agentId, order, service, _) =
+        var (agentId, order, service, _, _) =
             CreateService(OrderStatus.Processing);
 
         var result = await service.RequestCustomerActionAsync(
@@ -52,7 +57,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task RequestCustomerAction_WhenNoteIsEmpty_ReturnsConflict()
     {
-        var (agentId, order, service, repository) =
+        var (agentId, order, service, repository, _) =
             CreateService(OrderStatus.Processing);
 
         var result = await service.RequestCustomerActionAsync(
@@ -68,7 +73,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task ResumeProcessing_WhenCustomerResponded_AcknowledgesWithoutStatusChange()
     {
-        var (agentId, order, service, _) =
+        var (agentId, order, service, _, _) =
             CreateService(OrderStatus.Processing);
         order.RequestCustomerAction(agentId, "Send OTP.");
         var action = Assert.Single(order.CustomerActionRequests);
@@ -87,7 +92,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task Complete_WhenProcessing_SetsCompletedAtAndWritesLog()
     {
-        var (agentId, order, service, _) =
+        var (agentId, order, service, _, _) =
             CreateService(OrderStatus.Processing);
 
         var result = await service.CompleteAsync(
@@ -104,7 +109,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task Complete_WhenCreateNewAccountDeliveryFieldsAreMissing_ReturnsValidationFailure()
     {
-        var (agentId, order, service, repository) =
+        var (agentId, order, service, repository, _) =
             CreateService(OrderStatus.Processing);
         ConfigureCreateNewAccountDelivery(order);
 
@@ -124,7 +129,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task SaveDeliveryCredentials_WhenAssignedAgentSubmitsFields_EncryptsAndSaves()
     {
-        var (agentId, order, service, repository) =
+        var (agentId, order, service, repository, _) =
             CreateService(OrderStatus.Processing);
         ConfigureCreateNewAccountDelivery(order);
 
@@ -162,7 +167,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task Complete_WhenCreateNewAccountDeliveryFieldsAreSaved_CompletesOrder()
     {
-        var (agentId, order, service, _) =
+        var (agentId, order, service, _, _) =
             CreateService(OrderStatus.Processing);
         ConfigureCreateNewAccountDelivery(order);
 
@@ -200,7 +205,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task SaveDeliveryCredentials_WhenOrderBelongsToAnotherAgent_ReturnsNotFound()
     {
-        var (_, order, service, repository) =
+        var (_, order, service, repository, _) =
             CreateService(OrderStatus.Processing);
         ConfigureCreateNewAccountDelivery(order);
 
@@ -227,7 +232,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task Fail_WhenProcessing_StoresReasonAndWritesLog()
     {
-        var (agentId, order, service, _) =
+        var (agentId, order, service, _, _) =
             CreateService(OrderStatus.Processing);
 
         var result = await service.FailAsync(
@@ -249,7 +254,7 @@ public class AgentOrderProcessingTests
     public async Task StartProcessing_WhenStateIsInvalid_ReturnsConflict(
         OrderStatus status)
     {
-        var (agentId, order, service, repository) = CreateService(status);
+        var (agentId, order, service, repository, _) = CreateService(status);
 
         var result = await service.StartProcessingAsync(
             agentId,
@@ -265,7 +270,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task ProcessingOperation_WhenOrderBelongsToAnotherAgent_ReturnsNotFound()
     {
-        var (_, order, service, repository) =
+        var (_, order, service, repository, _) =
             CreateService(OrderStatus.Assigned);
 
         var result = await service.StartProcessingAsync(
@@ -281,7 +286,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task AddNote_WhenAssigned_AddsVisibilityControlledNote()
     {
-        var (agentId, order, service, repository) =
+        var (agentId, order, service, repository, _) =
             CreateService(OrderStatus.Assigned);
 
         var result = await service.AddNoteAsync(
@@ -304,7 +309,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task SaveConflict_ReturnsConflict()
     {
-        var (agentId, order, service, repository) =
+        var (agentId, order, service, repository, realtimeNotifier) =
             CreateService(OrderStatus.Assigned);
         repository.SaveSucceeds = false;
 
@@ -315,13 +320,15 @@ public class AgentOrderProcessingTests
 
         Assert.False(result.Success);
         Assert.Equal(409, result.StatusCode);
+        Assert.Empty(realtimeNotifier.Messages);
     }
 
     private static (
         Guid AgentId,
         Order Order,
         AgentOrderProcessingService Service,
-        FakeAgentOrderCommandRepository Repository)
+        FakeAgentOrderCommandRepository Repository,
+        FakeOrderRealtimeNotifier RealtimeNotifier)
         CreateService(OrderStatus status)
     {
         var agentId = Guid.NewGuid();
@@ -338,14 +345,17 @@ public class AgentOrderProcessingTests
             }
         };
         var repository = new FakeAgentOrderCommandRepository { Order = order };
+        var realtimeNotifier = new FakeOrderRealtimeNotifier();
         return (
             agentId,
             order,
             new AgentOrderProcessingService(
                 repository,
                 new FakeOrderFieldProtector(),
-                new FakeNotificationService()),
-            repository);
+                new FakeNotificationService(),
+                realtimeNotifier),
+            repository,
+            realtimeNotifier);
     }
 
     private static void ConfigureCreateNewAccountDelivery(Order order)

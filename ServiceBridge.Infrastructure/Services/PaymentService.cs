@@ -16,6 +16,7 @@ public class PaymentService : IPaymentService
     private readonly IMockPaymentGateway _mockPaymentGateway;
     private readonly IPaymentGatewayFactory _gatewayFactory;
     private readonly INotificationService _notificationService;
+    private readonly IOrderRealtimeNotifier _orderRealtimeNotifier;
     private readonly ILogger<PaymentService> _logger;
 
     public PaymentService(
@@ -23,12 +24,14 @@ public class PaymentService : IPaymentService
         IMockPaymentGateway mockPaymentGateway,
         IPaymentGatewayFactory gatewayFactory,
         INotificationService notificationService,
+        IOrderRealtimeNotifier orderRealtimeNotifier,
         ILogger<PaymentService> logger)
     {
         _repository = repository;
         _mockPaymentGateway = mockPaymentGateway;
         _gatewayFactory = gatewayFactory;
         _notificationService = notificationService;
+        _orderRealtimeNotifier = orderRealtimeNotifier;
         _logger = logger;
     }
 
@@ -313,12 +316,19 @@ public class PaymentService : IPaymentService
                 409);
         }
 
-        if (!await _repository.SaveChangesAsync())
+        var saved = await _repository.SaveChangesAsync();
+        if (!saved)
         {
             return ServiceResult.Fail(
                 AppMessages.PaymentAlreadyProcessed,
                 AppConstants.ErrorCodes.Conflict,
                 409);
+        }
+
+        if (request.Status == PaymentStatus.Completed)
+        {
+            await _orderRealtimeNotifier.NotifyOrderUpdatedAsync(
+                CreateRealtimeMessage(payment.Order));
         }
 
         return ServiceResult.Ok(
@@ -441,5 +451,18 @@ public class PaymentService : IPaymentService
             {
                 [key] = [message]
             });
+    }
+
+    private static OrderUpdatedRealtimeMessage CreateRealtimeMessage(Order order)
+    {
+        return new OrderUpdatedRealtimeMessage
+        {
+            OrderId = order.Id,
+            OrderNumber = order.OrderNumber,
+            NewStatus = order.Status.ToString(),
+            UpdatedAtUtc = order.UpdatedAt ?? DateTime.UtcNow,
+            UserId = order.UserId,
+            AgentId = order.AssignedAgentId
+        };
     }
 }

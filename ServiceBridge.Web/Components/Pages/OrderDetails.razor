@@ -1,6 +1,8 @@
 @page "/ui/orders/{OrderId:guid}"
 @attribute [Authorize(Roles = AppConstants.Roles.User)]
+@implements IDisposable
 @inject UserOrdersClient OrdersClient
+@inject OrderRealtimeClient OrderRealtimeClient
 @inject NavigationManager Navigation
 
 @if (_loading)
@@ -197,7 +199,23 @@ else
             ? Array.Empty<TimelineItem>()
             : UserOrderDisplay.TimelineItems(_order.StatusHistory);
 
+    protected override async Task OnInitializedAsync()
+    {
+        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        await OrderRealtimeClient.StartAsync();
+    }
+
     protected override async Task OnParametersSetAsync()
+    {
+        await LoadOrderAsync();
+    }
+
+    private void OpenDrawer()
+    {
+        _drawerOpen = true;
+    }
+
+    private async Task LoadOrderAsync()
     {
         _loading = true;
         _errorMessage = null;
@@ -214,8 +232,17 @@ else
         _loading = false;
     }
 
-    private void OpenDrawer()
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
     {
-        _drawerOpen = true;
+        return InvokeAsync(async () =>
+        {
+            await LoadOrderAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
     }
 }

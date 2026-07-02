@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Options;
+using ServiceBridge.Api.Hubs;
 using ServiceBridge.Api.Middleware;
+using ServiceBridge.Api.Realtime;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Orders;
 using ServiceBridge.Application.Services;
@@ -21,6 +23,7 @@ var builder = WebApplication.CreateBuilder(args);
 // ===================================================
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddDataProtection();
 builder.Services.Configure<MessageOutboxSettings>(
     builder.Configuration.GetSection(MessageOutboxSettings.SectionName));
@@ -115,6 +118,7 @@ builder.Services.AddScoped<IMessageOutboxProcessor, MessageOutboxProcessor>();
 builder.Services.AddHostedService<MessageOutboxBackgroundService>();
 builder.Services.AddScoped<ITicketRepository, TicketRepository>();
 builder.Services.AddScoped<ITicketService, TicketService>();
+builder.Services.AddScoped<IOrderRealtimeNotifier, SignalROrderRealtimeNotifier>();
 builder.Services.AddScoped<IAdminOrderQueryRepository, AdminOrderQueryRepository>();
 builder.Services.AddScoped<IAdminOrderCommandRepository, AdminOrderCommandRepository>();
 builder.Services.AddScoped<IAdminOrderQueryService, AdminOrderQueryService>();
@@ -151,6 +155,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
             ClockSkew = TimeSpan.FromMinutes(1)
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrWhiteSpace(accessToken) &&
+                    context.HttpContext.Request.Path.StartsWithSegments("/hubs/order-updates"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -343,6 +361,8 @@ app.Use(async (context, next) =>
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<OrderUpdatesHub>("/hubs/order-updates")
+    .RequireAuthorization();
 
 using (var adminSeedScope = app.Services.CreateScope())
 {

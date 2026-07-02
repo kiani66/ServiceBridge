@@ -13,15 +13,18 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
     private readonly IAgentOrderCommandRepository _repository;
     private readonly IOrderFieldProtector _fieldProtector;
     private readonly INotificationService _notificationService;
+    private readonly IOrderRealtimeNotifier _orderRealtimeNotifier;
 
     public AgentOrderProcessingService(
         IAgentOrderCommandRepository repository,
         IOrderFieldProtector fieldProtector,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IOrderRealtimeNotifier orderRealtimeNotifier)
     {
         _repository = repository;
         _fieldProtector = fieldProtector;
         _notificationService = notificationService;
+        _orderRealtimeNotifier = orderRealtimeNotifier;
     }
 
     public Task<ServiceResult> StartProcessingAsync(
@@ -211,18 +214,26 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
 
         try
         {
+            var previousStatus = order.Status;
             transition(order);
             if (queueNotification is not null)
             {
                 await queueNotification(order);
             }
+
+            var result = await SaveAsync(successMessage);
+            if (result.Success && order.Status != previousStatus)
+            {
+                await _orderRealtimeNotifier.NotifyOrderUpdatedAsync(
+                    CreateRealtimeMessage(order));
+            }
+
+            return result;
         }
         catch (InvalidOperationException)
         {
             return InvalidOperation();
         }
-
-        return await SaveAsync(successMessage);
     }
 
     private async Task<ServiceResult> CompleteInternalAsync(
@@ -265,7 +276,14 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
             return InvalidOperation();
         }
 
-        return await SaveAsync(successMessage);
+        var result = await SaveAsync(successMessage);
+        if (result.Success)
+        {
+            await _orderRealtimeNotifier.NotifyOrderUpdatedAsync(
+                CreateRealtimeMessage(order));
+        }
+
+        return result;
     }
 
     private static IReadOnlyCollection<OrderFieldDefinition>
@@ -417,5 +435,18 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
             AppMessages.InvalidAgentOrderOperation,
             AppConstants.ErrorCodes.Conflict,
             409);
+    }
+
+    private static OrderUpdatedRealtimeMessage CreateRealtimeMessage(Order order)
+    {
+        return new OrderUpdatedRealtimeMessage
+        {
+            OrderId = order.Id,
+            OrderNumber = order.OrderNumber,
+            NewStatus = order.Status.ToString(),
+            UpdatedAtUtc = order.UpdatedAt ?? DateTime.UtcNow,
+            UserId = order.UserId,
+            AgentId = order.AssignedAgentId
+        };
     }
 }
