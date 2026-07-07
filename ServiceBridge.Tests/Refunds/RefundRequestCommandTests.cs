@@ -72,6 +72,58 @@ public class RefundRequestCommandTests
     }
 
     [Fact]
+    public async Task CreateAsync_UsesPaymentAmountWhenOrderAmountIsHigher()
+    {
+        var userId = Guid.NewGuid();
+        var paymentAmount = 1250000m;
+        var order = CreateOrder(
+            userId,
+            OrderStatus.Failed,
+            finalAmountIrr: 1750000m,
+            paymentAmountIrr: paymentAmount);
+        var repository = new FakeRefundRequestRepository { Order = order };
+        var command = new CreateRefundRequest(
+            repository,
+            new FakeNotificationService());
+
+        var result = await command.ExecuteAsync(
+            userId,
+            order.Id,
+            new CreateRefundRequestRequest { Reason = "The service failed." });
+
+        Assert.True(result.Success);
+        Assert.NotNull(repository.RefundRequest);
+        Assert.Equal(paymentAmount, repository.RefundRequest.Amount);
+        Assert.True(repository.RefundRequest.Amount <= order.PaymentRecords.Single().AmountIRR);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenActiveRefundExists_ReturnsConflict()
+    {
+        var userId = Guid.NewGuid();
+        var order = CreateOrder(userId, OrderStatus.Failed);
+        var repository = new FakeRefundRequestRepository
+        {
+            Order = order,
+            ActiveRefundExists = true
+        };
+        var command = new CreateRefundRequest(
+            repository,
+            new FakeNotificationService());
+
+        var result = await command.ExecuteAsync(
+            userId,
+            order.Id,
+            new CreateRefundRequestRequest { Reason = "The service failed." });
+
+        Assert.False(result.Success);
+        Assert.Equal(409, result.StatusCode);
+        Assert.Equal(AppConstants.ErrorCodes.Conflict, result.ErrorCode);
+        Assert.Equal(0, repository.AddCount);
+        Assert.Equal(0, repository.SaveCount);
+    }
+
+    [Fact]
     public async Task ApproveAsync_WhenRequested_ApprovesAndWritesAuditLog()
     {
         var adminId = Guid.NewGuid();
@@ -99,6 +151,31 @@ public class RefundRequestCommandTests
             x.PreviousStatus == RefundStatus.Requested &&
             x.NewStatus == RefundStatus.Approved &&
             x.ActorId == adminId);
+    }
+
+    [Fact]
+    public async Task ApproveAsync_DoesNotMarkPaymentAsRefunded()
+    {
+        var adminId = Guid.NewGuid();
+        var payment = CreateCompletedPayment(Guid.NewGuid(), 1250000m);
+        var refundRequest = CreateRefundRequestEntity(payment);
+        var repository = new FakeRefundRequestRepository
+        {
+            RefundRequest = refundRequest
+        };
+        var command = new ApproveRefundRequest(
+            repository,
+            new FakeNotificationService());
+
+        var result = await command.ExecuteAsync(
+            adminId,
+            refundRequest.Id,
+            new ReviewRefundRequestRequest { AdminNote = "Approved for manual processing." });
+
+        Assert.True(result.Success);
+        Assert.Equal(RefundStatus.Approved, refundRequest.Status);
+        Assert.Equal(PaymentStatus.Completed, payment.Status);
+        Assert.Null(payment.RefundedAt);
     }
 
     [Fact]
@@ -156,19 +233,14 @@ public class RefundRequestCommandTests
         Assert.Equal(0, repository.SaveCount);
     }
 
-    private static Order CreateOrder(Guid userId, OrderStatus status)
+    private static Order CreateOrder(
+        Guid userId,
+        OrderStatus status,
+        decimal finalAmountIrr = 1250000m,
+        decimal paymentAmountIrr = 1250000m)
     {
         var orderId = Guid.NewGuid();
-        var payment = new Payment
-        {
-            Id = Guid.NewGuid(),
-            OrderId = orderId,
-            AmountIRR = 1250000m,
-            AmountUSD = 10m,
-            ExchangeRateSnapshot = 125000m,
-            CreatedAt = DateTime.UtcNow
-        };
-        payment.Complete("ref-1", null, DateTime.UtcNow);
+        var payment = CreateCompletedPayment(orderId, paymentAmountIrr);
 
         return new Order
         {
@@ -176,20 +248,37 @@ public class RefundRequestCommandTests
             UserId = userId,
             OrderNumber = "SB-1001",
             Status = status,
-            FinalAmountIrr = payment.AmountIRR,
+            FinalAmountIrr = finalAmountIrr,
             PaymentRecords = [payment]
         };
     }
 
-    private static RefundRequest CreateRefundRequestEntity()
+    private static Payment CreateCompletedPayment(Guid orderId, decimal amountIrr)
+    {
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid(),
+            OrderId = orderId,
+            AmountIRR = amountIrr,
+            AmountUSD = 10m,
+            ExchangeRateSnapshot = 125000m,
+            CreatedAt = DateTime.UtcNow
+        };
+        payment.Complete("ref-1", null, DateTime.UtcNow);
+
+        return payment;
+    }
+
+    private static RefundRequest CreateRefundRequestEntity(Payment? payment = null)
     {
         var userId = Guid.NewGuid();
-        var orderId = Guid.NewGuid();
+        var orderId = payment?.OrderId ?? Guid.NewGuid();
+        payment ??= CreateCompletedPayment(orderId, 1250000m);
         var request = RefundRequest.Create(
             orderId,
-            Guid.NewGuid(),
+            payment.Id,
             userId,
-            1250000m,
+            payment.AmountIRR,
             "The service failed.",
             DateTime.UtcNow);
         request.Order = new Order
@@ -199,6 +288,7 @@ public class RefundRequestCommandTests
             OrderNumber = "SB-1001",
             Status = OrderStatus.Failed
         };
+        request.Payment = payment;
 
         return request;
     }
