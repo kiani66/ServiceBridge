@@ -325,6 +325,30 @@ public class PaymentServiceTests
     }
 
     [Fact]
+    public async Task ConfirmAsync_WhenRealtimeNotificationFails_StillConfirmsPayment()
+    {
+        var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
+        var payment = CreatePayment(order);
+        var repository = new FakePaymentRepository { Payment = payment };
+        var realtimeNotifier = new FakeOrderRealtimeNotifier { ThrowOnNotify = true };
+        var service = CreateService(repository, realtimeNotifier: realtimeNotifier);
+
+        var result = await service.ConfirmAsync(
+            new ConfirmPaymentRequest
+            {
+                PaymentId = payment.Id,
+                GatewayReference = "gateway-123"
+            },
+            "{}");
+
+        Assert.True(result.Success);
+        Assert.Equal(PaymentStatus.Completed, payment.Status);
+        Assert.Equal(OrderStatus.Paid, order.Status);
+        Assert.Equal(1, repository.SaveCount);
+        Assert.Empty(realtimeNotifier.Messages);
+    }
+
+    [Fact]
     public async Task VerifyCallbackAsync_WhenGatewayVerificationFails_RecordsFailureSafely()
     {
         var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
