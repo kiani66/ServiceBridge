@@ -132,4 +132,30 @@ internal class FakeNotificationService : INotificationService
         QueuedTypes.Add(nameof(QueueTicketClosedForUserAsync));
         return Task.CompletedTask;
     }
+
+    public Task QueueRefundRequestedForAdminsAsync(
+        Guid orderId,
+        string orderNumber)
+    {
+        QueuedTypes.Add(nameof(QueueRefundRequestedForAdminsAsync));
+        return Task.CompletedTask;
+    }
+
+    public Task QueueRefundApprovedForUserAsync(
+        Guid userId,
+        Guid orderId,
+        string orderNumber)
+    {
+        QueuedTypes.Add(nameof(QueueRefundApprovedForUserAsync));
+        return Task.CompletedTask;
+    }
+
+    public Task QueueRefundRejectedForUserAsync(
+        Guid userId,
+        Guid orderId,
+        string orderNumber)
+    {
+        QueuedTypes.Add(nameof(QueueRefundRejectedForUserAsync));
+        return Task.CompletedTask;
+    }
 }

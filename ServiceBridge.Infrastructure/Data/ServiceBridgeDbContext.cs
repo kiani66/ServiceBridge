@@ -24,6 +24,8 @@ public class ServiceBridgeDbContext : DbContext
     public DbSet<OrderNote> OrderNotes { get; set; } = null!;
     public DbSet<Payment> Payments { get; set; } = null!;
     public DbSet<PaymentEvent> PaymentEvents { get; set; } = null!;
+    public DbSet<RefundRequest> RefundRequests { get; set; } = null!;
+    public DbSet<RefundRequestStatusHistory> RefundRequestStatusHistory { get; set; } = null!;
     public DbSet<AgentAssignment> AgentAssignments { get; set; } = null!;
     public DbSet<CustomerActionRequest> CustomerActionRequests { get; set; } = null!;
     public DbSet<OrderCredentialAccessLog> OrderCredentialAccessLogs { get; set; } = null!;
@@ -78,8 +80,14 @@ public class ServiceBridgeDbContext : DbContext
         var credentialLogsChanged = ChangeTracker
             .Entries<OrderCredentialAccessLog>()
             .Any(x => x.State is EntityState.Modified or EntityState.Deleted);
+        var refundHistoryChanged = ChangeTracker
+            .Entries<RefundRequestStatusHistory>()
+            .Any(x => x.State is EntityState.Modified or EntityState.Deleted);
 
-        if (paymentEventsChanged || assignmentsChanged || credentialLogsChanged)
+        if (paymentEventsChanged ||
+            assignmentsChanged ||
+            credentialLogsChanged ||
+            refundHistoryChanged)
         {
             throw new InvalidOperationException("Audit records are append-only.");
         }

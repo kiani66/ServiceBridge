@@ -38,6 +38,7 @@ public class Order : BaseEntity
     public DigitalService Service { get; set; } = null!;
     public ServiceVariant? ServiceVariant { get; set; }
     public User? AssignedAgent { get; set; }
+    public ICollection<Payment> PaymentRecords { get; set; } = new List<Payment>();
     public ICollection<OrderFieldValue> FieldValues { get; set; } =
         new List<OrderFieldValue>();
     public IReadOnlyCollection<OrderStatusHistory> StatusHistory => _statusHistory.AsReadOnly();

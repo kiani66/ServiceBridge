@@ -28,6 +28,8 @@ builder.Services.AddScoped<PaymentClient>();
 builder.Services.AddScoped<UserOrdersClient>();
 builder.Services.AddScoped<AgentOrdersClient>();
 builder.Services.AddScoped<AdminOrdersClient>();
+builder.Services.AddScoped<RefundsClient>();
+builder.Services.AddScoped<AdminRefundsClient>();
 builder.Services.AddScoped<NotificationsClient>();
 builder.Services.AddScoped<TicketsClient>();
 builder.Services.AddScoped<OrderRealtimeClient>();

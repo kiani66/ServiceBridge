@@ -44,4 +44,13 @@ public interface INotificationService
         Guid userId,
         Guid ticketId,
         string ticketNumber);
+    Task QueueRefundRequestedForAdminsAsync(Guid orderId, string orderNumber);
+    Task QueueRefundApprovedForUserAsync(
+        Guid userId,
+        Guid orderId,
+        string orderNumber);
+    Task QueueRefundRejectedForUserAsync(
+        Guid userId,
+        Guid orderId,
+        string orderNumber);
 }

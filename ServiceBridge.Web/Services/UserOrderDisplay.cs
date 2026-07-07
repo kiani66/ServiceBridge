@@ -49,6 +49,11 @@ public static class UserOrderDisplay
         return SplitPascalCase(status);
     }
 
+    public static string RefundStatusLabel(string status)
+    {
+        return SplitPascalCase(status);
+    }
+
     public static string OrderTone(string status)
     {
         return status switch
@@ -70,6 +75,25 @@ public static class UserOrderDisplay
             nameof(PaymentStatus.Pending) => "warning",
             _ => "neutral"
         };
+    }
+
+    public static string RefundTone(string status)
+    {
+        return status switch
+        {
+            nameof(RefundStatus.Approved) or nameof(RefundStatus.Completed) => "success",
+            nameof(RefundStatus.Rejected) or nameof(RefundStatus.Cancelled) => "danger",
+            nameof(RefundStatus.Requested) => "warning",
+            _ => "neutral"
+        };
+    }
+
+    public static bool CanRequestRefund(string status)
+    {
+        return status is nameof(OrderStatus.Paid) or
+            nameof(OrderStatus.Assigned) or
+            nameof(OrderStatus.Processing) or
+            nameof(OrderStatus.Failed);
     }
 
     public static IReadOnlyList<TimelineItem> TimelineItems(

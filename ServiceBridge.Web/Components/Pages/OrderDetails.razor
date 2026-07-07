@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = AppConstants.Roles.User)]
 @implements IDisposable
 @inject UserOrdersClient OrdersClient
+@inject RefundsClient RefundsClient
 @inject OrderRealtimeClient OrderRealtimeClient
 @inject NavigationManager Navigation
 
@@ -133,6 +134,71 @@ else
         }
     </PageSection>
 
+    <PageSection Title="Refund requests" Description="Controlled refund review for eligible paid orders." MaxWidth="wide">
+        <div class="sb-detail-grid">
+            <div class="sb-detail-panel">
+                <h2>Refund action</h2>
+                @if (!string.IsNullOrWhiteSpace(_refundMessage))
+                {
+                    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">@_refundMessage</MudAlert>
+                }
+                @if (!string.IsNullOrWhiteSpace(_refundError))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_refundError</MudAlert>
+                }
+                @if (CanRequestRefund)
+                {
+                    <MudTextField T="string"
+                                  Label="Refund reason"
+                                  Variant="Variant.Outlined"
+                                  Lines="3"
+                                  MaxLength="1000"
+                                  Value="_refundReason"
+                                  ValueChanged="@((string? value) => _refundReason = value)" />
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="@_refundBusy"
+                               StartIcon="@Icons.Material.Outlined.AssignmentReturn"
+                               OnClick="RequestRefundAsync">
+                        Request refund
+                    </MudButton>
+                }
+                else
+                {
+                    <p>This order is not currently eligible for a new refund request.</p>
+                }
+            </div>
+
+            <div class="sb-detail-panel">
+                <h2>Refund status</h2>
+                @if (_refundsLoading)
+                {
+                    <LoadingState Text="Loading refunds" />
+                }
+                else if (_refunds.Count == 0)
+                {
+                    <p>No refund requests have been submitted for this order.</p>
+                }
+                else
+                {
+                    <dl class="sb-fact-list">
+                        @foreach (var refund in _refunds.OrderByDescending(x => x.CreatedAtUtc))
+                        {
+                            <div>
+                                <dt>@UserOrderDisplay.FormatDateTime(refund.CreatedAtUtc)</dt>
+                                <dd>
+                                    <StatusBadge Text="@UserOrderDisplay.RefundStatusLabel(refund.Status)"
+                                                 Tone="@UserOrderDisplay.RefundTone(refund.Status)" />
+                                    @refund.Amount.ToString("N0") IRR / @refund.Reason
+                                </dd>
+                            </div>
+                        }
+                    </dl>
+                }
+            </div>
+        </div>
+    </PageSection>
+
     <PageSection Title="Order timeline" Description="Status history recorded for this order." MaxWidth="wide">
         @if (TimelineItems.Count == 0)
         {
@@ -188,8 +254,14 @@ else
 
     private bool _loading = true;
     private bool _drawerOpen;
+    private bool _refundBusy;
+    private bool _refundsLoading;
     private string? _errorMessage;
+    private string? _refundError;
+    private string? _refundMessage;
+    private string? _refundReason;
     private UserOrderDetailDto? _order;
+    private IReadOnlyCollection<RefundRequestDto> _refunds = Array.Empty<RefundRequestDto>();
 
     private PaymentHistoryDto? LatestPayment =>
         _order is null ? null : UserOrderDisplay.LatestPayment(_order);
@@ -198,6 +270,12 @@ else
         _order is null
             ? Array.Empty<TimelineItem>()
             : UserOrderDisplay.TimelineItems(_order.StatusHistory);
+
+    private bool CanRequestRefund =>
+        _order is not null &&
+        UserOrderDisplay.CanRequestRefund(_order.Status) &&
+        _order.Payments.Any(x => x.Status == nameof(PaymentStatus.Completed)) &&
+        !_refunds.Any(x => x.Status is nameof(RefundStatus.Requested) or nameof(RefundStatus.Approved));
 
     protected override async Task OnInitializedAsync()
     {
@@ -229,7 +307,62 @@ else
 
         _order = result.Success ? result.Data : null;
         _errorMessage = result.ErrorMessage;
+        await LoadRefundsAsync();
         _loading = false;
+    }
+
+    private async Task LoadRefundsAsync()
+    {
+        if (_order is null)
+        {
+            _refunds = Array.Empty<RefundRequestDto>();
+            return;
+        }
+
+        _refundsLoading = true;
+        var result = await RefundsClient.GetOrderRefundsAsync(_order.OrderId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _refunds = result.Success && result.Data is not null
+            ? result.Data.Items
+            : Array.Empty<RefundRequestDto>();
+        _refundsLoading = false;
+    }
+
+    private async Task RequestRefundAsync()
+    {
+        _refundError = null;
+        _refundMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_refundReason))
+        {
+            _refundError = "Enter a refund reason before submitting.";
+            return;
+        }
+
+        _refundBusy = true;
+        var result = await RefundsClient.CreateAsync(OrderId, _refundReason);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _refundError = result.ErrorMessage ?? "Unable to submit this refund request.";
+            _refundBusy = false;
+            return;
+        }
+
+        _refundReason = null;
+        _refundMessage = "Refund request submitted.";
+        await LoadRefundsAsync();
+        _refundBusy = false;
     }
 
     private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)

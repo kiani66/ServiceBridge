@@ -50,7 +50,7 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             .HasFilter($"[Status] = {(int)PaymentStatus.Completed}");
 
         entity.HasOne(x => x.Order)
-            .WithMany()
+            .WithMany(x => x.PaymentRecords)
             .HasForeignKey(x => x.OrderId)
             .OnDelete(DeleteBehavior.Restrict);
 
