@@ -124,6 +124,28 @@ public class CatalogControllerAuthorizationTests
     }
 
     [Fact]
+    public void AdminReportsController_RequiresAdminRole()
+    {
+        var attribute = Assert.Single(
+            typeof(AdminReportsController)
+                .GetCustomAttributes(typeof(AuthorizeAttribute), true)
+                .Cast<AuthorizeAttribute>());
+
+        Assert.Equal(AppConstants.Roles.Admin, attribute.Roles);
+    }
+
+    [Fact]
+    public void AdminReportsController_UsesExpectedRoute()
+    {
+        var route = Assert.Single(
+            typeof(AdminReportsController)
+                .GetCustomAttributes(typeof(RouteAttribute), false)
+                .Cast<RouteAttribute>());
+
+        Assert.Equal("api/admin/reports", route.Template);
+    }
+
+    [Fact]
     public void AgentOrdersController_RequiresAgentRole()
     {
         var attribute = Assert.Single(

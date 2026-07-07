@@ -125,6 +125,8 @@ builder.Services.AddScoped<IAdminOrderQueryRepository, AdminOrderQueryRepository
 builder.Services.AddScoped<IAdminOrderCommandRepository, AdminOrderCommandRepository>();
 builder.Services.AddScoped<IAdminOrderQueryService, AdminOrderQueryService>();
 builder.Services.AddScoped<IAdminOrderAssignmentService, AdminOrderAssignmentService>();
+builder.Services.AddScoped<IAdminFinancialReportRepository, AdminFinancialReportRepository>();
+builder.Services.AddScoped<IAdminFinancialReportService, AdminFinancialReportService>();
 builder.Services.AddScoped<IAgentOrderQueryRepository, AgentOrderQueryRepository>();
 builder.Services.AddScoped<IAgentOrderCommandRepository, AgentOrderCommandRepository>();
 builder.Services.AddScoped<IAgentOrderQueryService, AgentOrderQueryService>();
