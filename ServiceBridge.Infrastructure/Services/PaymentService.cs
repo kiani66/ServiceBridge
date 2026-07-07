@@ -327,8 +327,7 @@ public class PaymentService : IPaymentService
 
         if (request.Status == PaymentStatus.Completed)
         {
-            await _orderRealtimeNotifier.NotifyOrderUpdatedAsync(
-                CreateRealtimeMessage(payment.Order));
+            await NotifyOrderPaidTransitionAsync(payment);
         }
 
         return ServiceResult.Ok(
@@ -464,5 +463,22 @@ public class PaymentService : IPaymentService
             UserId = order.UserId,
             AgentId = order.AssignedAgentId
         };
+    }
+
+    private async Task NotifyOrderPaidTransitionAsync(Payment payment)
+    {
+        try
+        {
+            await _orderRealtimeNotifier.NotifyOrderUpdatedAsync(
+                CreateRealtimeMessage(payment.Order));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Payment {PaymentId} was confirmed, but realtime order update failed for order {OrderId}.",
+                payment.Id,
+                payment.OrderId);
+        }
     }
 }
