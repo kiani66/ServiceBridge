@@ -801,6 +801,109 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.ToTable("Providers");
                 });
 
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.RefundRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AdminNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReviewedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentId");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("ReviewedByAdminId");
+
+                    b.HasIndex("OrderId", "PaymentId", "Status");
+
+                    b.ToTable("RefundRequests", t =>
+                        {
+                            t.HasCheckConstraint("CK_RefundRequests_Amount_Positive", "[Amount] > 0");
+
+                            t.HasCheckConstraint("CK_RefundRequests_Status_Valid", "[Status] IN (1, 2, 3, 4, 5)");
+                        });
+                });
+
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.RefundRequestStatusHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ActorType")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("NewStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("PreviousStatus")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("RefundRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RefundRequestId");
+
+                    b.ToTable("RefundRequestStatusHistory", t =>
+                        {
+                            t.HasCheckConstraint("CK_RefundRequestStatusHistory_NewStatus_Valid", "[NewStatus] IN (1, 2, 3, 4, 5)");
+                        });
+                });
+
             modelBuilder.Entity("ServiceBridge.Domain.Entities.ServiceCategory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1367,7 +1470,7 @@ namespace ServiceBridge.Infrastructure.Migrations
             modelBuilder.Entity("ServiceBridge.Domain.Entities.Payment", b =>
                 {
                     b.HasOne("ServiceBridge.Domain.Entities.Order", "Order")
-                        .WithMany()
+                        .WithMany("PaymentRecords")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -1408,6 +1511,51 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Navigation("Service");
 
                     b.Navigation("ServiceVariant");
+                });
+
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.RefundRequest", b =>
+                {
+                    b.HasOne("ServiceBridge.Domain.Entities.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceBridge.Domain.Entities.Payment", "Payment")
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceBridge.Domain.Entities.User", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceBridge.Domain.Entities.User", "ReviewedByAdmin")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByAdminId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Payment");
+
+                    b.Navigation("RequestedByUser");
+
+                    b.Navigation("ReviewedByAdmin");
+                });
+
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.RefundRequestStatusHistory", b =>
+                {
+                    b.HasOne("ServiceBridge.Domain.Entities.RefundRequest", "RefundRequest")
+                        .WithMany("StatusHistory")
+                        .HasForeignKey("RefundRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RefundRequest");
                 });
 
             modelBuilder.Entity("ServiceBridge.Domain.Entities.ServiceRequiredField", b =>
@@ -1502,6 +1650,8 @@ namespace ServiceBridge.Infrastructure.Migrations
 
                     b.Navigation("Notes");
 
+                    b.Navigation("PaymentRecords");
+
                     b.Navigation("StatusHistory");
                 });
 
@@ -1513,6 +1663,11 @@ namespace ServiceBridge.Infrastructure.Migrations
             modelBuilder.Entity("ServiceBridge.Domain.Entities.Provider", b =>
                 {
                     b.Navigation("Services");
+                });
+
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.RefundRequest", b =>
+                {
+                    b.Navigation("StatusHistory");
                 });
 
             modelBuilder.Entity("ServiceBridge.Domain.Entities.ServiceCategory", b =>

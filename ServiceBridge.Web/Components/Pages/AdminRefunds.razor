@@ -1,0 +1,264 @@
+@page "/ui/admin/refunds"
+@attribute [Authorize(Roles = AppConstants.Roles.Admin)]
+@inject AdminRefundsClient RefundsClient
+@inject NavigationManager Navigation
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Refunds", null) })" />
+
+<PageHeader Eyebrow="Admin operations"
+            Title="Refund management"
+            Description="Review customer refund requests without calling an external payment provider." />
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Refund requests"
+                     Description="Newest refund requests are shown first."
+                     ShowSearch="false">
+        <Actions>
+            <MudSelect T="RefundStatus?"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_status"
+                       ValueChanged="OnStatusChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="RefundStatus?" Value="null">All statuses</MudSelectItem>
+                @foreach (var status in Enum.GetValues<RefundStatus>())
+                {
+                    <MudSelectItem T="RefundStatus?" Value="@status">
+                        @UserOrderDisplay.RefundStatusLabel(status.ToString())
+                    </MudSelectItem>
+                }
+            </MudSelect>
+        </Actions>
+    </DataGridToolbar>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">@_message</MudAlert>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+    }
+
+    @if (_loading)
+    {
+        <LoadingState Text="Loading refund requests" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_loadError</MudAlert>
+    }
+    else if (_refunds.Items.Count == 0)
+    {
+        <EmptyState Title="No refund requests found"
+                    Description="@(_status.HasValue ? "No refund requests match the selected status." : "Refund requests will appear here after customers submit them.")"
+                    Icon="@Icons.Material.Outlined.AssignmentReturn" />
+    }
+    else
+    {
+        <MudTable Items="@_refunds.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Status</MudTh>
+                <MudTh>Order</MudTh>
+                <MudTh>Customer</MudTh>
+                <MudTh>Amount</MudTh>
+                <MudTh>Reason</MudTh>
+                <MudTh>Requested</MudTh>
+                <MudTh>Admin note</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Status">
+                    <StatusBadge Text="@UserOrderDisplay.RefundStatusLabel(context.Status)"
+                                 Tone="@UserOrderDisplay.RefundTone(context.Status)" />
+                </MudTd>
+                <MudTd DataLabel="Order">
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               Href="@($"/ui/admin?orderId={context.OrderId}")">
+                        @context.OrderNumber
+                    </MudButton>
+                    <span class="sb-table-subtext">@UserOrderDisplay.OrderStatusLabel(context.OrderStatus) / @UserOrderDisplay.PaymentStatusLabel(context.PaymentStatus)</span>
+                </MudTd>
+                <MudTd DataLabel="Customer">@context.CustomerName<span class="sb-table-subtext">@context.CustomerEmail</span></MudTd>
+                <MudTd DataLabel="Amount">@context.Amount.ToString("N0") IRR</MudTd>
+                <MudTd DataLabel="Reason">@context.Reason</MudTd>
+                <MudTd DataLabel="Requested">@UserOrderDisplay.FormatDateTime(context.CreatedAtUtc)</MudTd>
+                <MudTd DataLabel="Admin note">
+                    @if (context.Status == nameof(RefundStatus.Requested))
+                    {
+                        <MudTextField T="string"
+                                      Label="Note"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      MaxLength="1000"
+                                      Value="@GetNote(context.RefundRequestId)"
+                                      ValueChanged="@((string? value) => SetNote(context.RefundRequestId, value))" />
+                    }
+                    else
+                    {
+                        @(context.AdminNote ?? "-")
+                    }
+                </MudTd>
+                <MudTd DataLabel="Actions">
+                    @if (context.Status == nameof(RefundStatus.Requested))
+                    {
+                        <div class="sb-grid-toolbar-actions">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Disabled="@_busy"
+                                       StartIcon="@Icons.Material.Outlined.CheckCircle"
+                                       OnClick="@(() => ApproveAsync(context.RefundRequestId))">
+                                Approve
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Error"
+                                       Disabled="@_busy"
+                                       StartIcon="@Icons.Material.Outlined.Cancel"
+                                       OnClick="@(() => RejectAsync(context.RefundRequestId))">
+                                Reject
+                            </MudButton>
+                        </div>
+                    }
+                    else
+                    {
+                        <span>@(context.ReviewedByAdminName ?? "-")</span>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        @if (_refunds.TotalPages > 1)
+        {
+            <div class="sb-pagination">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_refunds.Page <= 1 || _loading)"
+                           StartIcon="@Icons.Material.Outlined.ChevronLeft"
+                           OnClick="PreviousPage">
+                    Previous
+                </MudButton>
+                <span>Page @_refunds.Page of @_refunds.TotalPages</span>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_refunds.Page >= _refunds.TotalPages || _loading)"
+                           EndIcon="@Icons.Material.Outlined.ChevronRight"
+                           OnClick="NextPage">
+                    Next
+                </MudButton>
+            </div>
+        }
+    }
+</PageSection>
+
+@code {
+    private const int PageSize = 20;
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _loadError;
+    private string? _error;
+    private string? _message;
+    private RefundStatus? _status;
+    private PagedResultDto<AdminRefundRequestDto> _refunds = new();
+    private readonly Dictionary<Guid, string?> _notes = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task OnStatusChanged(RefundStatus? status)
+    {
+        _status = status;
+        await LoadAsync(1);
+    }
+
+    private Task PreviousPage()
+    {
+        return LoadAsync(Math.Max(_refunds.Page - 1, 1));
+    }
+
+    private Task NextPage()
+    {
+        return LoadAsync(_refunds.Page + 1);
+    }
+
+    private async Task LoadAsync(int page = 1)
+    {
+        _loading = true;
+        _loadError = null;
+
+        var result = await RefundsClient.GetRefundsAsync(page, PageSize, _status);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _refunds = result.Success && result.Data is not null
+            ? result.Data
+            : new PagedResultDto<AdminRefundRequestDto>();
+        _loadError = result.ErrorMessage;
+        _loading = false;
+    }
+
+    private async Task ApproveAsync(Guid refundRequestId)
+    {
+        await ReviewAsync(
+            refundRequestId,
+            note => RefundsClient.ApproveAsync(refundRequestId, note),
+            "Refund request approved.");
+    }
+
+    private async Task RejectAsync(Guid refundRequestId)
+    {
+        await ReviewAsync(
+            refundRequestId,
+            note => RefundsClient.RejectAsync(refundRequestId, note),
+            "Refund request rejected.");
+    }
+
+    private async Task ReviewAsync(
+        Guid refundRequestId,
+        Func<string?, Task<AdminRefundsApiResult<bool>>> review,
+        string successMessage)
+    {
+        _error = null;
+        _message = null;
+        _busy = true;
+
+        var result = await review(GetNote(refundRequestId));
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _error = result.ErrorMessage ?? "Unable to update this refund request.";
+            _busy = false;
+            return;
+        }
+
+        _notes.Remove(refundRequestId);
+        _message = successMessage;
+        await LoadAsync(Math.Max(_refunds.Page, 1));
+        _busy = false;
+    }
+
+    private string? GetNote(Guid refundRequestId)
+    {
+        return _notes.TryGetValue(refundRequestId, out var note)
+            ? note
+            : null;
+    }
+
+    private void SetNote(Guid refundRequestId, string? note)
+    {
+        _notes[refundRequestId] = note;
+    }
+}

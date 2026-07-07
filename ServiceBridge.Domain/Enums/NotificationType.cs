@@ -11,5 +11,8 @@ public enum NotificationType
     CustomerActionRequested = 7,
     TicketCreated = 8,
     TicketReplied = 9,
-    TicketClosed = 10
+    TicketClosed = 10,
+    RefundRequested = 11,
+    RefundApproved = 12,
+    RefundRejected = 13
 }

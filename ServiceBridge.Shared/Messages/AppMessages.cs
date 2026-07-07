@@ -72,6 +72,18 @@ public static class AppMessages
         "This payment has already been processed.";
     public const string OrderPaidByConfirmedPayment =
         "Payment confirmed by the payment callback.";
+    public const string RefundRequestCreated = "Refund request submitted successfully.";
+    public const string RefundRequestNotFound = "Refund request not found.";
+    public const string RefundRequestApproved = "Refund request approved.";
+    public const string RefundRequestRejected = "Refund request rejected.";
+    public const string RefundOrderStatusNotEligible =
+        "This order is not eligible for a refund request.";
+    public const string ActiveRefundRequestExists =
+        "An active refund request already exists for this payment.";
+    public const string InvalidRefundTransition =
+        "This refund request cannot move to the requested status.";
+    public const string RefundChangedDuringUpdate =
+        "The refund request changed while it was being updated. Please refresh and try again.";
     public const string AgentNotFound = "Active agent not found.";
     public const string OrderAssigned = "Order assigned successfully.";
     public const string OrderAssignedToAgent = "Order assigned to an agent.";

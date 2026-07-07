@@ -602,6 +602,80 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
             }));
         }
 
+        if (ShouldLoadEventType(query.EventType, "Refund"))
+        {
+            var refundQuery = _context.RefundRequestStatusHistory.AsNoTracking();
+            if (query.OrderId.HasValue)
+            {
+                refundQuery = refundQuery.Where(
+                    x => x.RefundRequest.OrderId == query.OrderId.Value);
+            }
+
+            if (query.FromUtc.HasValue)
+            {
+                refundQuery = refundQuery.Where(
+                    x => x.CreatedAt >= query.FromUtc.Value);
+            }
+
+            if (query.ToUtc.HasValue)
+            {
+                refundQuery = refundQuery.Where(
+                    x => x.CreatedAt <= query.ToUtc.Value);
+            }
+
+            if (query.Status.HasValue)
+            {
+                refundQuery = refundQuery.Where(
+                    x => x.RefundRequest.Order.Status == query.Status.Value);
+            }
+
+            var rows = await refundQuery
+                .Select(x => new
+                {
+                    EventId = x.Id,
+                    x.RefundRequest.OrderId,
+                    x.RefundRequest.Order.OrderNumber,
+                    CustomerName = x.RefundRequest.Order.User.FullName,
+                    CustomerEmail = x.RefundRequest.Order.User.Email,
+                    AssignedAgentName = x.RefundRequest.Order.AssignedAgent == null
+                        ? null
+                        : x.RefundRequest.Order.AssignedAgent.FullName,
+                    x.CreatedAt,
+                    x.PreviousStatus,
+                    x.NewStatus,
+                    x.ActorType,
+                    x.ActorId,
+                    x.Note
+                })
+                .ToListAsync();
+
+            events.AddRange(rows.Select(x => new AuditEventProjection
+            {
+                EventId = x.EventId,
+                OrderId = x.OrderId,
+                OrderNumber = x.OrderNumber,
+                CustomerName = SafeName(x.CustomerName, x.CustomerEmail),
+                CustomerEmail = x.CustomerEmail,
+                AssignedAgentName = x.AssignedAgentName,
+                OccurredAt = x.CreatedAt,
+                EventType = "Refund",
+                Title = x.PreviousStatus.HasValue
+                    ? $"Refund {FormatStatus(x.NewStatus.ToString())}"
+                    : "Refund requested",
+                Description = string.IsNullOrWhiteSpace(x.Note)
+                    ? x.PreviousStatus.HasValue
+                        ? $"{FormatStatus(x.PreviousStatus.Value.ToString())} changed to {FormatStatus(x.NewStatus.ToString())}."
+                        : "Refund request created."
+                    : x.Note,
+                Status = x.NewStatus.ToString(),
+                ActorType = x.ActorType.ToString(),
+                ActorName = x.ActorType == OrderLogActorType.User
+                    ? SafeName(x.CustomerName, x.CustomerEmail)
+                    : x.ActorType.ToString(),
+                Tone = RefundTone(x.NewStatus.ToString())
+            }));
+        }
+
         if (ShouldLoadEventType(query.EventType, "Note"))
         {
             var noteQuery = _context.OrderNotes.AsNoTracking();
@@ -1084,6 +1158,17 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
             nameof(PaymentEventType.Completed) => "success",
             nameof(PaymentEventType.Failed) or nameof(PaymentEventType.Refunded) => "danger",
             nameof(PaymentEventType.Initiated) => "warning",
+            _ => "neutral"
+        };
+    }
+
+    private static string RefundTone(string status)
+    {
+        return status switch
+        {
+            nameof(RefundStatus.Approved) or nameof(RefundStatus.Completed) => "success",
+            nameof(RefundStatus.Rejected) or nameof(RefundStatus.Cancelled) => "danger",
+            nameof(RefundStatus.Requested) => "warning",
             _ => "neutral"
         };
     }

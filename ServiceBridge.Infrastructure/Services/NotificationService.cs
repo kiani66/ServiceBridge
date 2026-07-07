@@ -246,6 +246,47 @@ public class NotificationService : INotificationService
             ticketId);
     }
 
+    public async Task QueueRefundRequestedForAdminsAsync(
+        Guid orderId,
+        string orderNumber)
+    {
+        var adminIds = await _repository.GetActiveAdminUserIdsAsync();
+        var notifications = adminIds.Select(adminId => Create(
+            adminId,
+            NotificationType.RefundRequested,
+            "Refund requested",
+            $"Order {orderNumber} has a new refund request.",
+            orderId));
+
+        await _repository.AddRangeAsync(notifications);
+    }
+
+    public Task QueueRefundApprovedForUserAsync(
+        Guid userId,
+        Guid orderId,
+        string orderNumber)
+    {
+        return QueueAsync(
+            userId,
+            NotificationType.RefundApproved,
+            "Refund approved",
+            $"Refund request for order {orderNumber} was approved.",
+            orderId);
+    }
+
+    public Task QueueRefundRejectedForUserAsync(
+        Guid userId,
+        Guid orderId,
+        string orderNumber)
+    {
+        return QueueAsync(
+            userId,
+            NotificationType.RefundRejected,
+            "Refund rejected",
+            $"Refund request for order {orderNumber} was rejected.",
+            orderId);
+    }
+
     private Task QueueAsync(
         Guid userId,
         NotificationType type,
