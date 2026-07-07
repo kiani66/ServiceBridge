@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Options;
+using ServiceBridge.Api.Configuration;
+using ServiceBridge.Api.HealthChecks;
 using ServiceBridge.Api.Hubs;
 using ServiceBridge.Api.Middleware;
 using ServiceBridge.Api.Realtime;
@@ -26,6 +28,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddDataProtection();
+var startupConfiguration = StartupConfigurationValidator.Validate(
+    builder.Configuration,
+    builder.Environment);
 builder.Services.Configure<MessageOutboxSettings>(
     builder.Configuration.GetSection(MessageOutboxSettings.SectionName));
 builder.Services.AddSingleton<IValidateOptions<EmailOptions>, EmailOptionsValidator>();
@@ -52,24 +57,9 @@ builder.Services.AddHttpClient<HttpSmsProvider>((serviceProvider, client) =>
     }
 });
 
-var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(defaultConnectionString))
-{
-    throw new InvalidOperationException(
-        "Connection string 'DefaultConnection' must be configured.");
-}
-
 // EF Core with SQL Server
 builder.Services.AddDbContext<ServiceBridgeDbContext>(options =>
-    options.UseSqlServer(defaultConnectionString));
-
-// JWT settings
-var jwtIssuer = GetRequiredConfigurationValue(builder.Configuration, "Jwt:Issuer");
-var jwtAudience = GetRequiredConfigurationValue(builder.Configuration, "Jwt:Audience");
-var jwtSigningKey = GetRequiredConfigurationValue(builder.Configuration, "Jwt:SigningKey");
-var jwtExpirationMinutes = GetRequiredIntConfigurationValue(
-    builder.Configuration,
-    "Jwt:ExpirationMinutes");
+    options.UseSqlServer(startupConfiguration.DefaultConnectionString));
 
 // Application services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -148,7 +138,10 @@ builder.Services.AddSingleton<IOrderFactory, OrderFactory>();
 builder.Services.AddSingleton<IOrderStatusPolicy, OrderStatusPolicy>();
 builder.Services.AddSingleton<IPricingCalculator, PricingCalculator>();
 builder.Services.AddSingleton<IJwtTokenService>(new JwtTokenService(
-    jwtIssuer, jwtAudience, jwtSigningKey, jwtExpirationMinutes));
+    startupConfiguration.JwtIssuer,
+    startupConfiguration.JwtAudience,
+    startupConfiguration.JwtSigningKey,
+    startupConfiguration.JwtExpirationMinutes));
 
 // JWT Bearer Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -160,9 +153,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtIssuer,
-            ValidAudience = jwtAudience,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
+            ValidIssuer = startupConfiguration.JwtIssuer,
+            ValidAudience = startupConfiguration.JwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(startupConfiguration.JwtSigningKey)),
             ClockSkew = TimeSpan.FromMinutes(1)
         };
         options.Events = new JwtBearerEvents
@@ -247,7 +241,7 @@ builder.Services.AddProblemDetails();
 // ===================================================
 // 2. HEALTH CHECKS (Step 9 - Hardening)
 // ===================================================
-builder.Services.AddHealthChecks();
+builder.Services.AddServiceBridgeHealthChecks();
 
 // ===================================================
 // 3. CORS (Step 9 - Hardening) — for future browser-based API access
@@ -389,38 +383,6 @@ if (app.Environment.IsDevelopment())
 }
 
 // Health check endpoints
-app.MapHealthChecks("/health");
-app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("ready")
-});
+app.MapServiceBridgeHealthChecks();
 
 app.Run();
-
-static string GetRequiredConfigurationValue(
-    IConfiguration configuration,
-    string key)
-{
-    var value = configuration[key];
-    if (string.IsNullOrWhiteSpace(value))
-    {
-        throw new InvalidOperationException(
-            $"Configuration value '{key}' must be configured.");
-    }
-
-    return value;
-}
-
-static int GetRequiredIntConfigurationValue(
-    IConfiguration configuration,
-    string key)
-{
-    var value = GetRequiredConfigurationValue(configuration, key);
-    if (!int.TryParse(value, out var parsedValue))
-    {
-        throw new InvalidOperationException(
-            $"Configuration value '{key}' must be a valid integer.");
-    }
-
-    return parsedValue;
-}
