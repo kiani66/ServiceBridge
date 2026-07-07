@@ -1,6 +1,8 @@
 @page "/ui/orders"
 @attribute [Authorize(Roles = AppConstants.Roles.User)]
+@implements IDisposable
 @inject UserOrdersClient OrdersClient
+@inject OrderRealtimeClient OrderRealtimeClient
 @inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Orders", null) })" />
@@ -136,6 +138,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        await OrderRealtimeClient.StartAsync();
         await LoadOrdersAsync();
     }
 
@@ -172,5 +176,19 @@
             : new PagedResultDto<UserOrderListItemDto>();
         _errorMessage = result.ErrorMessage;
         _loading = false;
+    }
+
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
+    {
+        return InvokeAsync(async () =>
+        {
+            await LoadOrdersAsync(Math.Max(_orders.Page, 1));
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
     }
 }

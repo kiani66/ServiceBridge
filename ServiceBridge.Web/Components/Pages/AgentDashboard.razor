@@ -1,6 +1,8 @@
 @page "/ui/agent"
 @attribute [Authorize(Roles = AppConstants.Roles.Agent)]
+@implements IDisposable
 @inject AgentOrdersClient AgentOrdersClient
+@inject OrderRealtimeClient OrderRealtimeClient
 @inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Agent", null) })" />
@@ -346,6 +348,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        await OrderRealtimeClient.StartAsync();
         await LoadSummaryAsync();
         await LoadOrdersAsync();
     }
@@ -511,5 +515,25 @@
         await LoadSummaryAsync();
         await LoadOrdersAsync(_orders.Page);
         _actionBusy = false;
+    }
+
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
+    {
+        return InvokeAsync(async () =>
+        {
+            await LoadSummaryAsync();
+            await LoadOrdersAsync(Math.Max(_orders.Page, 1));
+            if (_drawerOpen && _selectedOrder is not null)
+            {
+                await LoadOrderDetailAsync(_selectedOrder.OrderId);
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
     }
 }

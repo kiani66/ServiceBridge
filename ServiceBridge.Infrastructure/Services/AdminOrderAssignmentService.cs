@@ -10,13 +10,16 @@ public class AdminOrderAssignmentService : IAdminOrderAssignmentService
 {
     private readonly IAdminOrderCommandRepository _repository;
     private readonly INotificationService _notificationService;
+    private readonly IOrderRealtimeNotifier _orderRealtimeNotifier;
 
     public AdminOrderAssignmentService(
         IAdminOrderCommandRepository repository,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IOrderRealtimeNotifier orderRealtimeNotifier)
     {
         _repository = repository;
         _notificationService = notificationService;
+        _orderRealtimeNotifier = orderRealtimeNotifier;
     }
 
     public async Task<ServiceResult> AssignAsync(
@@ -70,6 +73,23 @@ public class AdminOrderAssignmentService : IAdminOrderAssignmentService
                 409);
         }
 
+        await _orderRealtimeNotifier.NotifyOrderUpdatedAsync(
+            CreateRealtimeMessage(order));
+
         return ServiceResult.Ok(AppMessages.OrderAssigned);
+    }
+
+    private static OrderUpdatedRealtimeMessage CreateRealtimeMessage(
+        Domain.Entities.Order order)
+    {
+        return new OrderUpdatedRealtimeMessage
+        {
+            OrderId = order.Id,
+            OrderNumber = order.OrderNumber,
+            NewStatus = order.Status.ToString(),
+            UpdatedAtUtc = order.UpdatedAt ?? DateTime.UtcNow,
+            UserId = order.UserId,
+            AgentId = order.AssignedAgentId
+        };
     }
 }

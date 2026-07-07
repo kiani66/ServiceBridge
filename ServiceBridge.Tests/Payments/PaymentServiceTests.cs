@@ -196,7 +196,8 @@ public class PaymentServiceTests
         var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
         var payment = CreatePayment(order);
         var repository = new FakePaymentRepository { Payment = payment };
-        var service = CreateService(repository);
+        var realtimeNotifier = new FakeOrderRealtimeNotifier();
+        var service = CreateService(repository, realtimeNotifier: realtimeNotifier);
 
         var result = await service.ConfirmAsync(
             new ConfirmPaymentRequest
@@ -213,6 +214,10 @@ public class PaymentServiceTests
         Assert.Equal(OrderStatus.Paid, order.Status);
         Assert.NotNull(order.PaidAt);
         Assert.Equal(1, repository.SaveCount);
+        var message = Assert.Single(realtimeNotifier.Messages);
+        Assert.Equal(order.Id, message.OrderId);
+        Assert.Equal(OrderStatus.Paid.ToString(), message.NewStatus);
+        Assert.Equal(order.UserId, message.UserId);
     }
 
     [Fact]
@@ -298,7 +303,8 @@ public class PaymentServiceTests
         var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
         var payment = CreatePayment(order);
         var repository = new FakePaymentRepository { Payment = payment };
-        var service = CreateService(repository);
+        var realtimeNotifier = new FakeOrderRealtimeNotifier();
+        var service = CreateService(repository, realtimeNotifier: realtimeNotifier);
 
         var result = await service.ConfirmAsync(
             new ConfirmPaymentRequest
@@ -315,6 +321,7 @@ public class PaymentServiceTests
         Assert.Equal(
             PaymentEventType.Failed,
             Assert.Single(payment.Events).EventType);
+        Assert.Empty(realtimeNotifier.Messages);
     }
 
     [Fact]
@@ -501,15 +508,18 @@ public class PaymentServiceTests
     private static PaymentService CreateService(
         FakePaymentRepository repository,
         FakeMockPaymentGateway? gateway = null,
-        FakePaymentGateway? paymentGateway = null)
+        FakePaymentGateway? paymentGateway = null,
+        FakeOrderRealtimeNotifier? realtimeNotifier = null)
     {
         paymentGateway ??= new FakePaymentGateway();
+        realtimeNotifier ??= new FakeOrderRealtimeNotifier();
 
         return new PaymentService(
             repository,
             gateway ?? new FakeMockPaymentGateway(),
             new FakePaymentGatewayFactory([paymentGateway]),
             new FakeNotificationService(),
+            realtimeNotifier,
             NullLogger<PaymentService>.Instance);
     }
 }

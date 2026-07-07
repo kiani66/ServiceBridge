@@ -17,9 +17,11 @@ public class AdminOrderAssignmentTests
         var agentId = Guid.NewGuid();
         var order = CreateOrder(OrderStatus.Paid);
         var repository = new FakeAdminOrderCommandRepository { Order = order };
+        var realtimeNotifier = new FakeOrderRealtimeNotifier();
         var service = new AdminOrderAssignmentService(
             repository,
-            new FakeNotificationService());
+            new FakeNotificationService(),
+            realtimeNotifier);
 
         var result = await service.AssignAsync(
             adminId,
@@ -31,6 +33,11 @@ public class AdminOrderAssignmentTests
         Assert.Equal(agentId, order.AssignedAgentId);
         Assert.NotNull(order.AssignedAt);
         Assert.Equal(1, repository.SaveCount);
+        var message = Assert.Single(realtimeNotifier.Messages);
+        Assert.Equal(order.Id, message.OrderId);
+        Assert.Equal(OrderStatus.Assigned.ToString(), message.NewStatus);
+        Assert.Equal(order.UserId, message.UserId);
+        Assert.Equal(agentId, message.AgentId);
 
         var log = Assert.Single(order.StatusHistory);
         Assert.Equal(OrderStatus.Paid, log.PreviousStatus);
@@ -45,7 +52,8 @@ public class AdminOrderAssignmentTests
     {
         var service = new AdminOrderAssignmentService(
             new FakeAdminOrderCommandRepository(),
-            new FakeNotificationService());
+            new FakeNotificationService(),
+            new FakeOrderRealtimeNotifier());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -67,7 +75,8 @@ public class AdminOrderAssignmentTests
         };
         var service = new AdminOrderAssignmentService(
             repository,
-            new FakeNotificationService());
+            new FakeNotificationService(),
+            new FakeOrderRealtimeNotifier());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -91,7 +100,8 @@ public class AdminOrderAssignmentTests
         var repository = new FakeAdminOrderCommandRepository { Order = order };
         var service = new AdminOrderAssignmentService(
             repository,
-            new FakeNotificationService());
+            new FakeNotificationService(),
+            new FakeOrderRealtimeNotifier());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -113,9 +123,11 @@ public class AdminOrderAssignmentTests
             Order = order,
             SaveSucceeds = false
         };
+        var realtimeNotifier = new FakeOrderRealtimeNotifier();
         var service = new AdminOrderAssignmentService(
             repository,
-            new FakeNotificationService());
+            new FakeNotificationService(),
+            realtimeNotifier);
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -125,6 +137,7 @@ public class AdminOrderAssignmentTests
         Assert.False(result.Success);
         Assert.Equal(409, result.StatusCode);
         Assert.Equal(1, repository.SaveCount);
+        Assert.Empty(realtimeNotifier.Messages);
     }
 
     [Fact]
@@ -135,7 +148,8 @@ public class AdminOrderAssignmentTests
         var repository = new FakeAdminOrderCommandRepository { Order = order };
         var service = new AdminOrderAssignmentService(
             repository,
-            new FakeNotificationService());
+            new FakeNotificationService(),
+            new FakeOrderRealtimeNotifier());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -152,6 +166,7 @@ public class AdminOrderAssignmentTests
         return new Order
         {
             Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
             Status = status
         };
     }
