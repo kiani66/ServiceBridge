@@ -1,0 +1,296 @@
+@page "/ui/admin/reports/financial"
+@attribute [Authorize(Roles = AppConstants.Roles.Admin)]
+@inject AdminFinancialReportsClient ReportsClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Financial reports", null) })" />
+
+<PageHeader Eyebrow="Admin operations"
+            Title="Financial reports"
+            Description="Operational payment, order, and refund reporting." />
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Report filters"
+                     Description="Filters apply to payment, order, and refund report sections."
+                     ShowSearch="false">
+        <Actions>
+            <MudDatePicker Label="From"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Date="_fromDate"
+                           DateChanged="OnFromDateChanged"
+                           DateFormat="yyyy-MM-dd"
+                           Class="sb-search-compact" />
+            <MudDatePicker Label="To"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Date="_toDate"
+                           DateChanged="OnToDateChanged"
+                           DateFormat="yyyy-MM-dd"
+                           Class="sb-search-compact" />
+            <MudSelect T="PaymentStatus?"
+                       Label="Payment"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_paymentStatus"
+                       ValueChanged="OnPaymentStatusChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="PaymentStatus?" Value="null">All payments</MudSelectItem>
+                @foreach (var status in Enum.GetValues<PaymentStatus>())
+                {
+                    <MudSelectItem T="PaymentStatus?" Value="@status">
+                        @UserOrderDisplay.PaymentStatusLabel(status.ToString())
+                    </MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="RefundStatus?"
+                       Label="Refund"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_refundStatus"
+                       ValueChanged="OnRefundStatusChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="RefundStatus?" Value="null">All refunds</MudSelectItem>
+                @foreach (var status in Enum.GetValues<RefundStatus>())
+                {
+                    <MudSelectItem T="RefundStatus?" Value="@status">
+                        @UserOrderDisplay.RefundStatusLabel(status.ToString())
+                    </MudSelectItem>
+                }
+            </MudSelect>
+            <MudIconButton Icon="@Icons.Material.Outlined.Refresh"
+                           Color="Color.Primary"
+                           Disabled="@_loading"
+                           OnClick="LoadAsync"
+                           aria-label="Refresh financial reports" />
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Disabled="@(_loading || _exporting)"
+                       StartIcon="@Icons.Material.Outlined.Download"
+                       OnClick="ExportCsvAsync">
+                CSV
+            </MudButton>
+        </Actions>
+    </DataGridToolbar>
+
+    @if (!string.IsNullOrWhiteSpace(_exportError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_exportError</MudAlert>
+    }
+</PageSection>
+
+@if (_loading)
+{
+    <PageSection MaxWidth="wide">
+        <LoadingState Text="Loading financial reports" />
+    </PageSection>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <PageSection MaxWidth="wide">
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+    </PageSection>
+}
+else if (_report is not null)
+{
+    <PageSection MaxWidth="wide">
+        <div class="sb-stat-grid">
+            <StatCard Label="Total payments" Value="@_report.Payments.TotalPayments.ToString("N0")" Description="Payment records in scope" Tone="neutral" Icon="@Icons.Material.Outlined.Payments" />
+            <StatCard Label="Completed" Value="@_report.Payments.CompletedPayments.ToString("N0")" Description="Successful payments" Tone="success" Icon="@Icons.Material.Outlined.CheckCircle" />
+            <StatCard Label="Failed" Value="@_report.Payments.FailedPayments.ToString("N0")" Description="Failed payments" Tone="danger" Icon="@Icons.Material.Outlined.ErrorOutline" />
+            <StatCard Label="Pending" Value="@_report.Payments.PendingPayments.ToString("N0")" Description="Awaiting callback" Tone="warning" Icon="@Icons.Material.Outlined.HourglassTop" />
+            <StatCard Label="Refunded" Value="@_report.Payments.RefundedPayments.ToString("N0")" Description="Refunded payment records" Tone="danger" Icon="@Icons.Material.Outlined.Replay" />
+            <StatCard Label="Refund amount" Value="@FormatIrr(_report.Refunds.TotalRefundAmountIrr)" Description="Refund requests in scope" Tone="warning" Icon="@Icons.Material.Outlined.AssignmentReturn" />
+        </div>
+    </PageSection>
+
+    <PageSection MaxWidth="wide">
+        <div class="sb-stat-grid">
+            <StatCard Label="Orders" Value="@_report.Orders.OrderCount.ToString("N0")" Description="Orders in scope" Tone="neutral" Icon="@Icons.Material.Outlined.ReceiptLong" />
+            <StatCard Label="Final price" Value="@FormatIrr(_report.Orders.TotalFinalPriceIrr)" Description="Total FinalPriceIRR" Tone="info" Icon="@Icons.Material.Outlined.PriceCheck" />
+            <StatCard Label="Paid amount" Value="@FormatIrr(_report.Orders.PaidAmountIrr)" Description="Completed or refunded payments" Tone="success" Icon="@Icons.Material.Outlined.Paid" />
+            <StatCard Label="Refunded amount" Value="@FormatIrr(_report.Orders.RefundedAmountIrr)" Description="Refunded payment amount" Tone="danger" Icon="@Icons.Material.Outlined.Undo" />
+            <StatCard Label="Estimated profit" Value="@FormatIrr(_report.Orders.EstimatedProfitIrr)" Description="Existing order profit snapshots" Tone="success" Icon="@Icons.Material.Outlined.TrendingUp" />
+            <StatCard Label="Refund requests" Value="@_report.Refunds.RefundCount.ToString("N0")" Description="All refund statuses" Tone="neutral" Icon="@Icons.Material.Outlined.FactCheck" />
+        </div>
+    </PageSection>
+
+    <PageSection MaxWidth="wide">
+        <DataGridToolbar Title="Payment summary" Description="Newest payment records are shown first." ShowSearch="false" />
+        <MudTable Items="@_report.Payments.Rows" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Status</MudTh>
+                <MudTh>Amount</MudTh>
+                <MudTh>Payment date</MudTh>
+                <MudTh>Order</MudTh>
+                <MudTh>Customer</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Status"><StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(context.Status)" Tone="@UserOrderDisplay.PaymentTone(context.Status)" /></MudTd>
+                <MudTd DataLabel="Amount">@FormatIrr(context.AmountIrr)</MudTd>
+                <MudTd DataLabel="Payment date">@UserOrderDisplay.FormatDateTime(context.PaymentDate)</MudTd>
+                <MudTd DataLabel="Order">@context.OrderNumber</MudTd>
+                <MudTd DataLabel="Customer">@context.CustomerName</MudTd>
+            </RowTemplate>
+        </MudTable>
+    </PageSection>
+
+    <PageSection MaxWidth="wide">
+        <DataGridToolbar Title="Order financial summary" Description="Estimated profit comes from existing order snapshots." ShowSearch="false" />
+        <MudTable Items="@_report.Orders.Rows" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Order</MudTh>
+                <MudTh>Customer</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>FinalPriceIRR</MudTh>
+                <MudTh>Paid</MudTh>
+                <MudTh>Refunded</MudTh>
+                <MudTh>Estimated profit</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Order">@context.OrderNumber</MudTd>
+                <MudTd DataLabel="Customer">@context.CustomerName</MudTd>
+                <MudTd DataLabel="Status"><StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(context.Status)" Tone="@UserOrderDisplay.OrderTone(context.Status)" /></MudTd>
+                <MudTd DataLabel="FinalPriceIRR">@FormatIrr(context.FinalPriceIrr)</MudTd>
+                <MudTd DataLabel="Paid">@FormatIrr(context.PaidAmountIrr)</MudTd>
+                <MudTd DataLabel="Refunded">@FormatIrr(context.RefundedAmountIrr)</MudTd>
+                <MudTd DataLabel="Estimated profit">@FormatIrr(context.EstimatedProfitIrr)</MudTd>
+            </RowTemplate>
+        </MudTable>
+    </PageSection>
+
+    <PageSection MaxWidth="wide">
+        <DataGridToolbar Title="Refund summary" Description="Newest refund requests are shown first." ShowSearch="false" />
+        <div class="sb-stat-grid">
+            <StatCard Label="Requested" Value="@_report.Refunds.RequestedRefunds.ToString("N0")" Description="Awaiting review" Tone="warning" Icon="@Icons.Material.Outlined.PendingActions" />
+            <StatCard Label="Approved" Value="@_report.Refunds.ApprovedRefunds.ToString("N0")" Description="Approved requests" Tone="success" Icon="@Icons.Material.Outlined.CheckCircle" />
+            <StatCard Label="Rejected" Value="@_report.Refunds.RejectedRefunds.ToString("N0")" Description="Rejected requests" Tone="danger" Icon="@Icons.Material.Outlined.Cancel" />
+            <StatCard Label="Completed" Value="@_report.Refunds.CompletedRefunds.ToString("N0")" Description="Completed refunds" Tone="success" Icon="@Icons.Material.Outlined.TaskAlt" />
+            <StatCard Label="Cancelled" Value="@_report.Refunds.CancelledRefunds.ToString("N0")" Description="Cancelled requests" Tone="neutral" Icon="@Icons.Material.Outlined.RemoveCircleOutline" />
+        </div>
+        <MudTable Items="@_report.Refunds.Rows" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Status</MudTh>
+                <MudTh>Amount</MudTh>
+                <MudTh>Requested</MudTh>
+                <MudTh>Order</MudTh>
+                <MudTh>Customer</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Status"><StatusBadge Text="@UserOrderDisplay.RefundStatusLabel(context.Status)" Tone="@UserOrderDisplay.RefundTone(context.Status)" /></MudTd>
+                <MudTd DataLabel="Amount">@FormatIrr(context.AmountIrr)</MudTd>
+                <MudTd DataLabel="Requested">@UserOrderDisplay.FormatDateTime(context.RequestedAtUtc)</MudTd>
+                <MudTd DataLabel="Order">@context.OrderNumber</MudTd>
+                <MudTd DataLabel="Customer">@context.CustomerName</MudTd>
+            </RowTemplate>
+        </MudTable>
+    </PageSection>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _exporting;
+    private string? _error;
+    private string? _exportError;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private PaymentStatus? _paymentStatus;
+    private RefundStatus? _refundStatus;
+    private AdminFinancialReportDto? _report;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task OnFromDateChanged(DateTime? value)
+    {
+        _fromDate = value;
+        await LoadAsync();
+    }
+
+    private async Task OnToDateChanged(DateTime? value)
+    {
+        _toDate = value;
+        await LoadAsync();
+    }
+
+    private async Task OnPaymentStatusChanged(PaymentStatus? value)
+    {
+        _paymentStatus = value;
+        await LoadAsync();
+    }
+
+    private async Task OnRefundStatusChanged(RefundStatus? value)
+    {
+        _refundStatus = value;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _exportError = null;
+
+        var result = await ReportsClient.GetFinancialReportAsync(
+            _fromDate?.Date,
+            _toDate?.Date.AddDays(1).AddTicks(-1),
+            _paymentStatus,
+            _refundStatus);
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        _report = result.Success ? result.Data : null;
+        _error = result.ErrorMessage;
+        _loading = false;
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        _exporting = true;
+        _exportError = null;
+
+        var result = await ReportsClient.ExportFinancialReportCsvAsync(
+            _fromDate?.Date,
+            _toDate?.Date.AddDays(1).AddTicks(-1),
+            _paymentStatus,
+            _refundStatus);
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        if (!result.Success || result.Data == null)
+        {
+            _exportError = result.ErrorMessage ?? "Unable to export financial reports.";
+            _exporting = false;
+            return;
+        }
+
+        await JS.InvokeVoidAsync(
+            "serviceBridgeDownloadCsv",
+            result.Data.FileName,
+            result.Data.Content);
+        _exporting = false;
+    }
+
+    private bool RedirectIfAuthRequired(bool requiresAuthentication)
+    {
+        if (!requiresAuthentication)
+        {
+            return false;
+        }
+
+        Navigation.NavigateTo("/Account/Login");
+        return true;
+    }
+
+    private static string FormatIrr(decimal amount)
+    {
+        return $"{amount:N0} IRR";
+    }
+}
