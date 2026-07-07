@@ -185,7 +185,9 @@ else if (_order is not null)
         await LoadAsync(showLoading: true);
     }
 
-    private async Task LoadAsync(bool showLoading)
+    private async Task LoadAsync(
+        bool showLoading,
+        bool clearActionState = true)
     {
         if (showLoading)
         {
@@ -194,8 +196,11 @@ else if (_order is not null)
 
         _notFound = false;
         _loadErrorMessage = null;
-        _actionErrorMessage = null;
-        _validationErrors.Clear();
+        if (clearActionState)
+        {
+            _actionErrorMessage = null;
+            _validationErrors.Clear();
+        }
 
         var result = await PaymentClient.GetOrderAsync(OrderId);
         if (result.RequiresAuthentication)
@@ -263,7 +268,7 @@ else if (_order is not null)
         }
 
         ApplyErrors(result);
-        await LoadAsync(showLoading: false);
+        await LoadAsync(showLoading: false, clearActionState: false);
     }
 
     private async Task<Guid?> EnsurePaymentAsync()

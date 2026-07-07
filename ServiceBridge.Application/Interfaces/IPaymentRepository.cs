@@ -5,7 +5,7 @@ namespace ServiceBridge.Application.Interfaces;
 public interface IPaymentRepository
 {
     Task<Order?> GetOrderAsync(Guid orderId);
-    Task<bool> PendingPaymentExistsAsync(Guid orderId);
+    Task<Payment?> GetPendingPaymentForOrderAsync(Guid orderId);
     Task<bool> PaymentExistsAsync(Guid paymentId);
     Task AddPaymentAsync(Payment payment);
     Task<Payment?> GetPaymentWithOrderAsync(Guid paymentId);

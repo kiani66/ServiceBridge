@@ -66,8 +66,15 @@ public class PaymentService : IPaymentService
                 409);
         }
 
-        if (await _repository.PaymentExistsAsync(request.PaymentId) ||
-            await _repository.PendingPaymentExistsAsync(order.Id))
+        var pendingPayment = await _repository.GetPendingPaymentForOrderAsync(order.Id);
+        if (pendingPayment is not null)
+        {
+            return ServiceResult<PaymentInitiatedResponse>.Ok(
+                new PaymentInitiatedResponse { PaymentId = pendingPayment.Id },
+                AppMessages.PaymentInitiated);
+        }
+
+        if (await _repository.PaymentExistsAsync(request.PaymentId))
         {
             return ServiceResult<PaymentInitiatedResponse>.Fail(
                 AppMessages.PendingPaymentExists,

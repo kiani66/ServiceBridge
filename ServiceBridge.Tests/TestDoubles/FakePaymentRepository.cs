@@ -8,7 +8,7 @@ internal class FakePaymentRepository : IPaymentRepository
 {
     public Order? Order { get; set; }
     public Payment? Payment { get; set; }
-    public bool HasPendingPayment { get; set; }
+    public Payment? ExistingPendingPayment { get; set; }
     public bool PaymentIdExists { get; set; }
     public bool SaveSucceeds { get; set; } = true;
     public Payment? AddedPayment { get; private set; }
@@ -19,9 +19,16 @@ internal class FakePaymentRepository : IPaymentRepository
         return Task.FromResult(Order?.Id == orderId ? Order : null);
     }
 
-    public Task<bool> PendingPaymentExistsAsync(Guid orderId)
+    public Task<Payment?> GetPendingPaymentForOrderAsync(Guid orderId)
     {
-        return Task.FromResult(HasPendingPayment);
+        return Task.FromResult(
+            ExistingPendingPayment is
+            {
+                OrderId: var pendingOrderId,
+                Status: PaymentStatus.Pending
+            } && pendingOrderId == orderId
+                ? ExistingPendingPayment
+                : null);
     }
 
     public Task<bool> PaymentExistsAsync(Guid paymentId)
