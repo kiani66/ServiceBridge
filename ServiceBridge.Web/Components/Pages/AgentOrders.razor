@@ -2,7 +2,7 @@
 @attribute [Authorize(Roles = AppConstants.Roles.Agent)]
 @implements IDisposable
 @inject AgentOrdersClient AgentOrdersClient
-@inject OrderRealtimeClient OrderRealtimeClient
+@inject RealtimeClient RealtimeClient
 @inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Agent", "/ui/agent"), ("Orders", null) })" />
@@ -166,10 +166,11 @@
         ? "No assigned orders match the current filters."
         : "Orders assigned by an administrator will appear here.";
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
-        await OrderRealtimeClient.StartAsync();
+        RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        RealtimeClient.OrderAssigned += HandleOrderAssignedAsync;
+        RealtimeClient.CustomerActionChanged += HandleCustomerActionChangedAsync;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -278,7 +279,22 @@
             replace: true);
     }
 
-    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
+    {
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task HandleOrderAssignedAsync(OrderAssignedRealtimeDto message)
+    {
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task HandleCustomerActionChangedAsync(CustomerActionChangedRealtimeDto message)
+    {
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task ReloadFromRealtimeAsync()
     {
         return InvokeAsync(async () =>
         {
@@ -289,6 +305,8 @@
 
     public void Dispose()
     {
-        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+        RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+        RealtimeClient.OrderAssigned -= HandleOrderAssignedAsync;
+        RealtimeClient.CustomerActionChanged -= HandleCustomerActionChangedAsync;
     }
 }

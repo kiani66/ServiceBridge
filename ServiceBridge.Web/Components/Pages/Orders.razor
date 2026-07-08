@@ -2,7 +2,7 @@
 @attribute [Authorize(Roles = AppConstants.Roles.User)]
 @implements IDisposable
 @inject UserOrdersClient OrdersClient
-@inject OrderRealtimeClient OrderRealtimeClient
+@inject RealtimeClient RealtimeClient
 @inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Orders", null) })" />
@@ -141,10 +141,10 @@
         ? "No orders match the selected status."
         : "Your service requests will appear here after checkout.";
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
-        await OrderRealtimeClient.StartAsync();
+        RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        RealtimeClient.CustomerActionChanged += HandleCustomerActionChangedAsync;
     }
 
     protected override Task OnParametersSetAsync()
@@ -192,7 +192,17 @@
         _loading = false;
     }
 
-    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
+    {
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task HandleCustomerActionChangedAsync(CustomerActionChangedRealtimeDto message)
+    {
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task ReloadFromRealtimeAsync()
     {
         return InvokeAsync(async () =>
         {
@@ -203,7 +213,8 @@
 
     public void Dispose()
     {
-        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+        RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+        RealtimeClient.CustomerActionChanged -= HandleCustomerActionChangedAsync;
     }
 
     private static OrderStatus? ParseStatus(string? status)

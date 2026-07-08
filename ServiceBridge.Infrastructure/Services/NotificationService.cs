@@ -13,10 +13,15 @@ public class NotificationService : INotificationService
     private const string TicketEntityType = "Ticket";
 
     private readonly INotificationRepository _repository;
+    private readonly IRealtimeEventPublisher _realtimeEventPublisher;
+    private readonly List<Notification> _queuedRealtimeNotifications = new();
 
-    public NotificationService(INotificationRepository repository)
+    public NotificationService(
+        INotificationRepository repository,
+        IRealtimeEventPublisher realtimeEventPublisher)
     {
         _repository = repository;
+        _realtimeEventPublisher = realtimeEventPublisher;
     }
 
     public async Task<ServiceResult<PagedResultDto<NotificationDto>>> GetForUserAsync(
@@ -87,6 +92,37 @@ public class NotificationService : INotificationService
                 409);
     }
 
+    public async Task PublishQueuedRealtimeAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_queuedRealtimeNotifications.Count == 0)
+        {
+            return;
+        }
+
+        var notifications = _queuedRealtimeNotifications.ToArray();
+        _queuedRealtimeNotifications.Clear();
+
+        foreach (var notification in notifications)
+        {
+            var unreadCount = await _repository.GetUnreadCountAsync(notification.UserId);
+            await _realtimeEventPublisher.PublishNotificationReceivedAsync(
+                notification.UserId,
+                new RealtimeEventDto
+                {
+                    EventType = RealtimeEventTypes.NotificationReceived,
+                    EntityId = notification.RelatedEntityId,
+                    EntityName = notification.RelatedEntityType,
+                    LinkUrl = LinkFor(notification),
+                    Title = notification.Title,
+                    Message = notification.Message,
+                    CreatedAtUtc = notification.CreatedAt,
+                    UnreadCount = unreadCount
+                },
+                cancellationToken);
+        }
+    }
+
     public Task QueueOrderCreatedAsync(
         Guid userId,
         Guid orderId,
@@ -123,7 +159,8 @@ public class NotificationService : INotificationService
             NotificationType.PaymentCompleted,
             "Order ready for assignment",
             $"Order {orderNumber} is paid and ready for assignment.",
-            orderId));
+            orderId)).ToArray();
+        _queuedRealtimeNotifications.AddRange(notifications);
 
         await _repository.AddRangeAsync(notifications);
     }
@@ -134,7 +171,8 @@ public class NotificationService : INotificationService
         Guid orderId,
         string orderNumber)
     {
-        await _repository.AddRangeAsync([
+        var notifications = new[]
+        {
             Create(
                 userId,
                 NotificationType.OrderAssignedToAgent,
@@ -147,7 +185,10 @@ public class NotificationService : INotificationService
                 "New assigned order",
                 $"Order {orderNumber} was assigned to you.",
                 orderId)
-        ]);
+        };
+        _queuedRealtimeNotifications.AddRange(notifications);
+
+        await _repository.AddRangeAsync(notifications);
     }
 
     public Task QueueAgentStartedProcessingAsync(
@@ -226,7 +267,8 @@ public class NotificationService : INotificationService
             "New support ticket",
             $"Ticket {ticketNumber} was created and is waiting for support.",
             TicketEntityType,
-            ticketId));
+            ticketId)).ToArray();
+        _queuedRealtimeNotifications.AddRange(notifications);
 
         await _repository.AddRangeAsync(notifications);
     }
@@ -269,7 +311,8 @@ public class NotificationService : INotificationService
             NotificationType.RefundRequested,
             "Refund requested",
             $"Order {orderNumber} has a new refund request.",
-            orderId));
+            orderId)).ToArray();
+        _queuedRealtimeNotifications.AddRange(notifications);
 
         await _repository.AddRangeAsync(notifications);
     }
@@ -318,13 +361,16 @@ public class NotificationService : INotificationService
         string relatedEntityType,
         Guid relatedEntityId)
     {
-        return _repository.AddAsync(Create(
+        var notification = Create(
             userId,
             type,
             title,
             message,
             relatedEntityType,
-            relatedEntityId));
+            relatedEntityId);
+        _queuedRealtimeNotifications.Add(notification);
+
+        return _repository.AddAsync(notification);
     }
 
     private static Notification Create(
@@ -356,6 +402,13 @@ public class NotificationService : INotificationService
             RelatedEntityId = relatedEntityId,
             CreatedAt = DateTime.UtcNow
         };
+    }
+
+    private static string LinkFor(Notification notification)
+    {
+        return notification.RelatedEntityType == TicketEntityType
+            ? $"/ui/tickets/{notification.RelatedEntityId}"
+            : $"/ui/orders/{notification.RelatedEntityId}";
     }
 
     private static int NormalizePageSize(int pageSize)

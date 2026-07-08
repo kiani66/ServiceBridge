@@ -6,7 +6,7 @@ using ServiceBridge.Shared.Constants;
 namespace ServiceBridge.Api.Hubs;
 
 [Authorize]
-public sealed class OrderUpdatesHub : Hub
+public sealed class RealtimeHub : Hub
 {
     public override async Task OnConnectedAsync()
     {
@@ -15,28 +15,22 @@ public sealed class OrderUpdatesHub : Hub
         {
             await Groups.AddToGroupAsync(
                 Context.ConnectionId,
-                $"user:{userId}");
+                RealtimeGroups.User(userId));
         }
 
         if (Context.User?.IsInRole(AppConstants.Roles.Admin) == true)
         {
             await Groups.AddToGroupAsync(
                 Context.ConnectionId,
-                $"role:{AppConstants.Roles.Admin}");
+                RealtimeGroups.Admins);
         }
 
-        if (Context.User?.IsInRole(AppConstants.Roles.Agent) == true)
+        if (Context.User?.IsInRole(AppConstants.Roles.Agent) == true &&
+            !string.IsNullOrWhiteSpace(userId))
         {
             await Groups.AddToGroupAsync(
                 Context.ConnectionId,
-                $"role:{AppConstants.Roles.Agent}");
-
-            if (!string.IsNullOrWhiteSpace(userId))
-            {
-                await Groups.AddToGroupAsync(
-                    Context.ConnectionId,
-                    $"agent:{userId}");
-            }
+                RealtimeGroups.Agent(userId));
         }
 
         await base.OnConnectedAsync();

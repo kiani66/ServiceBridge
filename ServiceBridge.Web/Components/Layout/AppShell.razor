@@ -1,4 +1,6 @@
 @inject NavigationManager Navigation
+@inject RealtimeClient RealtimeClient
+@implements IAsyncDisposable
 
 <MudThemeProvider Theme="_theme" />
 <MudPopoverProvider />
@@ -58,8 +60,18 @@
         }
     };
 
+    protected override async Task OnInitializedAsync()
+    {
+        await RealtimeClient.StartAsync();
+    }
+
     private void ToggleDrawer()
     {
         _drawerOpen = !_drawerOpen;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        return RealtimeClient.DisposeAsync();
     }
 }

@@ -13,7 +13,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task StartProcessing_WhenAssigned_TransitionsAndWritesAgentLog()
     {
-        var (agentId, order, service, repository, realtimeNotifier) =
+        var (agentId, order, service, repository, realtimePublisher) =
             CreateService(OrderStatus.Assigned);
 
         var result = await service.StartProcessingAsync(
@@ -24,9 +24,9 @@ public class AgentOrderProcessingTests
         Assert.True(result.Success);
         Assert.Equal(OrderStatus.Processing, order.Status);
         Assert.Equal(1, repository.SaveCount);
-        var message = Assert.Single(realtimeNotifier.Messages);
+        var message = Assert.Single(realtimePublisher.OrderUpdates);
         Assert.Equal(order.Id, message.OrderId);
-        Assert.Equal(OrderStatus.Processing.ToString(), message.NewStatus);
+        Assert.Equal(OrderStatus.Processing.ToString(), message.Status);
         Assert.Equal(order.UserId, message.UserId);
         Assert.Equal(agentId, message.AgentId);
         AssertAgentLog(order, agentId, OrderStatus.Assigned, OrderStatus.Processing);
@@ -35,7 +35,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task RequestCustomerAction_WhenProcessing_StaysProcessingAndCreatesRequest()
     {
-        var (agentId, order, service, _, _) =
+        var (agentId, order, service, _, realtimePublisher) =
             CreateService(OrderStatus.Processing);
 
         var result = await service.RequestCustomerActionAsync(
@@ -52,6 +52,11 @@ public class AgentOrderProcessingTests
         var customerNote = Assert.Single(order.Notes);
         Assert.True(customerNote.IsVisibleToCustomer);
         Assert.Equal("Send the verification code.", customerNote.Text);
+        var realtimeEvent = Assert.Single(realtimePublisher.CustomerActionChanges);
+        Assert.Equal(order.Id, realtimeEvent.OrderId);
+        Assert.Equal(action.Id, realtimeEvent.RequestId);
+        Assert.Equal(order.UserId, realtimeEvent.UserId);
+        Assert.Equal(agentId, realtimeEvent.AgentId);
     }
 
     [Fact]
@@ -326,7 +331,7 @@ public class AgentOrderProcessingTests
     [Fact]
     public async Task SaveConflict_ReturnsConflict()
     {
-        var (agentId, order, service, repository, realtimeNotifier) =
+        var (agentId, order, service, repository, realtimePublisher) =
             CreateService(OrderStatus.Assigned);
         repository.SaveSucceeds = false;
 
@@ -337,7 +342,7 @@ public class AgentOrderProcessingTests
 
         Assert.False(result.Success);
         Assert.Equal(409, result.StatusCode);
-        Assert.Empty(realtimeNotifier.Messages);
+        Assert.Empty(realtimePublisher.OrderUpdates);
     }
 
     private static (
@@ -345,7 +350,7 @@ public class AgentOrderProcessingTests
         Order Order,
         AgentOrderProcessingService Service,
         FakeAgentOrderCommandRepository Repository,
-        FakeOrderRealtimeNotifier RealtimeNotifier)
+        FakeRealtimeEventPublisher RealtimePublisher)
         CreateService(OrderStatus status)
     {
         var agentId = Guid.NewGuid();
@@ -362,7 +367,7 @@ public class AgentOrderProcessingTests
             }
         };
         var repository = new FakeAgentOrderCommandRepository { Order = order };
-        var realtimeNotifier = new FakeOrderRealtimeNotifier();
+        var realtimePublisher = new FakeRealtimeEventPublisher();
         return (
             agentId,
             order,
@@ -370,9 +375,9 @@ public class AgentOrderProcessingTests
                 repository,
                 new FakeOrderFieldProtector(),
                 new FakeNotificationService(),
-                realtimeNotifier),
+                realtimePublisher),
             repository,
-            realtimeNotifier);
+            realtimePublisher);
     }
 
     private static void ConfigureCreateNewAccountDelivery(Order order)

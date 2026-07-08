@@ -37,7 +37,7 @@ builder.Services.AddScoped<RefundsClient>();
 builder.Services.AddScoped<AdminRefundsClient>();
 builder.Services.AddScoped<NotificationsClient>();
 builder.Services.AddScoped<TicketsClient>();
-builder.Services.AddScoped<OrderRealtimeClient>();
+builder.Services.AddScoped<RealtimeClient>();
 
 // Cookie Authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -103,7 +103,7 @@ app.Use(async (context, next) =>
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
         "img-src 'self' data: https:; " +
         "font-src 'self' data:; " +
-        "connect-src 'self' ws: wss:;";
+        "connect-src 'self' https://localhost:7066 ws: wss:;";
     context.Response.Headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
     context.Response.Headers.Remove("Server");
     await next();

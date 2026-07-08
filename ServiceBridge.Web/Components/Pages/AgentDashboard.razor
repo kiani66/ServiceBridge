@@ -2,7 +2,7 @@
 @attribute [Authorize(Roles = AppConstants.Roles.Agent)]
 @implements IDisposable
 @inject AgentOrdersClient AgentOrdersClient
-@inject OrderRealtimeClient OrderRealtimeClient
+@inject RealtimeClient RealtimeClient
 @inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Agent", null) })" />
@@ -327,8 +327,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
-        await OrderRealtimeClient.StartAsync();
+        RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        RealtimeClient.OrderAssigned += HandleOrderAssignedAsync;
+        RealtimeClient.CustomerActionChanged += HandleCustomerActionChangedAsync;
         await LoadSummaryAsync();
         await LoadOrdersAsync();
     }
@@ -481,7 +482,22 @@
         _actionBusy = false;
     }
 
-    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
+    {
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task HandleOrderAssignedAsync(OrderAssignedRealtimeDto message)
+    {
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task HandleCustomerActionChangedAsync(CustomerActionChangedRealtimeDto message)
+    {
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task ReloadFromRealtimeAsync()
     {
         return InvokeAsync(async () =>
         {
@@ -514,7 +530,9 @@
 
     public void Dispose()
     {
-        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+        RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+        RealtimeClient.OrderAssigned -= HandleOrderAssignedAsync;
+        RealtimeClient.CustomerActionChanged -= HandleCustomerActionChangedAsync;
     }
 
     private sealed record ActivityFeedItem(string Title, string Description, string Time);

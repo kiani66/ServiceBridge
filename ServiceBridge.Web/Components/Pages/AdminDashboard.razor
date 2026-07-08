@@ -2,7 +2,7 @@
 @attribute [Authorize(Roles = AppConstants.Roles.Admin)]
 @implements IDisposable
 @inject AdminOrdersClient AdminOrdersClient
-@inject OrderRealtimeClient OrderRealtimeClient
+@inject RealtimeClient RealtimeClient
 @inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", null) })" />
@@ -415,8 +415,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
-        await OrderRealtimeClient.StartAsync();
+        RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        RealtimeClient.OrderAssigned += HandleOrderAssignedAsync;
         await LoadDashboardAsync();
     }
 
@@ -515,7 +515,17 @@
         return true;
     }
 
-    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
+    {
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task HandleOrderAssignedAsync(OrderAssignedRealtimeDto message)
+    {
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task ReloadFromRealtimeAsync()
     {
         return InvokeAsync(async () =>
         {
@@ -526,7 +536,8 @@
 
     public void Dispose()
     {
-        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+        RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+        RealtimeClient.OrderAssigned -= HandleOrderAssignedAsync;
     }
 
     private sealed record ChartPoint(

@@ -13,18 +13,18 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
     private readonly IAgentOrderCommandRepository _repository;
     private readonly IOrderFieldProtector _fieldProtector;
     private readonly INotificationService _notificationService;
-    private readonly IOrderRealtimeNotifier _orderRealtimeNotifier;
+    private readonly IRealtimeEventPublisher _realtimeEventPublisher;
 
     public AgentOrderProcessingService(
         IAgentOrderCommandRepository repository,
         IOrderFieldProtector fieldProtector,
         INotificationService notificationService,
-        IOrderRealtimeNotifier orderRealtimeNotifier)
+        IRealtimeEventPublisher realtimeEventPublisher)
     {
         _repository = repository;
         _fieldProtector = fieldProtector;
         _notificationService = notificationService;
-        _orderRealtimeNotifier = orderRealtimeNotifier;
+        _realtimeEventPublisher = realtimeEventPublisher;
     }
 
     public Task<ServiceResult> StartProcessingAsync(
@@ -56,7 +56,8 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
                 order.UserId,
                 order.Id,
                 order.OrderNumber),
-            AppMessages.CustomerActionRequested);
+            AppMessages.CustomerActionRequested,
+            PublishCustomerActionChangedAsync);
     }
 
     public Task<ServiceResult> ResumeProcessingAsync(
@@ -202,7 +203,8 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
         Guid orderId,
         Action<Order> transition,
         Func<Order, Task>? queueNotification,
-        string successMessage)
+        string successMessage,
+        Func<Order, Task>? publishAfterSave = null)
     {
         var order = await _repository.GetAssignedOrderForUpdateAsync(
             agentId,
@@ -222,10 +224,19 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
             }
 
             var result = await SaveAsync(successMessage);
-            if (result.Success && order.Status != previousStatus)
+            if (result.Success)
             {
-                await _orderRealtimeNotifier.NotifyOrderUpdatedAsync(
-                    CreateRealtimeMessage(order));
+                await _notificationService.PublishQueuedRealtimeAsync();
+
+                if (publishAfterSave is not null)
+                {
+                    await publishAfterSave(order);
+                }
+                else if (order.Status != previousStatus)
+                {
+                    await _realtimeEventPublisher.PublishOrderUpdatedAsync(
+                        CreateOrderUpdatedEvent(order, notifyAdmins: true));
+                }
             }
 
             return result;
@@ -279,8 +290,9 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
         var result = await SaveAsync(successMessage);
         if (result.Success)
         {
-            await _orderRealtimeNotifier.NotifyOrderUpdatedAsync(
-                CreateRealtimeMessage(order));
+            await _notificationService.PublishQueuedRealtimeAsync();
+            await _realtimeEventPublisher.PublishOrderUpdatedAsync(
+                CreateOrderUpdatedEvent(order, notifyAdmins: true));
         }
 
         return result;
@@ -437,16 +449,40 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
             409);
     }
 
-    private static OrderUpdatedRealtimeMessage CreateRealtimeMessage(Order order)
+    private static OrderUpdatedRealtimeEvent CreateOrderUpdatedEvent(
+        Order order,
+        bool notifyAdmins)
     {
-        return new OrderUpdatedRealtimeMessage
+        return new OrderUpdatedRealtimeEvent
         {
             OrderId = order.Id,
-            OrderNumber = order.OrderNumber,
-            NewStatus = order.Status.ToString(),
+            Status = order.Status.ToString(),
+            LinkUrl = $"/ui/orders/{order.Id}",
             UpdatedAtUtc = order.UpdatedAt ?? DateTime.UtcNow,
             UserId = order.UserId,
-            AgentId = order.AssignedAgentId
+            AgentId = order.AssignedAgentId,
+            NotifyAdmins = notifyAdmins
         };
+    }
+
+    private Task PublishCustomerActionChangedAsync(Order order)
+    {
+        var request = order.CustomerActionRequests
+            .Where(x => !x.IsResolved)
+            .OrderByDescending(x => x.RequestedAt)
+            .FirstOrDefault();
+
+        return request is null
+            ? Task.CompletedTask
+            : _realtimeEventPublisher.PublishCustomerActionChangedAsync(
+                new CustomerActionChangedRealtimeEvent
+                {
+                    OrderId = order.Id,
+                    RequestId = request.Id,
+                    LinkUrl = $"/ui/orders/{order.Id}",
+                    UpdatedAtUtc = order.UpdatedAt ?? DateTime.UtcNow,
+                    UserId = order.UserId,
+                    AgentId = order.AssignedAgentId
+                });
     }
 }

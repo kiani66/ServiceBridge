@@ -3,6 +3,8 @@
 @inject NotificationsClient NotificationsClient
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject RealtimeClient RealtimeClient
+@implements IDisposable
 
 <PageHeader Eyebrow="Notifications"
             Title="In-app notifications"
@@ -133,6 +135,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        RealtimeClient.NotificationReceived += HandleNotificationReceivedAsync;
         await ResolveOrderRouteAsync();
         await LoadAsync(1);
     }
@@ -285,5 +288,19 @@
     private static string FormatDateTime(DateTime value)
     {
         return value.ToString("yyyy-MM-dd HH:mm") + " UTC";
+    }
+
+    private Task HandleNotificationReceivedAsync(RealtimeEventDto notification)
+    {
+        return InvokeAsync(async () =>
+        {
+            await LoadAsync(_unreadOnly ? 1 : Math.Max(_notifications.Page, 1));
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        RealtimeClient.NotificationReceived -= HandleNotificationReceivedAsync;
     }
 }

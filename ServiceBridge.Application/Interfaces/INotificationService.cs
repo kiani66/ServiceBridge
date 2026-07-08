@@ -17,6 +17,7 @@ public interface INotificationService
     Task<ServiceResult<UnreadNotificationCountDto>> GetUnreadCountAsync(Guid userId);
     Task<ServiceResult> MarkAsReadAsync(Guid userId, Guid notificationId);
     Task<ServiceResult> MarkAllAsReadAsync(Guid userId);
+    Task PublishQueuedRealtimeAsync(CancellationToken cancellationToken = default);
     Task QueueOrderCreatedAsync(Guid userId, Guid orderId, string orderNumber);
     Task QueuePaymentCompletedAsync(Guid userId, Guid orderId, string orderNumber);
     Task QueueOrderReadyForAssignmentAsync(Guid orderId, string orderNumber);
