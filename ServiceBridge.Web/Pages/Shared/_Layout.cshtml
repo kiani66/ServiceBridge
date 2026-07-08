@@ -39,7 +39,7 @@
                     </div>
                 </div>
                 <nav class="sb-razor-nav">
-                    @foreach (var item in ServiceBridge.Web.Navigation.RoleNavigation.GetItems(User))
+                    @foreach (var item in ServiceBridge.Web.Navigation.RoleNavigation.GetConsoleItems(User))
                     {
                         var itemPath = item.Page.Split('?', 2)[0];
                         var isActive = pathValue.StartsWith(itemPath, StringComparison.OrdinalIgnoreCase);
@@ -102,7 +102,7 @@
                         <ul class="navbar-nav">
                             @if (isAuthenticated)
                             {
-                                var landingPage = ServiceBridge.Web.Navigation.RoleNavigation.GetLandingPage(User) ?? "/ui";
+                                var landingPage = ServiceBridge.Web.Navigation.RoleNavigation.GetConsoleLandingPage(User) ?? "/ui";
                                 <li class="nav-item"><a class="nav-link" href="@landingPage">Workspace</a></li>
                                 <li class="nav-item">
                                     <form method="post" asp-page="/Account/Logout" class="d-inline">

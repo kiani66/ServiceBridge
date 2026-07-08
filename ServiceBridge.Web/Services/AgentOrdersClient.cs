@@ -116,6 +116,31 @@ public sealed class AgentOrdersClient
             cancellationToken);
     }
 
+    public Task<AgentOrdersApiResult<bool>> SaveDeliveryCredentialsAsync(
+        Guid orderId,
+        IReadOnlyDictionary<string, string> credentials,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new SaveAgentDeliveryCredentialsRequest
+        {
+            Credentials = credentials
+                .Select(item => new CreateOrderFieldRequest
+                {
+                    FieldKey = item.Key,
+                    Value = item.Value.Trim()
+                })
+                .ToList()
+        };
+
+        return SendCommandAsync(
+            client => client.PostAsJsonAsync(
+                $"api/agent/orders/{orderId}/delivery-credentials",
+                request,
+                cancellationToken),
+            "Unable to save delivery credentials right now.",
+            cancellationToken);
+    }
+
     public Task<AgentOrdersApiResult<bool>> AddNoteAsync(
         Guid orderId,
         string text,

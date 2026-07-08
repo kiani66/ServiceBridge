@@ -32,7 +32,30 @@ public class IndexModel : PageModel
     [BindProperty(SupportsGet = true)]
     public OrderStatus? Status { get; set; }
 
-    public async Task<IActionResult> OnGetAsync()
+    public IActionResult OnGet()
+    {
+        return LocalRedirect(BuildConsoleOrdersUrl());
+    }
+
+    private string BuildConsoleOrdersUrl()
+    {
+        var query = new List<string>();
+        if (PageNumber > 1)
+        {
+            query.Add($"page={PageNumber}");
+        }
+
+        if (Status.HasValue)
+        {
+            query.Add($"status={Uri.EscapeDataString(Status.Value.ToString())}");
+        }
+
+        return query.Count == 0
+            ? "/ui/agent/orders"
+            : $"/ui/agent/orders?{string.Join("&", query)}";
+    }
+
+    private async Task<IActionResult> LoadLegacyOrdersAsync()
     {
         var client = _httpClientFactory.CreateClient(AppConstants.Api.HttpClientName);
 
