@@ -28,6 +28,11 @@ public class UserProfileModel : PageModel
 
     public async Task<IActionResult> OnGetAsync()
     {
+        if (!Request.HasFormContentType)
+        {
+            return LocalRedirect("/ui/profile");
+        }
+
         var client = _httpClientFactory.CreateClient(AppConstants.Api.HttpClientName);
 
         HttpResponseMessage response;

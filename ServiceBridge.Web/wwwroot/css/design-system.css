@@ -563,6 +563,56 @@ a:focus {
     line-height: 22px;
 }
 
+.sb-profile-panel {
+    display: grid;
+    gap: var(--sb-space-6);
+}
+
+.sb-profile-summary {
+    align-items: center;
+    display: flex;
+    gap: var(--sb-space-4);
+    min-width: 0;
+}
+
+.sb-profile-summary h2 {
+    margin-bottom: var(--sb-space-1);
+}
+
+.sb-profile-avatar-large {
+    align-items: center;
+    aspect-ratio: 1;
+    background: #eff6ff;
+    border: 1px solid var(--sb-color-border);
+    border-radius: 999px;
+    color: var(--sb-color-primary);
+    display: inline-flex;
+    flex: 0 0 88px;
+    font-size: 28px;
+    font-weight: 800;
+    justify-content: center;
+    overflow: hidden;
+    width: 88px;
+}
+
+.sb-profile-avatar-large img {
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.sb-profile-photo-edit {
+    align-items: center;
+    display: grid;
+    gap: var(--sb-space-4);
+    grid-template-columns: 88px minmax(0, 1fr);
+}
+
+.sb-break-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
 .sb-hero-steps,
 .sb-process-grid {
     display: grid;

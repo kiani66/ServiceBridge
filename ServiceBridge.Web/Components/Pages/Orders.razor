@@ -129,6 +129,9 @@
 @code {
     private const int PageSize = 20;
 
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? StatusQuery { get; set; }
+
     private bool _loading = true;
     private string? _errorMessage;
     private OrderStatus? _status;
@@ -142,13 +145,22 @@
     {
         OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
         await OrderRealtimeClient.StartAsync();
-        await LoadOrdersAsync();
     }
 
-    private async Task OnStatusChanged(OrderStatus? status)
+    protected override Task OnParametersSetAsync()
     {
-        _status = status;
-        await LoadOrdersAsync(1);
+        _status = ParseStatus(StatusQuery);
+        return LoadOrdersAsync(1);
+    }
+
+    private Task OnStatusChanged(OrderStatus? status)
+    {
+        var target = status.HasValue
+            ? $"/ui/orders?status={Uri.EscapeDataString(status.Value.ToString())}"
+            : "/ui/orders";
+
+        Navigation.NavigateTo(target);
+        return Task.CompletedTask;
     }
 
     private Task PreviousPage()
@@ -192,5 +204,12 @@
     public void Dispose()
     {
         OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+    }
+
+    private static OrderStatus? ParseStatus(string? status)
+    {
+        return Enum.TryParse<OrderStatus>(status, ignoreCase: true, out var parsed)
+            ? parsed
+            : null;
     }
 }

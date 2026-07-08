@@ -32,6 +32,11 @@ public class DetailsModel : PageModel
 
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
+        if (!Request.HasFormContentType)
+        {
+            return LocalRedirect($"/ui/orders/{id}");
+        }
+
         return await LoadOrderAsync(id);
     }
 

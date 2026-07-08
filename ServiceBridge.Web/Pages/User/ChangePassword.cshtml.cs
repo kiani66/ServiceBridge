@@ -47,8 +47,9 @@ namespace ServiceBridge.Web.Pages.User
             public string ConfirmNewPassword { get; set; } = string.Empty;
         }
 
-        public void OnGet()
+        public IActionResult OnGet()
         {
+            return LocalRedirect("/ui/profile/password");
         }
 
         public async Task<IActionResult> OnPostAsync()

@@ -3,6 +3,7 @@
 @implements IDisposable
 @inject UserOrdersClient OrdersClient
 @inject RefundsClient RefundsClient
+@inject PaymentClient PaymentClient
 @inject OrderRealtimeClient OrderRealtimeClient
 @inject NavigationManager Navigation
 
@@ -34,8 +35,28 @@ else
                 Title="@_order.OrderNumber"
                 Description="@($"{_order.ServiceName} via {_order.Provider}")">
         <Actions>
+            @if (_order.Status == nameof(OrderStatus.WaitingForPayment))
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@_paymentBusy"
+                           StartIcon="@Icons.Material.Outlined.Payment"
+                           OnClick="InitiatePaymentAsync">
+                    Pay
+                </MudButton>
+            }
+            @if (_order.CanCancel)
+            {
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Error"
+                           Disabled="@_cancelBusy"
+                           StartIcon="@Icons.Material.Outlined.Cancel"
+                           OnClick="@(() => _cancelDialogOpen = true)">
+                    Cancel
+                </MudButton>
+            }
             <MudButton Href="@SupportHref"
-                       Variant="Variant.Filled"
+                       Variant="Variant.Outlined"
                        Color="Color.Primary"
                        StartIcon="@Icons.Material.Outlined.SupportAgent">
                 Open support ticket
@@ -46,6 +67,19 @@ else
     <PageSection MaxWidth="wide">
         <div class="sb-order-management-grid">
             <div class="sb-order-stack">
+                @if (!string.IsNullOrWhiteSpace(_paymentError))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_paymentError</MudAlert>
+                }
+                @if (!string.IsNullOrWhiteSpace(_cancelError))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_cancelError</MudAlert>
+                }
+                @if (!string.IsNullOrWhiteSpace(_cancelMessage))
+                {
+                    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">@_cancelMessage</MudAlert>
+                }
+
                 <OrderSummaryCard Title="Order information"
                                   Eyebrow="Customer order"
                                   Facts="@SummaryFacts" />
@@ -216,6 +250,14 @@ else
             </div>
         </div>
     </PageSection>
+
+    <ConfirmationDialog Open="_cancelDialogOpen"
+                        OpenChanged="@((bool open) => _cancelDialogOpen = open)"
+                        Title="Cancel order"
+                        Description="Cancel this order and stop any pending fulfillment work."
+                        ConfirmText="Cancel order"
+                        Color="Color.Error"
+                        OnConfirmed="CancelOrderAsync" />
 }
 
 @code {
@@ -226,12 +268,18 @@ else
     private bool _refundsLoading;
     private bool _customerActionBusy;
     private bool _showCustomerActionForm;
+    private bool _paymentBusy;
+    private bool _cancelBusy;
+    private bool _cancelDialogOpen;
     private string? _errorMessage;
     private string? _refundError;
     private string? _refundMessage;
     private string? _refundReason;
     private string? _customerActionError;
     private string? _customerActionMessage;
+    private string? _paymentError;
+    private string? _cancelError;
+    private string? _cancelMessage;
     private string _customerActionResponse = string.Empty;
     private UserOrderDetailDto? _order;
     private IReadOnlyCollection<RefundRequestDto> _refunds = Array.Empty<RefundRequestDto>();
@@ -386,6 +434,74 @@ else
         _refundMessage = "Refund request submitted.";
         await LoadRefundsAsync();
         _refundBusy = false;
+    }
+
+    private async Task InitiatePaymentAsync()
+    {
+        _paymentError = null;
+        _paymentBusy = true;
+
+        var initiateResult = await PaymentClient.InitiatePaymentAsync(OrderId, Guid.NewGuid());
+        if (initiateResult.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!initiateResult.Success || initiateResult.Data is null)
+        {
+            _paymentError = initiateResult.ErrorMessage ?? "Unable to start payment for this order.";
+            _paymentBusy = false;
+            return;
+        }
+
+        var mockResult = await PaymentClient.ProcessMockPaymentAsync(
+            initiateResult.Data.PaymentId,
+            succeed: true);
+        if (mockResult.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!mockResult.Success || mockResult.Data is null)
+        {
+            _paymentError = mockResult.ErrorMessage ?? "Unable to process the mock payment.";
+            _paymentBusy = false;
+            return;
+        }
+
+        var route = mockResult.Data.Status == PaymentStatus.Completed
+            ? "success"
+            : "failure";
+
+        Navigation.NavigateTo(
+            $"/ui/payments/{route}/{mockResult.Data.OrderId}?paymentId={mockResult.Data.PaymentId}");
+    }
+
+    private async Task CancelOrderAsync()
+    {
+        _cancelError = null;
+        _cancelMessage = null;
+        _cancelBusy = true;
+
+        var result = await OrdersClient.CancelOrderAsync(OrderId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _cancelError = result.ErrorMessage ?? "Unable to cancel this order.";
+            _cancelBusy = false;
+            return;
+        }
+
+        _cancelMessage = "Order cancelled successfully.";
+        await LoadOrderAsync();
+        _cancelBusy = false;
     }
 
     private async Task SubmitCustomerActionResponseAsync()

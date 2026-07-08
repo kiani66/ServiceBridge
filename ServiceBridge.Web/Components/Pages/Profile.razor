@@ -1,35 +1,108 @@
 @page "/ui/profile"
 @attribute [Authorize]
+@inject UserProfileClient ProfileClient
+@inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Profile", null) })" />
 
 <PageHeader Eyebrow="Account"
             Title="Profile"
-            Description="Manage account details, profile photo, and password from the authenticated dashboard." />
+            Description="Review account details, profile photo, and security settings in the authenticated console.">
+    <Actions>
+        <MudButton Href="/ui/profile/edit"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.Edit">
+            Edit
+        </MudButton>
+        <MudButton Href="/ui/profile/password"
+                   Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.LockReset">
+            Password
+        </MudButton>
+    </Actions>
+</PageHeader>
 
 <PageSection MaxWidth="form">
-    <div class="sb-detail-panel">
-        <h2>Account settings</h2>
-        <p>Profile actions keep the existing account workflow while using the shared dashboard shell.</p>
-        <div class="sb-page-actions">
-            <MudButton Href="/User/UserProfile"
-                       Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       StartIcon="@Icons.Material.Outlined.Person">
-                View profile
-            </MudButton>
-            <MudButton Href="/User/EditProfile"
-                       Variant="Variant.Outlined"
-                       Color="Color.Primary"
-                       StartIcon="@Icons.Material.Outlined.Edit">
-                Edit profile
-            </MudButton>
-            <MudButton Href="/User/ChangePassword"
-                       Variant="Variant.Outlined"
-                       Color="Color.Primary"
-                       StartIcon="@Icons.Material.Outlined.LockReset">
-                Change password
-            </MudButton>
+    @if (_loading)
+    {
+        <LoadingState Text="Loading profile" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <ErrorState Title="Unable to load profile"
+                    Message="@_errorMessage"
+                    Icon="@Icons.Material.Outlined.PersonOff"
+                    OnRetry="LoadProfileAsync" />
+    }
+    else if (_profile is not null)
+    {
+        <div class="sb-detail-panel sb-profile-panel">
+            <div class="sb-profile-summary">
+                <div class="sb-profile-avatar-large">
+                    @if (!string.IsNullOrWhiteSpace(_profile.ProfileImageUrl))
+                    {
+                        <img src="@_profile.ProfileImageUrl" alt="Profile photo" />
+                    }
+                    else
+                    {
+                        <span>@Initial</span>
+                    }
+                </div>
+                <div>
+                    <span class="sb-eyebrow">@_profile.Role</span>
+                    <h2>@_profile.FullName</h2>
+                    <p>@_profile.Email</p>
+                </div>
+            </div>
+
+            <dl class="sb-fact-list">
+                <div><dt>Email</dt><dd>@_profile.Email</dd></div>
+                <div><dt>Role</dt><dd>@_profile.Role</dd></div>
+                <div><dt>User ID</dt><dd class="sb-break-anywhere">@_profile.UserId</dd></div>
+                <div><dt>Member since</dt><dd>@FormatDate(_profile.CreatedAt)</dd></div>
+                <div><dt>Last updated</dt><dd>@(_profile.UpdatedAt.HasValue ? FormatDate(_profile.UpdatedAt.Value) : "-")</dd></div>
+                <div><dt>Photo URL</dt><dd>@(string.IsNullOrWhiteSpace(_profile.ProfileImageUrl) ? "-" : _profile.ProfileImageUrl)</dd></div>
+            </dl>
         </div>
-    </div>
+    }
 </PageSection>
+
+@code {
+    private bool _loading = true;
+    private string? _errorMessage;
+    private UserProfileResponse? _profile;
+
+    private string Initial =>
+        string.IsNullOrWhiteSpace(_profile?.FullName)
+            ? "U"
+            : _profile.FullName.Trim()[0].ToString().ToUpperInvariant();
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await ProfileClient.GetProfileAsync();
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _profile = result.Success ? result.Data : null;
+        _errorMessage = result.ErrorMessage;
+        _loading = false;
+    }
+
+    private static string FormatDate(DateTime value)
+    {
+        return value.ToString("MMMM dd, yyyy");
+    }
+}
