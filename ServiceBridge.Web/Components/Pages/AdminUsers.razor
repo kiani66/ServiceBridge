@@ -1,0 +1,274 @@
+@page "/ui/admin/users"
+@attribute [Authorize(Roles = AppConstants.Roles.Admin)]
+@inject AdminUsersClient AdminUsersClient
+@inject NavigationManager Navigation
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Users", null) })" />
+
+<PageHeader Eyebrow="Admin operations"
+            Title="User Management"
+            Description="Create agents, search users, reset passwords, and manage account status." />
+
+<PageSection MaxWidth="wide">
+    <FormSection Title="Create agent" Description="Create an active operations account for order fulfillment.">
+        <EditForm Model="_agentRequest" OnValidSubmit="CreateAgentAsync">
+            <DataAnnotationsValidator />
+            <MudTextField T="string" Label="Full name" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_agentRequest.FullName" />
+            <MudTextField T="string" Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_agentRequest.Email" />
+            <MudTextField T="string" Label="Initial password" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_agentRequest.Password" />
+            <ValidationSummary />
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy" StartIcon="@Icons.Material.Outlined.PersonAdd">
+                Create Agent
+            </MudButton>
+        </EditForm>
+    </FormSection>
+</PageSection>
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Users"
+                     Description="Search platform users and manage operational account access."
+                     Search="@_search"
+                     SearchChanged="OnSearchChanged"
+                     SearchPlaceholder="Search name or email" />
+
+    @if (_loading)
+    {
+        <LoadingState Text="Loading users" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <ErrorState Title="Unable to load users"
+                    Message="@_errorMessage"
+                    OnRetry="@(() => LoadAsync(Math.Max(_users.Page, 1)))" />
+    }
+    else if (_users.Items.Count == 0)
+    {
+        <EmptyState Title="No users found"
+                    Description="No users match the current search."
+                    Icon="@Icons.Material.Outlined.Group" />
+    }
+    else
+    {
+        <MudTable Items="@_users.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>User</MudTh>
+                <MudTh>Role</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Created</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="User"><strong>@context.FullName</strong><span class="sb-table-subtext">@context.Email</span></MudTd>
+                <MudTd DataLabel="Role">@context.Role</MudTd>
+                <MudTd DataLabel="Status"><StatusBadge Text="@(context.IsActive ? "Active" : "Inactive")" Tone="@(context.IsActive ? "success" : "neutral")" /></MudTd>
+                <MudTd DataLabel="Created">@UserOrderDisplay.FormatDateTime(context.CreatedAt)</MudTd>
+                <MudTd DataLabel="Actions">
+                    <div class="sb-action-cell">
+                        @if (context.Role == AppConstants.Roles.Admin)
+                        {
+                            <span class="sb-table-subtext">Protected admin account</span>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       Disabled="@_actionBusy"
+                                       OnClick="@(() => SetStatusAsync(context.UserId, !context.IsActive))">
+                                @(context.IsActive ? "Deactivate" : "Activate")
+                            </MudButton>
+                        }
+                        <MudTextField T="string"
+                                      Label="New password"
+                                      InputType="InputType.Password"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Value="@PasswordFor(context.UserId)"
+                                      ValueChanged="@((string? value) => SetPassword(context.UserId, value))"
+                                      Class="sb-search-compact" />
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   Disabled="@(_actionBusy || string.IsNullOrWhiteSpace(PasswordFor(context.UserId)))"
+                                   OnClick="@(() => ResetPasswordAsync(context.UserId))">
+                            Reset Password
+                        </MudButton>
+                    </div>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        @if (_users.TotalPages > 1)
+        {
+            <div class="sb-pagination">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_users.Page <= 1 || _loading)"
+                           StartIcon="@Icons.Material.Outlined.ChevronLeft"
+                           OnClick="PreviousPage">
+                    Previous
+                </MudButton>
+                <span>Page @_users.Page of @_users.TotalPages</span>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_users.Page >= _users.TotalPages || _loading)"
+                           EndIcon="@Icons.Material.Outlined.ChevronRight"
+                           OnClick="NextPage">
+                    Next
+                </MudButton>
+            </div>
+        }
+    }
+</PageSection>
+
+@code {
+    private const int PageSize = 20;
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int? Page { get; set; }
+
+    [SupplyParameterFromQuery(Name = "search")]
+    public string? Search { get; set; }
+
+    private bool _loading = true;
+    private bool _actionBusy;
+    private string? _errorMessage;
+    private string? _search;
+    private PagedResultDto<AdminUserListItemDto> _users = new();
+    private CreateAgentRequest _agentRequest = new();
+    private readonly Dictionary<Guid, string?> _passwords = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _search = Search;
+        await LoadAsync(Math.Max(Page ?? 1, 1));
+    }
+
+    private async Task OnSearchChanged(string? search)
+    {
+        _search = search;
+        NavigateToPage(1);
+        await LoadAsync(1);
+    }
+
+    private Task PreviousPage()
+    {
+        var page = Math.Max(_users.Page - 1, 1);
+        NavigateToPage(page);
+        return LoadAsync(page);
+    }
+
+    private Task NextPage()
+    {
+        var page = _users.Page + 1;
+        NavigateToPage(page);
+        return LoadAsync(page);
+    }
+
+    private async Task LoadAsync(int page)
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await AdminUsersClient.GetUsersAsync(page, PageSize, _search);
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        _users = result.Success && result.Data is not null
+            ? result.Data
+            : new PagedResultDto<AdminUserListItemDto>();
+        _errorMessage = result.ErrorMessage;
+        _loading = false;
+    }
+
+    private Task CreateAgentAsync()
+    {
+        return RunActionAsync(
+            () => AdminUsersClient.CreateAgentAsync(_agentRequest),
+            () => _agentRequest = new());
+    }
+
+    private Task SetStatusAsync(Guid userId, bool isActive)
+    {
+        return RunActionAsync(
+            () => AdminUsersClient.SetUserStatusAsync(userId, isActive),
+            () => { });
+    }
+
+    private Task ResetPasswordAsync(Guid userId)
+    {
+        var password = PasswordFor(userId);
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            _errorMessage = "Enter a valid new password.";
+            return Task.CompletedTask;
+        }
+
+        return RunActionAsync(
+            () => AdminUsersClient.ResetPasswordAsync(userId, password),
+            () => _passwords.Remove(userId));
+    }
+
+    private async Task RunActionAsync(
+        Func<Task<AdminOrdersApiResult<bool>>> action,
+        Action onSuccess)
+    {
+        _actionBusy = true;
+        _errorMessage = null;
+        var result = await action();
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        if (result.Success)
+        {
+            onSuccess();
+            await LoadAsync(Math.Max(_users.Page, 1));
+        }
+        else
+        {
+            _errorMessage = result.ErrorMessage ?? "Unable to update the user.";
+        }
+
+        _actionBusy = false;
+    }
+
+    private string? PasswordFor(Guid userId)
+    {
+        return _passwords.TryGetValue(userId, out var password)
+            ? password
+            : null;
+    }
+
+    private void SetPassword(Guid userId, string? password)
+    {
+        _passwords[userId] = password;
+    }
+
+    private void NavigateToPage(int page)
+    {
+        var query = new Dictionary<string, object?>
+        {
+            ["page"] = page <= 1 ? null : page,
+            ["search"] = string.IsNullOrWhiteSpace(_search) ? null : _search
+        };
+
+        Navigation.NavigateTo(
+            Navigation.GetUriWithQueryParameters("/ui/admin/users", query),
+            replace: true);
+    }
+
+    private bool RedirectIfAuthRequired(bool requiresAuthentication)
+    {
+        if (!requiresAuthentication)
+        {
+            return false;
+        }
+
+        Navigation.NavigateTo("/Account/Login");
+        return true;
+    }
+}

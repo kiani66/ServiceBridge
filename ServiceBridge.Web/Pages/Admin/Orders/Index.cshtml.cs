@@ -32,7 +32,10 @@ public class IndexModel : PageModel
 
     public Task<IActionResult> OnGetAsync()
     {
-        return LoadAsync();
+        var target = PageNumber > 1
+            ? $"/ui/admin/orders?page={PageNumber}"
+            : "/ui/admin/orders";
+        return Task.FromResult<IActionResult>(LocalRedirect(target));
     }
 
     public async Task<IActionResult> OnPostAssignAsync(

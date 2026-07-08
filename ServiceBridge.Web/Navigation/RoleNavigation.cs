@@ -18,10 +18,10 @@ public static class RoleNavigation
             return
             [
                 new("Dashboard", "/ui/admin"),
-                new("Catalog", "/Admin/Catalog"),
-                new("Pricing", "/Admin/Pricing"),
-                new("Users", "/Admin/Users"),
-                new("Orders", "/Admin/Orders"),
+                new("Catalog", "/ui/admin/catalog"),
+                new("Pricing", "/ui/admin/pricing"),
+                new("Users", "/ui/admin/users"),
+                new("Orders", "/ui/admin/orders"),
                 new("Support", "/ui/admin/tickets"),
                 new("Profile", "/ui/profile")
             ];
@@ -95,12 +95,12 @@ public static class RoleNavigation
             return
             [
                 new("Dashboard", "/ui/admin", "Admin operations", Icons.Material.Outlined.SpaceDashboard, MatchExact: true),
+                new("Orders", "/ui/admin/orders", "Admin operations", Icons.Material.Outlined.ReceiptLong),
+                new("Catalog", "/ui/admin/catalog", "Admin operations", Icons.Material.Outlined.Inventory2),
+                new("Pricing", "/ui/admin/pricing", "Admin operations", Icons.Material.Outlined.PriceChange),
+                new("Users", "/ui/admin/users", "Admin operations", Icons.Material.Outlined.Group),
                 new("Financial Reports", "/ui/admin/reports/financial", "Admin operations", Icons.Material.Outlined.Assessment),
                 new("Audit", "/ui/admin/audit", "Admin operations", Icons.Material.Outlined.ManageSearch),
-                new("Catalog", "/Admin/Catalog", "Admin operations", Icons.Material.Outlined.Inventory2),
-                new("Pricing", "/Admin/Pricing", "Admin operations", Icons.Material.Outlined.PriceChange),
-                new("Users", "/Admin/Users", "Admin operations", Icons.Material.Outlined.Group),
-                new("Orders", "/Admin/Orders", "Admin operations", Icons.Material.Outlined.ReceiptLong),
                 new("Notifications", "/ui/notifications", "Account", Icons.Material.Outlined.Notifications),
                 new("Profile", "/ui/profile", "Account", Icons.Material.Outlined.Person)
             ];

@@ -1,0 +1,484 @@
+@page "/ui/admin/catalog/services/{ServiceId:guid}"
+@attribute [Authorize(Roles = AppConstants.Roles.Admin)]
+@inject AdminCatalogClient AdminCatalogClient
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <PageHeader Eyebrow="Admin catalog"
+                Title="Loading service"
+                Description="Fetching the service management view." />
+    <PageSection MaxWidth="standard">
+        <LoadingState Text="Loading service" />
+    </PageSection>
+}
+else if (_service is null)
+{
+    <ErrorState Title="Service unavailable"
+                Message="@(_errorMessage ?? "The requested service could not be loaded.")"
+                Icon="@Icons.Material.Outlined.SearchOff"
+                OnRetry="LoadAsync">
+        <Actions>
+            <MudButton Href="/ui/admin/catalog" Variant="Variant.Outlined" Color="Color.Primary">Back to catalog</MudButton>
+        </Actions>
+    </ErrorState>
+}
+else
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Catalog", "/ui/admin/catalog"), (_service.Name, null) })" />
+
+    <PageHeader Eyebrow="Admin catalog"
+                Title="@_service.Name"
+                Description="@($"{_service.Provider} / {_service.CategoryName}")">
+        <Actions>
+            <MudButton Href="/ui/admin/catalog"
+                       Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.ArrowBack">
+                Catalog
+            </MudButton>
+        </Actions>
+    </PageHeader>
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <PageSection MaxWidth="wide">
+            <ErrorState Title="Unable to save catalog changes"
+                        Message="@_errorMessage"
+                        OnRetry="LoadAsync" />
+        </PageSection>
+    }
+
+    <PageSection MaxWidth="wide">
+        <FormSection Title="Service details" Description="Update the service metadata shown to customers.">
+            <EditForm Model="_serviceEdit" OnValidSubmit="UpdateServiceAsync">
+                <DataAnnotationsValidator />
+                <MudSelect T="Guid" Label="Category" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceEdit.CategoryId">
+                    @foreach (var category in _categories)
+                    {
+                        <MudSelectItem T="Guid" Value="@category.Id">@category.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField T="string" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceEdit.Name" />
+                <MudTextField T="string" Label="Provider" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceEdit.Provider" />
+                <MudTextField T="string" Label="Slug" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceEdit.Slug" />
+                <MudNumericField T="decimal" Label="Base price" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0.0001m" @bind-Value="_serviceEdit.BasePrice" />
+                <MudTextField T="string" Label="Currency" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceEdit.CurrencyCode" />
+                <MudTextField T="string" Label="Description" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="3" @bind-Value="_serviceEdit.Description" />
+                <MudTextField T="string" Label="Processing time" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceEdit.ProcessingTimeDescription" />
+                <MudTextField T="string" Label="Logo URL" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceEdit.LogoUrl" />
+                <MudCheckBox T="bool" Label="Active" Color="Color.Primary" @bind-Value="_serviceEdit.IsActive" />
+                <MudCheckBox T="bool" Label="Supports existing account" Color="Color.Primary" @bind-Value="_serviceEdit.SupportsUseExistingAccount" />
+                <MudCheckBox T="bool" Label="Supports creating new account" Color="Color.Primary" @bind-Value="_serviceEdit.SupportsCreateNewAccount" />
+                <ValidationSummary />
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy" StartIcon="@Icons.Material.Outlined.Save">
+                    Save Service
+                </MudButton>
+            </EditForm>
+        </FormSection>
+    </PageSection>
+
+    <PageSection MaxWidth="wide" Title="Service Variants" Description="Manage purchasable plans and their fulfillment channel.">
+        <div class="sb-dashboard-grid sb-dashboard-grid-two">
+            @foreach (var variant in _service.Plans.OrderBy(item => item.DisplayOrder).ThenBy(item => item.Name))
+            {
+                var edit = VariantEdit(variant);
+                <section class="sb-dashboard-panel">
+                    <div class="sb-dashboard-panel-header">
+                        <div>
+                            <h2>@variant.Name</h2>
+                            <p>@variant.BasePrice.ToString("0.####") @variant.CurrencyCode / @variant.RegionCode</p>
+                        </div>
+                        <StatusBadge Text="@(variant.IsActive ? "Active" : "Inactive")" Tone="@(variant.IsActive ? "success" : "neutral")" />
+                    </div>
+                    <EditForm Model="edit" OnValidSubmit="@(() => UpdateVariantAsync(variant.Id, edit))">
+                        <DataAnnotationsValidator />
+                        <MudTextField T="string" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.Name" />
+                        <MudTextField T="string" Label="Slug" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.Slug" />
+                        <MudNumericField T="int?" Label="Duration days" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" @bind-Value="edit.DurationDays" />
+                        <MudSelect T="BillingCycle" Label="Billing" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.BillingCycle">
+                            @foreach (var cycle in Enum.GetValues<BillingCycle>())
+                            {
+                                <MudSelectItem T="BillingCycle" Value="@cycle">@cycle</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudSelect T="AccountDeliveryType" Label="Delivery" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.AccountDeliveryType">
+                            @foreach (var deliveryType in Enum.GetValues<AccountDeliveryType>())
+                            {
+                                <MudSelectItem T="AccountDeliveryType" Value="@deliveryType">@deliveryType</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudSelect T="FulfillmentMode" Label="Fulfillment" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.FulfillmentMode">
+                            @foreach (var mode in Enum.GetValues<FulfillmentMode>())
+                            {
+                                <MudSelectItem T="FulfillmentMode" Value="@mode">@mode</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudTextField T="string" Label="Region" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.RegionCode" />
+                        <MudNumericField T="decimal" Label="Price" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0.0001m" @bind-Value="edit.BasePrice" />
+                        <MudTextField T="string" Label="Currency" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.CurrencyCode" />
+                        <MudNumericField T="int" Label="Display order" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" @bind-Value="edit.DisplayOrder" />
+                        <MudTextField T="string" Label="Processing" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.ProcessingTimeDescription" />
+                        <MudCheckBox T="bool" Label="Active" Color="Color.Primary" @bind-Value="edit.IsActive" />
+                        <ValidationSummary />
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Primary" Disabled="@_actionBusy" StartIcon="@Icons.Material.Outlined.Save">
+                            Save Variant
+                        </MudButton>
+                    </EditForm>
+                </section>
+            }
+
+            <FormSection Title="Add variant" Description="Create a new purchasable plan for this service.">
+                <EditForm Model="_newVariant" OnValidSubmit="CreateVariantAsync">
+                    <DataAnnotationsValidator />
+                    <MudTextField T="string" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newVariant.Name" />
+                    <MudTextField T="string" Label="Slug" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newVariant.Slug" />
+                    <MudNumericField T="int?" Label="Duration days" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" @bind-Value="_newVariant.DurationDays" />
+                    <MudSelect T="BillingCycle" Label="Billing" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newVariant.BillingCycle">
+                        @foreach (var cycle in Enum.GetValues<BillingCycle>())
+                        {
+                            <MudSelectItem T="BillingCycle" Value="@cycle">@cycle</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="AccountDeliveryType" Label="Delivery" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newVariant.AccountDeliveryType">
+                        @foreach (var deliveryType in Enum.GetValues<AccountDeliveryType>())
+                        {
+                            <MudSelectItem T="AccountDeliveryType" Value="@deliveryType">@deliveryType</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="FulfillmentMode" Label="Fulfillment" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newVariant.FulfillmentMode">
+                        @foreach (var mode in Enum.GetValues<FulfillmentMode>())
+                        {
+                            <MudSelectItem T="FulfillmentMode" Value="@mode">@mode</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudTextField T="string" Label="Region" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newVariant.RegionCode" />
+                    <MudNumericField T="decimal" Label="Price" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0.0001m" @bind-Value="_newVariant.BasePrice" />
+                    <MudTextField T="string" Label="Currency" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newVariant.CurrencyCode" />
+                    <MudNumericField T="int" Label="Display order" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" @bind-Value="_newVariant.DisplayOrder" />
+                    <MudTextField T="string" Label="Processing" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newVariant.ProcessingTimeDescription" />
+                    <MudCheckBox T="bool" Label="Active" Color="Color.Primary" @bind-Value="_newVariant.IsActive" />
+                    <ValidationSummary />
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy" StartIcon="@Icons.Material.Outlined.Add">
+                        Add Variant
+                    </MudButton>
+                </EditForm>
+            </FormSection>
+        </div>
+    </PageSection>
+
+    <PageSection MaxWidth="wide" Title="Order Form Fields" Description="Manage required customer and agent credential fields.">
+        <div class="sb-dashboard-grid sb-dashboard-grid-two">
+            @foreach (var field in _service.RequiredFields.OrderBy(item => item.FulfillmentMode).ThenBy(item => item.Actor).ThenBy(item => item.DisplayOrder))
+            {
+                var edit = FieldEdit(field);
+                <section class="sb-dashboard-panel">
+                    <div class="sb-dashboard-panel-header">
+                        <div>
+                            <h2>@field.Label</h2>
+                            <p>@field.FieldKey / @field.Actor / @field.FulfillmentMode</p>
+                        </div>
+                    </div>
+                    <EditForm Model="edit" OnValidSubmit="@(() => UpdateFieldAsync(field.Id, edit))">
+                        <DataAnnotationsValidator />
+                        <MudTextField T="string" Label="Key" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.FieldKey" />
+                        <MudTextField T="string" Label="Label" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.Label" />
+                        <MudSelect T="ServiceFieldType" Label="Type" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.FieldType">
+                            @foreach (var fieldType in Enum.GetValues<ServiceFieldType>())
+                            {
+                                <MudSelectItem T="ServiceFieldType" Value="@fieldType">@fieldType</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudSelect T="OrderFulfillmentMode" Label="Mode" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.FulfillmentMode">
+                            @foreach (var mode in Enum.GetValues<OrderFulfillmentMode>())
+                            {
+                                <MudSelectItem T="OrderFulfillmentMode" Value="@mode">@mode</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudSelect T="CredentialActor" Label="Actor" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="edit.Actor">
+                            @foreach (var actor in Enum.GetValues<CredentialActor>())
+                            {
+                                <MudSelectItem T="CredentialActor" Value="@actor">@actor</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudNumericField T="int" Label="Display order" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" @bind-Value="edit.DisplayOrder" />
+                        <MudTextField T="string" Label="Options JSON" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" @bind-Value="edit.OptionsJson" />
+                        <MudCheckBox T="bool" Label="Required" Color="Color.Primary" @bind-Value="edit.IsRequired" />
+                        <MudCheckBox T="bool" Label="Sensitive" Color="Color.Primary" @bind-Value="edit.IsSensitive" />
+                        <MudCheckBox T="bool" Label="Visible after completion" Color="Color.Primary" @bind-Value="edit.IsVisibleToCustomerAfterCompletion" />
+                        <ValidationSummary />
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Primary" Disabled="@_actionBusy" StartIcon="@Icons.Material.Outlined.Save">
+                            Save Field
+                        </MudButton>
+                    </EditForm>
+                </section>
+            }
+
+            <FormSection Title="Add field" Description="Add a credential or fulfillment field to the order form.">
+                <EditForm Model="_newField" OnValidSubmit="CreateFieldAsync">
+                    <DataAnnotationsValidator />
+                    <MudTextField T="string" Label="Key" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newField.FieldKey" />
+                    <MudTextField T="string" Label="Label" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newField.Label" />
+                    <MudSelect T="ServiceFieldType" Label="Type" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newField.FieldType">
+                        @foreach (var fieldType in Enum.GetValues<ServiceFieldType>())
+                        {
+                            <MudSelectItem T="ServiceFieldType" Value="@fieldType">@fieldType</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="OrderFulfillmentMode" Label="Mode" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newField.FulfillmentMode">
+                        @foreach (var mode in Enum.GetValues<OrderFulfillmentMode>())
+                        {
+                            <MudSelectItem T="OrderFulfillmentMode" Value="@mode">@mode</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="CredentialActor" Label="Actor" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_newField.Actor">
+                        @foreach (var actor in Enum.GetValues<CredentialActor>())
+                        {
+                            <MudSelectItem T="CredentialActor" Value="@actor">@actor</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudNumericField T="int" Label="Display order" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" @bind-Value="_newField.DisplayOrder" />
+                    <MudTextField T="string" Label="Options JSON" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" @bind-Value="_newField.OptionsJson" />
+                    <MudCheckBox T="bool" Label="Required" Color="Color.Primary" @bind-Value="_newField.IsRequired" />
+                    <MudCheckBox T="bool" Label="Sensitive" Color="Color.Primary" @bind-Value="_newField.IsSensitive" />
+                    <MudCheckBox T="bool" Label="Visible after completion" Color="Color.Primary" @bind-Value="_newField.IsVisibleToCustomerAfterCompletion" />
+                    <ValidationSummary />
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy" StartIcon="@Icons.Material.Outlined.Add">
+                        Add Field
+                    </MudButton>
+                </EditForm>
+            </FormSection>
+        </div>
+    </PageSection>
+}
+
+@code {
+    [Parameter] public Guid ServiceId { get; set; }
+
+    private bool _loading = true;
+    private bool _actionBusy;
+    private string? _errorMessage;
+    private AdminServiceResponse? _service;
+    private IReadOnlyCollection<ServiceCategoryResponse> _categories = Array.Empty<ServiceCategoryResponse>();
+    private UpdateDigitalServiceRequest _serviceEdit = new();
+    private CreateServiceVariantRequest _newVariant = NewVariant();
+    private CreateServiceRequiredFieldRequest _newField = NewField();
+    private readonly Dictionary<Guid, UpdateServiceVariantRequest> _variantEdits = new();
+    private readonly Dictionary<Guid, UpdateServiceRequiredFieldRequest> _fieldEdits = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await AdminCatalogClient.GetServiceAsync(ServiceId);
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        if (result.Success && result.Data is not null)
+        {
+            _service = result.Data.Service;
+            _categories = result.Data.Categories.OrderBy(category => category.DisplayOrder).ThenBy(category => category.Name).ToArray();
+            _serviceEdit = ToServiceEdit(_service);
+            _variantEdits.Clear();
+            foreach (var variant in _service.Plans)
+            {
+                _variantEdits[variant.Id] = ToVariantEdit(variant);
+            }
+
+            _fieldEdits.Clear();
+            foreach (var field in _service.RequiredFields)
+            {
+                _fieldEdits[field.Id] = ToFieldEdit(field);
+            }
+        }
+        else
+        {
+            _service = null;
+            _errorMessage = result.ErrorMessage;
+        }
+
+        _loading = false;
+    }
+
+    private Task UpdateServiceAsync()
+    {
+        return RunActionAsync(
+            () => AdminCatalogClient.UpdateServiceAsync(ServiceId, _serviceEdit),
+            () => { });
+    }
+
+    private Task CreateVariantAsync()
+    {
+        return RunActionAsync(
+            () => AdminCatalogClient.CreateVariantAsync(ServiceId, _newVariant),
+            () => _newVariant = NewVariant());
+    }
+
+    private Task UpdateVariantAsync(Guid variantId, UpdateServiceVariantRequest request)
+    {
+        return RunActionAsync(
+            () => AdminCatalogClient.UpdateVariantAsync(variantId, request),
+            () => { });
+    }
+
+    private Task CreateFieldAsync()
+    {
+        return RunActionAsync(
+            () => AdminCatalogClient.CreateFieldAsync(ServiceId, _newField),
+            () => _newField = NewField());
+    }
+
+    private Task UpdateFieldAsync(Guid fieldId, UpdateServiceRequiredFieldRequest request)
+    {
+        return RunActionAsync(
+            () => AdminCatalogClient.UpdateFieldAsync(fieldId, request),
+            () => { });
+    }
+
+    private async Task RunActionAsync(
+        Func<Task<AdminOrdersApiResult<bool>>> action,
+        Action onSuccess)
+    {
+        _actionBusy = true;
+        _errorMessage = null;
+        var result = await action();
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        if (result.Success)
+        {
+            onSuccess();
+            await LoadAsync();
+        }
+        else
+        {
+            _errorMessage = result.ErrorMessage ?? "Unable to save catalog changes.";
+        }
+
+        _actionBusy = false;
+    }
+
+    private UpdateServiceVariantRequest VariantEdit(ServiceVariantResponse variant)
+    {
+        if (!_variantEdits.TryGetValue(variant.Id, out var edit))
+        {
+            edit = ToVariantEdit(variant);
+            _variantEdits[variant.Id] = edit;
+        }
+
+        return edit;
+    }
+
+    private UpdateServiceRequiredFieldRequest FieldEdit(ServiceRequiredFieldResponse field)
+    {
+        if (!_fieldEdits.TryGetValue(field.Id, out var edit))
+        {
+            edit = ToFieldEdit(field);
+            _fieldEdits[field.Id] = edit;
+        }
+
+        return edit;
+    }
+
+    private static UpdateDigitalServiceRequest ToServiceEdit(AdminServiceResponse service)
+    {
+        return new UpdateDigitalServiceRequest
+        {
+            CategoryId = service.CategoryId,
+            Name = service.Name,
+            Provider = service.Provider,
+            Slug = service.Slug,
+            Description = service.Description,
+            LogoUrl = service.LogoUrl,
+            CurrencyCode = service.CurrencyCode,
+            BasePrice = service.BasePrice,
+            IsActive = service.IsActive,
+            SupportsUseExistingAccount = service.SupportsUseExistingAccount,
+            SupportsCreateNewAccount = service.SupportsCreateNewAccount,
+            ProcessingTimeDescription = service.ProcessingTimeDescription
+        };
+    }
+
+    private static UpdateServiceVariantRequest ToVariantEdit(ServiceVariantResponse variant)
+    {
+        return new UpdateServiceVariantRequest
+        {
+            Name = variant.Name,
+            Slug = variant.Slug,
+            DurationDays = variant.DurationDays,
+            BillingCycle = variant.BillingCycle,
+            AccountDeliveryType = variant.AccountDeliveryType,
+            RegionCode = variant.RegionCode,
+            CurrencyCode = variant.CurrencyCode,
+            FulfillmentMode = variant.FulfillmentMode,
+            BasePrice = variant.BasePrice,
+            IsActive = variant.IsActive,
+            DisplayOrder = variant.DisplayOrder,
+            ProcessingTimeDescription = variant.ProcessingTimeDescription
+        };
+    }
+
+    private static UpdateServiceRequiredFieldRequest ToFieldEdit(ServiceRequiredFieldResponse field)
+    {
+        return new UpdateServiceRequiredFieldRequest
+        {
+            FieldKey = field.FieldKey,
+            Label = field.Label,
+            FieldType = Enum.TryParse<ServiceFieldType>(field.FieldType, out var fieldType)
+                ? fieldType
+                : ServiceFieldType.Text,
+            FulfillmentMode = field.FulfillmentMode,
+            Actor = field.Actor,
+            IsRequired = field.IsRequired,
+            IsSensitive = field.IsSensitive,
+            IsVisibleToCustomerAfterCompletion = field.IsVisibleToCustomerAfterCompletion,
+            DisplayOrder = field.DisplayOrder,
+            OptionsJson = field.OptionsJson
+        };
+    }
+
+    private static CreateServiceVariantRequest NewVariant()
+    {
+        return new CreateServiceVariantRequest
+        {
+            CurrencyCode = "USD",
+            RegionCode = "GLOBAL",
+            IsActive = true,
+            BillingCycle = BillingCycle.None,
+            AccountDeliveryType = AccountDeliveryType.NotApplicable,
+            FulfillmentMode = FulfillmentMode.ManualAgent
+        };
+    }
+
+    private static CreateServiceRequiredFieldRequest NewField()
+    {
+        return new CreateServiceRequiredFieldRequest
+        {
+            FieldType = ServiceFieldType.Text,
+            FulfillmentMode = OrderFulfillmentMode.UseExistingAccount,
+            Actor = CredentialActor.Customer,
+            IsRequired = true
+        };
+    }
+
+    private bool RedirectIfAuthRequired(bool requiresAuthentication)
+    {
+        if (!requiresAuthentication)
+        {
+            return false;
+        }
+
+        Navigation.NavigateTo("/Account/Login");
+        return true;
+    }
+}

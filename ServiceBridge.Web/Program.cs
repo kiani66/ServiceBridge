@@ -28,6 +28,9 @@ builder.Services.AddScoped<PaymentClient>();
 builder.Services.AddScoped<UserOrdersClient>();
 builder.Services.AddScoped<AgentOrdersClient>();
 builder.Services.AddScoped<AdminOrdersClient>();
+builder.Services.AddScoped<AdminCatalogClient>();
+builder.Services.AddScoped<AdminPricingClient>();
+builder.Services.AddScoped<AdminUsersClient>();
 builder.Services.AddScoped<AdminFinancialReportsClient>();
 builder.Services.AddScoped<RefundsClient>();
 builder.Services.AddScoped<AdminRefundsClient>();
@@ -110,6 +113,9 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
+
+app.MapGet("/Admin/Orders/{orderId:guid}", (Guid orderId) =>
+    Results.LocalRedirect($"/ui/admin/orders/{orderId}"));
 
 app.MapRazorPages();
 app.MapRazorComponents<App>()
