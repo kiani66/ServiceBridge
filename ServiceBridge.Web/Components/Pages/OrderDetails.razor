@@ -50,6 +50,81 @@ else
                                   Eyebrow="Customer order"
                                   Facts="@SummaryFacts" />
 
+                @if (PendingCustomerAction is not null)
+                {
+                    <section class="sb-detail-panel sb-order-detail-card">
+                        <div class="sb-card-heading">
+                            <div>
+                                <span class="sb-eyebrow">Action required</span>
+                                <h2>Additional information required</h2>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_customerActionMessage))
+                        {
+                            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">@_customerActionMessage</MudAlert>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(_customerActionError))
+                        {
+                            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_customerActionError</MudAlert>
+                        }
+                        <p>@PendingCustomerAction.RequestText</p>
+                        @if (!_showCustomerActionForm)
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Disabled="@_customerActionBusy"
+                                       StartIcon="@Icons.Material.Outlined.EditNote"
+                                       OnClick="@(() => _showCustomerActionForm = true)">
+                                Provide Information
+                            </MudButton>
+                        }
+                        else
+                        {
+                            <div class="sb-order-form">
+                                <MudTextField T="string"
+                                              Label="Response message"
+                                              Variant="Variant.Outlined"
+                                              Lines="4"
+                                              Required="true"
+                                              MaxLength="2000"
+                                              Value="@_customerActionResponse"
+                                              ValueChanged="@((string? value) => _customerActionResponse = value ?? string.Empty)" />
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Disabled="@_customerActionBusy"
+                                           StartIcon="@Icons.Material.Outlined.Send"
+                                           OnClick="SubmitCustomerActionResponseAsync">
+                                    Submit
+                                </MudButton>
+                            </div>
+                        }
+                    </section>
+                }
+
+                @if (ResolvedCustomerActions.Count > 0)
+                {
+                    <section class="sb-detail-panel sb-order-detail-card">
+                        <div class="sb-card-heading">
+                            <div>
+                                <span class="sb-eyebrow">Information requests</span>
+                                <h2>Submitted responses</h2>
+                            </div>
+                        </div>
+                        <div class="sb-note-list">
+                            @foreach (var action in ResolvedCustomerActions)
+                            {
+                                <article class="sb-note-item">
+                                    <strong>Request message</strong>
+                                    <p>@action.RequestText</p>
+                                    <strong>Your response</strong>
+                                    <p>@action.CustomerResponse</p>
+                                    <span>@FormatNullable(action.RespondedAt)</span>
+                                </article>
+                            }
+                        </div>
+                    </section>
+                }
+
                 <CredentialCard Title="Credential summary"
                                 Eyebrow="Fulfillment"
                                 Description="Sensitive values stay hidden in the customer console."
@@ -149,10 +224,15 @@ else
     private bool _loading = true;
     private bool _refundBusy;
     private bool _refundsLoading;
+    private bool _customerActionBusy;
+    private bool _showCustomerActionForm;
     private string? _errorMessage;
     private string? _refundError;
     private string? _refundMessage;
     private string? _refundReason;
+    private string? _customerActionError;
+    private string? _customerActionMessage;
+    private string _customerActionResponse = string.Empty;
     private UserOrderDetailDto? _order;
     private IReadOnlyCollection<RefundRequestDto> _refunds = Array.Empty<RefundRequestDto>();
 
@@ -208,6 +288,17 @@ else
         _order.Payments.Any(x => x.Status == nameof(PaymentStatus.Completed)) &&
         !_refunds.Any(x => x.Status is nameof(RefundStatus.Requested) or nameof(RefundStatus.Approved));
 
+    private CustomerActionRequestDto? PendingCustomerAction => _order?.CustomerActions
+        .OrderByDescending(action => action.RequestedAt)
+        .FirstOrDefault(action => !action.IsResolved);
+
+    private IReadOnlyList<CustomerActionRequestDto> ResolvedCustomerActions => _order is null
+        ? Array.Empty<CustomerActionRequestDto>()
+        : _order.CustomerActions
+            .Where(action => action.IsResolved)
+            .OrderByDescending(action => action.RespondedAt ?? action.RequestedAt)
+            .ToArray();
+
     protected override async Task OnInitializedAsync()
     {
         OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
@@ -233,6 +324,12 @@ else
 
         _order = result.Success ? result.Data : null;
         _errorMessage = result.ErrorMessage;
+        if (PendingCustomerAction is null)
+        {
+            _showCustomerActionForm = false;
+            _customerActionResponse = string.Empty;
+        }
+
         await LoadRefundsAsync();
         _loading = false;
     }
@@ -289,6 +386,48 @@ else
         _refundMessage = "Refund request submitted.";
         await LoadRefundsAsync();
         _refundBusy = false;
+    }
+
+    private async Task SubmitCustomerActionResponseAsync()
+    {
+        _customerActionError = null;
+        _customerActionMessage = null;
+        var pendingRequest = PendingCustomerAction;
+        if (pendingRequest is null)
+        {
+            _customerActionError = "This information request is no longer pending.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_customerActionResponse))
+        {
+            _customerActionError = "Enter a response before submitting.";
+            return;
+        }
+
+        _customerActionBusy = true;
+        var result = await OrdersClient.RespondToCustomerActionAsync(
+            OrderId,
+            pendingRequest.Id,
+            _customerActionResponse);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _customerActionError = result.ErrorMessage ?? "Unable to submit your response.";
+            _customerActionBusy = false;
+            return;
+        }
+
+        _customerActionResponse = string.Empty;
+        _showCustomerActionForm = false;
+        _customerActionMessage = "Information submitted.";
+        await LoadOrderAsync();
+        _customerActionBusy = false;
     }
 
     private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)

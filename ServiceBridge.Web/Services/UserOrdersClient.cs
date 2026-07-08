@@ -125,6 +125,25 @@ public sealed class UserOrdersClient
             cancellationToken);
     }
 
+    public Task<UserOrdersApiResult<bool>> RespondToCustomerActionAsync(
+        Guid orderId,
+        Guid requestId,
+        string responseMessage,
+        CancellationToken cancellationToken = default)
+    {
+        return SendCommandAsync(
+            client => client.PostAsJsonAsync(
+                $"api/orders/my/{orderId}/customer-actions/respond",
+                new RespondToCustomerActionRequest
+                {
+                    RequestId = requestId,
+                    Response = responseMessage
+                },
+                cancellationToken),
+            "Unable to submit your response right now.",
+            cancellationToken);
+    }
+
     private async Task<UserOrdersApiResult<T>> SendAsync<T>(
         Func<HttpClient, Task<HttpResponseMessage>> send,
         string fallbackMessage,
@@ -166,6 +185,48 @@ public sealed class UserOrdersClient
         catch (System.Text.Json.JsonException)
         {
             return UserOrdersApiResult<T>.Failed(
+                "The order service returned an invalid response.");
+        }
+    }
+
+    private async Task<UserOrdersApiResult<bool>> SendCommandAsync(
+        Func<HttpClient, Task<HttpResponseMessage>> send,
+        string fallbackMessage,
+        CancellationToken cancellationToken)
+    {
+        var client = _httpClientFactory.CreateClient(AppConstants.Api.HttpClientName);
+
+        try
+        {
+            using var response = await send(client);
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                return UserOrdersApiResult<bool>.AuthRequired();
+            }
+
+            var result = await response.Content
+                .ReadFromJsonAsync<ServiceResult>(cancellationToken);
+
+            return result?.Success == true
+                ? UserOrdersApiResult<bool>.Succeeded(true)
+                : UserOrdersApiResult<bool>.Failed(
+                    result?.Message ?? MessageFor(response.StatusCode, fallbackMessage),
+                    result?.ValidationErrors,
+                    response.StatusCode);
+        }
+        catch (HttpRequestException)
+        {
+            return UserOrdersApiResult<bool>.Failed(
+                "Unable to connect to the order service. Please try again later.");
+        }
+        catch (NotSupportedException)
+        {
+            return UserOrdersApiResult<bool>.Failed(
+                "The order service returned an unsupported response.");
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return UserOrdersApiResult<bool>.Failed(
                 "The order service returned an invalid response.");
         }
     }

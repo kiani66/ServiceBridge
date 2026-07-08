@@ -9,10 +9,14 @@ namespace ServiceBridge.Application.Orders;
 public class RespondToCustomerActionCommand
 {
     private readonly IUserOrderCommandRepository _repository;
+    private readonly INotificationService _notificationService;
 
-    public RespondToCustomerActionCommand(IUserOrderCommandRepository repository)
+    public RespondToCustomerActionCommand(
+        IUserOrderCommandRepository repository,
+        INotificationService notificationService)
     {
         _repository = repository;
+        _notificationService = notificationService;
     }
 
     public async Task<ServiceResult> ExecuteAsync(
@@ -43,6 +47,15 @@ public class RespondToCustomerActionCommand
                 AppConstants.ErrorCodes.Conflict,
                 409);
         }
+
+        var requestAgentId = order.CustomerActionRequests
+            .Single(x => x.Id == request.RequestId)
+            .RequestedByAgentId;
+        var notificationAgentId = order.AssignedAgentId ?? requestAgentId;
+        await _notificationService.QueueCustomerActionRespondedAsync(
+            notificationAgentId,
+            order.Id,
+            order.OrderNumber);
 
         if (!await _repository.SaveChangesAsync())
         {

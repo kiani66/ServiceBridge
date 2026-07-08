@@ -107,6 +107,15 @@ internal class FakeNotificationService : INotificationService
         return Task.CompletedTask;
     }
 
+    public Task QueueCustomerActionRespondedAsync(
+        Guid agentId,
+        Guid orderId,
+        string orderNumber)
+    {
+        QueuedTypes.Add(nameof(QueueCustomerActionRespondedAsync));
+        return Task.CompletedTask;
+    }
+
     public Task QueueTicketCreatedForAdminsAsync(
         Guid ticketId,
         string ticketNumber)

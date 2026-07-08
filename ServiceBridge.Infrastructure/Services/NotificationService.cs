@@ -202,6 +202,19 @@ public class NotificationService : INotificationService
             orderId);
     }
 
+    public Task QueueCustomerActionRespondedAsync(
+        Guid agentId,
+        Guid orderId,
+        string orderNumber)
+    {
+        return QueueAsync(
+            agentId,
+            NotificationType.CustomerActionResponded,
+            "Customer response received",
+            $"Customer information was provided for order {orderNumber}.",
+            orderId);
+    }
+
     public async Task QueueTicketCreatedForAdminsAsync(
         Guid ticketId,
         string ticketNumber)

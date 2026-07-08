@@ -71,6 +71,23 @@ public class AgentOrderProcessingTests
     }
 
     [Fact]
+    public async Task RequestCustomerAction_WhenOrderBelongsToAnotherAgent_ReturnsNotFound()
+    {
+        var (_, order, service, repository, _) =
+            CreateService(OrderStatus.Processing);
+
+        var result = await service.RequestCustomerActionAsync(
+            Guid.NewGuid(),
+            order.Id,
+            new RequestCustomerActionRequest { Note = "Please confirm your account email." });
+
+        Assert.False(result.Success);
+        Assert.Equal(404, result.StatusCode);
+        Assert.Empty(order.CustomerActionRequests);
+        Assert.Equal(0, repository.SaveCount);
+    }
+
+    [Fact]
     public async Task ResumeProcessing_WhenCustomerResponded_AcknowledgesWithoutStatusChange()
     {
         var (agentId, order, service, _, _) =
