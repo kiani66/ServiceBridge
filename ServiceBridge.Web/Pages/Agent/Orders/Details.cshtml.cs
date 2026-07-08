@@ -42,9 +42,11 @@ public class DetailsModel : PageModel
     [BindProperty]
     public List<DeliveryCredentialInput> DeliveryCredentials { get; set; } = new();
 
-    public Task<IActionResult> OnGetAsync(Guid id)
+    public IActionResult OnGet(Guid id)
     {
-        return LoadOrderAsync(id);
+        return id == Guid.Empty
+            ? LocalRedirect("/ui/agent/orders")
+            : LocalRedirect($"/ui/agent/orders/{id}");
     }
 
     public Task<IActionResult> OnPostStartAsync(Guid id)
@@ -197,7 +199,7 @@ public class DetailsModel : PageModel
     {
         if (id == Guid.Empty)
         {
-            return RedirectToPage("/Agent/Orders/Index");
+            return LocalRedirect("/ui/agent/orders");
         }
 
         var client = _httpClientFactory.CreateClient(AppConstants.Api.HttpClientName);

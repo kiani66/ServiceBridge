@@ -82,7 +82,7 @@ public class LoginModel : PageModel
         }
 
         var loginData = result.Data!;
-        var landingPage = RoleNavigation.GetLandingPage(loginData.Role);
+        var landingPage = RoleNavigation.GetConsoleLandingPage(loginData.Role);
         if (landingPage == null)
         {
             return Forbid();

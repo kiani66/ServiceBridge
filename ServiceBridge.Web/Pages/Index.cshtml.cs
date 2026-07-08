@@ -10,7 +10,7 @@ public class IndexModel : PageModel
     {
         if (User.Identity?.IsAuthenticated == true)
         {
-            var landingPage = RoleNavigation.GetLandingPage(User);
+            var landingPage = RoleNavigation.GetConsoleLandingPage(User);
             return landingPage == null
                 ? Forbid()
                 : LocalRedirect(landingPage);

@@ -1,0 +1,294 @@
+@page "/ui/agent/orders"
+@attribute [Authorize(Roles = AppConstants.Roles.Agent)]
+@implements IDisposable
+@inject AgentOrdersClient AgentOrdersClient
+@inject OrderRealtimeClient OrderRealtimeClient
+@inject NavigationManager Navigation
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Agent", "/ui/agent"), ("Orders", null) })" />
+
+<PageHeader Eyebrow="Agent workspace"
+            Title="Assigned Orders"
+            Description="Process assigned service requests, respond to customer needs, and complete fulfillment work.">
+    <Actions>
+        <MudButton Href="/ui/agent"
+                   Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.SpaceDashboard">
+            Dashboard
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Orders assigned to me"
+                     Description="Filter the queue by status or search across order, customer, and service."
+                     Search="@_search"
+                     SearchChanged="OnSearchChanged"
+                     SearchPlaceholder="Search order, customer, service">
+        <Actions>
+            <MudSelect T="OrderStatus?"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_status"
+                       ValueChanged="OnStatusChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="OrderStatus?" Value="null">All statuses</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Assigned">Assigned</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Processing">Processing</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Completed">Completed</MudSelectItem>
+                <MudSelectItem T="OrderStatus?" Value="@OrderStatus.Failed">Failed</MudSelectItem>
+            </MudSelect>
+        </Actions>
+    </DataGridToolbar>
+
+    @if (_loading)
+    {
+        <LoadingState Text="Loading assigned orders" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <ErrorState Title="Unable to load assigned orders"
+                    Message="@_errorMessage"
+                    OnRetry="@(() => LoadOrdersAsync(Math.Max(_orders.Page, 1)))" />
+    }
+    else if (_orders.Items.Count == 0)
+    {
+        <EmptyState Title="No assigned orders"
+                    Description="@EmptyDescription"
+                    Icon="@Icons.Material.Outlined.AssignmentLate" />
+    }
+    else
+    {
+        <MudTable Items="@_orders.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Order</MudTh>
+                <MudTh>Customer</MudTh>
+                <MudTh>Service</MudTh>
+                <MudTh>Assigned</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Action</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Order"><strong>@context.OrderNumber</strong></MudTd>
+                <MudTd DataLabel="Customer">@context.CustomerName</MudTd>
+                <MudTd DataLabel="Service">
+                    @context.ServiceName
+                    <span class="sb-table-subtext">
+                        @AgentOrderDisplay.VariantLabel(context.PlanName, context.PlanDurationDays, context.PlanRegionCode)
+                    </span>
+                </MudTd>
+                <MudTd DataLabel="Assigned">
+                    @(context.AssignedAt.HasValue ? AgentOrderDisplay.FormatDateTime(context.AssignedAt.Value) : "-")
+                </MudTd>
+                <MudTd DataLabel="Status">
+                    <StatusBadge Text="@AgentOrderDisplay.OrderStatusLabel(context.Status)"
+                                 Tone="@AgentOrderDisplay.OrderTone(context.Status)" />
+                    @if (context.HasPendingCustomerAction)
+                    {
+                        <span class="sb-table-subtext">Customer action pending</span>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Action">
+                    <div class="sb-action-cell">
+                        <MudButton Href="@($"/ui/agent/orders/{context.OrderId}")"
+                                   Variant="Variant.Text"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Outlined.OpenInNew">
+                            Open
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   Disabled="@(context.Status != nameof(OrderStatus.Assigned) || _actionBusy)"
+                                   StartIcon="@Icons.Material.Outlined.PlayArrow"
+                                   OnClick="@(() => StartProcessingAsync(context.OrderId))">
+                            Start
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Success"
+                                   Size="Size.Small"
+                                   Disabled="@(context.Status != nameof(OrderStatus.Processing) || context.HasPendingCustomerAction || _actionBusy)"
+                                   StartIcon="@Icons.Material.Outlined.CheckCircle"
+                                   OnClick="@(() => CompleteAsync(context.OrderId))">
+                            Complete
+                        </MudButton>
+                    </div>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        @if (_orders.TotalPages > 1)
+        {
+            <div class="sb-pagination">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_orders.Page <= 1 || _loading)"
+                           StartIcon="@Icons.Material.Outlined.ChevronLeft"
+                           OnClick="PreviousPage">
+                    Previous
+                </MudButton>
+                <span>Page @_orders.Page of @_orders.TotalPages</span>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_orders.Page >= _orders.TotalPages || _loading)"
+                           EndIcon="@Icons.Material.Outlined.ChevronRight"
+                           OnClick="NextPage">
+                    Next
+                </MudButton>
+            </div>
+        }
+    }
+</PageSection>
+
+@code {
+    private const int PageSize = 20;
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public OrderStatus? Status { get; set; }
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int? Page { get; set; }
+
+    [SupplyParameterFromQuery(Name = "search")]
+    public string? Search { get; set; }
+
+    private bool _loading = true;
+    private bool _actionBusy;
+    private string? _errorMessage;
+    private string? _search;
+    private OrderStatus? _status;
+    private PagedResultDto<AgentOrderListItemDto> _orders = new();
+
+    private string EmptyDescription => _status.HasValue || !string.IsNullOrWhiteSpace(_search)
+        ? "No assigned orders match the current filters."
+        : "Orders assigned by an administrator will appear here.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        await OrderRealtimeClient.StartAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _status = Status;
+        _search = Search;
+        await LoadOrdersAsync(Math.Max(Page ?? 1, 1));
+    }
+
+    private async Task OnStatusChanged(OrderStatus? status)
+    {
+        _status = status;
+        NavigateToPage(1);
+        await LoadOrdersAsync(1);
+    }
+
+    private async Task OnSearchChanged(string? search)
+    {
+        _search = search;
+        NavigateToPage(1);
+        await LoadOrdersAsync(1);
+    }
+
+    private Task PreviousPage()
+    {
+        var page = Math.Max(_orders.Page - 1, 1);
+        NavigateToPage(page);
+        return LoadOrdersAsync(page);
+    }
+
+    private Task NextPage()
+    {
+        var page = _orders.Page + 1;
+        NavigateToPage(page);
+        return LoadOrdersAsync(page);
+    }
+
+    private async Task LoadOrdersAsync(int page)
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await AgentOrdersClient.GetOrdersAsync(page, PageSize, _status, _search);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _orders = result.Success && result.Data is not null
+            ? result.Data
+            : new PagedResultDto<AgentOrderListItemDto>();
+        _errorMessage = result.ErrorMessage;
+        _loading = false;
+    }
+
+    private Task StartProcessingAsync(Guid orderId)
+    {
+        return RunActionAsync(
+            orderId,
+            id => AgentOrdersClient.StartProcessingAsync(id, "Processing started from agent order queue."));
+    }
+
+    private Task CompleteAsync(Guid orderId)
+    {
+        return RunActionAsync(
+            orderId,
+            id => AgentOrdersClient.CompleteAsync(id, "Completed from agent order queue."));
+    }
+
+    private async Task RunActionAsync(
+        Guid orderId,
+        Func<Guid, Task<AgentOrdersApiResult<bool>>> action)
+    {
+        _actionBusy = true;
+        _errorMessage = null;
+        var result = await action(orderId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _errorMessage = result.ErrorMessage ?? "Unable to update this order.";
+            _actionBusy = false;
+            return;
+        }
+
+        await LoadOrdersAsync(Math.Max(_orders.Page, 1));
+        _actionBusy = false;
+    }
+
+    private void NavigateToPage(int page)
+    {
+        var query = new Dictionary<string, object?>
+        {
+            ["page"] = page <= 1 ? null : page,
+            ["status"] = _status?.ToString(),
+            ["search"] = string.IsNullOrWhiteSpace(_search) ? null : _search
+        };
+
+        Navigation.NavigateTo(
+            Navigation.GetUriWithQueryParameters("/ui/agent/orders", query),
+            replace: true);
+    }
+
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
+    {
+        return InvokeAsync(async () =>
+        {
+            await LoadOrdersAsync(Math.Max(_orders.Page, 1));
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+    }
+}

@@ -36,6 +36,12 @@ else
         <Actions>
             <StatusBadge Text="@AgentOrderDisplay.OrderStatusLabel(_order.Status)"
                          Tone="@AgentOrderDisplay.OrderTone(_order.Status)" />
+            <MudButton Href="/ui/agent/orders"
+                       Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.ArrowBack">
+                Orders
+            </MudButton>
         </Actions>
     </PageHeader>
 
@@ -59,6 +65,44 @@ else
                                 Description="Credential values are intentionally kept behind the protected fulfillment workflow."
                                 ProtectedPlaceholder="true"
                                 Items="@CredentialItems" />
+
+                @if (_order.DeliveryFields.Count > 0)
+                {
+                    <section class="sb-detail-panel sb-order-detail-card">
+                        <div class="sb-card-heading">
+                            <div>
+                                <span class="sb-eyebrow">Delivery</span>
+                                <h2>Agent delivery credentials</h2>
+                                <p>Save the fulfillment data that should be available after completion.</p>
+                            </div>
+                        </div>
+
+                        <div class="sb-order-form">
+                            @foreach (var field in _order.DeliveryFields.OrderBy(field => field.DisplayOrder))
+                            {
+                                <MudTextField T="string"
+                                              Label="@field.FieldLabel"
+                                              Variant="Variant.Outlined"
+                                              Lines="@(IsTextArea(field) ? 3 : 1)"
+                                              InputType="@InputTypeFor(field)"
+                                              Required="@field.IsRequired"
+                                              MaxLength="2000"
+                                              HelperText="@DeliveryHelperText(field)"
+                                              Value="@GetDeliveryValue(field.FieldKey)"
+                                              ValueChanged="@((string? value) => SetDeliveryValue(field.FieldKey, value))"
+                                              Disabled="@_actionBusy" />
+                            }
+
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Disabled="@_actionBusy"
+                                       StartIcon="@Icons.Material.Outlined.Save"
+                                       OnClick="SaveDeliveryCredentialsAsync">
+                                Save delivery credentials
+                            </MudButton>
+                        </div>
+                    </section>
+                }
 
                 <section class="sb-detail-panel sb-order-detail-card">
                     <div class="sb-card-heading">
@@ -182,6 +226,22 @@ else
                                    OnClick="CompleteAsync">
                             Complete order
                         </MudButton>
+                        <div class="sb-order-form">
+                            <MudTextField T="string"
+                                          Label="Failure reason"
+                                          Variant="Variant.Outlined"
+                                          Lines="3"
+                                          MaxLength="1000"
+                                          Value="@_failureReason"
+                                          ValueChanged="@((string? value) => _failureReason = value ?? string.Empty)" />
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Error"
+                                       Disabled="@(!CanFail || _actionBusy)"
+                                       StartIcon="@Icons.Material.Outlined.ReportProblem"
+                                       OnClick="FailAsync">
+                                Mark failed
+                            </MudButton>
+                        </div>
                     </div>
                 </section>
 
@@ -209,10 +269,12 @@ else
     private string? _actionError;
     private string? _actionMessage;
     private string? _operationNote;
+    private string _failureReason = string.Empty;
     private string _informationRequestMessage = string.Empty;
     private string _noteText = string.Empty;
     private bool _showInformationRequestForm;
     private AgentOrderDetailDto? _order;
+    private Dictionary<string, string> _deliveryCredentials = new(StringComparer.OrdinalIgnoreCase);
 
     private bool CanStart => _order?.Status == nameof(OrderStatus.Assigned);
     private bool HasPendingCustomerAction =>
@@ -221,6 +283,8 @@ else
         _order?.Status == nameof(OrderStatus.Processing) && !HasPendingCustomerAction;
     private bool CanComplete =>
         _order?.Status == nameof(OrderStatus.Processing) && !HasPendingCustomerAction;
+    private bool CanFail =>
+        _order?.Status == nameof(OrderStatus.Processing);
 
     private IReadOnlyList<OrderFact> SummaryFacts => _order is null
         ? Array.Empty<OrderFact>()
@@ -242,7 +306,6 @@ else
     private IReadOnlyList<CredentialDisplayItem> CredentialItems => _order is null
         ? Array.Empty<CredentialDisplayItem>()
         : _order.Fields
-            .Concat(_order.DeliveryFields)
             .OrderBy(field => field.DisplayOrder)
             .Select(field => new CredentialDisplayItem(
                 field.FieldLabel,
@@ -291,6 +354,7 @@ else
 
         _order = result.Success ? result.Data : null;
         _errorMessage = result.ErrorMessage;
+        InitializeDeliveryCredentials();
         _loading = false;
     }
 
@@ -321,6 +385,41 @@ else
             "Order completed.");
     }
 
+    private Task FailAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_failureReason))
+        {
+            _actionError = "Enter the reason the order could not be completed.";
+            return Task.CompletedTask;
+        }
+
+        return RunActionAsync(
+            _ => AgentOrdersClient.FailAsync(OrderId, _failureReason),
+            "Order marked failed.",
+            clearFailureReason: true);
+    }
+
+    private Task SaveDeliveryCredentialsAsync()
+    {
+        if (_order is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var missingRequiredField = _order.DeliveryFields
+            .Where(field => field.IsRequired)
+            .FirstOrDefault(field => string.IsNullOrWhiteSpace(GetDeliveryValue(field.FieldKey)));
+        if (missingRequiredField is not null)
+        {
+            _actionError = $"{missingRequiredField.FieldLabel} is required.";
+            return Task.CompletedTask;
+        }
+
+        return RunActionAsync(
+            _ => AgentOrdersClient.SaveDeliveryCredentialsAsync(OrderId, _deliveryCredentials),
+            "Delivery credentials saved.");
+    }
+
     private Task AddNoteAsync()
     {
         if (string.IsNullOrWhiteSpace(_noteText))
@@ -342,7 +441,8 @@ else
         string? missingNoteMessage = null,
         bool clearNote = false,
         bool useInformationRequestMessage = false,
-        bool clearInformationRequestMessage = false)
+        bool clearInformationRequestMessage = false,
+        bool clearFailureReason = false)
     {
         _actionError = null;
         _actionMessage = null;
@@ -382,6 +482,10 @@ else
             _informationRequestMessage = string.Empty;
             _showInformationRequestForm = false;
         }
+        else if (clearFailureReason)
+        {
+            _failureReason = string.Empty;
+        }
         else
         {
             _operationNote = null;
@@ -404,6 +508,66 @@ else
     private static string FormatNullable(DateTime? value)
     {
         return value.HasValue ? AgentOrderDisplay.FormatDateTime(value.Value) : "-";
+    }
+
+    private void InitializeDeliveryCredentials()
+    {
+        _deliveryCredentials = _order?.DeliveryFields
+            .ToDictionary(
+                field => field.FieldKey,
+                field => field.Value,
+                StringComparer.OrdinalIgnoreCase) ??
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private string GetDeliveryValue(string fieldKey)
+    {
+        return _deliveryCredentials.TryGetValue(fieldKey, out var value)
+            ? value
+            : string.Empty;
+    }
+
+    private void SetDeliveryValue(string fieldKey, string? value)
+    {
+        _deliveryCredentials[fieldKey] = value ?? string.Empty;
+    }
+
+    private static string DeliveryHelperText(AgentOrderFieldDto field)
+    {
+        return field.IsVisibleToCustomerAfterCompletion
+            ? "Visible to the customer after completion."
+            : "Internal delivery field.";
+    }
+
+    private static bool IsTextArea(AgentOrderFieldDto field)
+    {
+        return field.FieldType.Equals("Textarea", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static InputType InputTypeFor(AgentOrderFieldDto field)
+    {
+        if (IsTextArea(field))
+        {
+            return InputType.Text;
+        }
+
+        if (field.IsSensitive ||
+            field.FieldType.Equals("Password", StringComparison.OrdinalIgnoreCase))
+        {
+            return InputType.Password;
+        }
+
+        if (field.FieldType.Equals("Email", StringComparison.OrdinalIgnoreCase))
+        {
+            return InputType.Email;
+        }
+
+        if (field.FieldType.Equals("Number", StringComparison.OrdinalIgnoreCase))
+        {
+            return InputType.Number;
+        }
+
+        return InputType.Text;
     }
 
     public void Dispose()
