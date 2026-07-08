@@ -19,16 +19,26 @@ public sealed class UserOrdersClient
     public async Task<UserOrdersApiResult<UserDashboardSummary>> GetDashboardAsync(
         CancellationToken cancellationToken = default)
     {
-        var recentResult = await GetOrdersAsync(1, 3, null, cancellationToken);
-        if (!recentResult.Success)
+        var ordersResult = await GetOrdersAsync(1, 100, null, cancellationToken);
+        if (!ordersResult.Success)
         {
-            return UserOrdersApiResult<UserDashboardSummary>.FromFailure(recentResult);
+            return UserOrdersApiResult<UserDashboardSummary>.FromFailure(ordersResult);
         }
 
         var pendingResult = await GetOrdersAsync(
             1,
             1,
             OrderStatus.WaitingForPayment,
+            cancellationToken);
+        var paidResult = await GetOrdersAsync(
+            1,
+            1,
+            OrderStatus.Paid,
+            cancellationToken);
+        var assignedResult = await GetOrdersAsync(
+            1,
+            1,
+            OrderStatus.Assigned,
             cancellationToken);
         var processingResult = await GetOrdersAsync(
             1,
@@ -49,6 +59,8 @@ public sealed class UserOrdersClient
         var firstFailure = new[]
             {
                 pendingResult,
+                paidResult,
+                assignedResult,
                 processingResult,
                 completedResult,
                 failedResult
@@ -60,14 +72,29 @@ public sealed class UserOrdersClient
             return UserOrdersApiResult<UserDashboardSummary>.FromFailure(firstFailure);
         }
 
+        var activeOrders = ordersResult.Data!.Items
+            .Where(order => IsActiveOrder(order.Status))
+            .OrderByDescending(order => order.CreatedAt)
+            .Take(8)
+            .ToArray();
+
+        var totalPaymentsIrr = ordersResult.Data.Items
+            .Where(order => order.PaymentStatus == nameof(PaymentStatus.Completed))
+            .Sum(order => order.FinalPriceIrr);
+
         return UserOrdersApiResult<UserDashboardSummary>.Succeeded(
             new UserDashboardSummary(
-                recentResult.Data!.TotalCount,
+                ordersResult.Data.TotalCount,
                 pendingResult.Data!.TotalCount,
+                paidResult.Data!.TotalCount,
+                assignedResult.Data!.TotalCount,
                 processingResult.Data!.TotalCount,
                 completedResult.Data!.TotalCount,
                 failedResult.Data!.TotalCount,
-                recentResult.Data.Items));
+                totalPaymentsIrr,
+                ordersResult.Data.TotalCount > ordersResult.Data.Items.Count,
+                activeOrders,
+                ordersResult.Data.Items.Take(5).ToArray()));
     }
 
     public Task<UserOrdersApiResult<PagedResultDto<UserOrderListItemDto>>> GetOrdersAsync(
@@ -152,14 +179,27 @@ public sealed class UserOrdersClient
             _ => fallbackMessage
         };
     }
+
+    private static bool IsActiveOrder(string status)
+    {
+        return status is nameof(OrderStatus.WaitingForPayment) or
+            nameof(OrderStatus.Paid) or
+            nameof(OrderStatus.Assigned) or
+            nameof(OrderStatus.Processing);
+    }
 }
 
 public sealed record UserDashboardSummary(
     int TotalOrders,
     int PendingOrders,
+    int PaidOrders,
+    int AssignedOrders,
     int ProcessingOrders,
     int CompletedOrders,
     int FailedOrders,
+    decimal TotalPaymentsIrr,
+    bool IsPaymentTotalPartial,
+    IReadOnlyCollection<UserOrderListItemDto> ActiveOrders,
     IReadOnlyCollection<UserOrderListItemDto> RecentOrders);
 
 public sealed record UserOrdersApiResult<T>(

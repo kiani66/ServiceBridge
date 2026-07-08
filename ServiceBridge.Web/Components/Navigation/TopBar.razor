@@ -19,6 +19,19 @@
             </MudButton>
         </Authorized>
     </AuthorizeView>
+    <AuthorizeView>
+        <Authorized Context="profileContext">
+            <MudTooltip Text="Profile">
+                <MudButton Href="/ui/profile"
+                           Variant="Variant.Text"
+                           Color="Color.Secondary"
+                           Class="sb-profile-chip"
+                           StartIcon="@Icons.Material.Outlined.AccountCircle">
+                    @GetDisplayName(profileContext.User)
+                </MudButton>
+            </MudTooltip>
+        </Authorized>
+    </AuthorizeView>
 </MudAppBar>
 
 @code {
@@ -28,5 +41,16 @@
     private Task ToggleAsync()
     {
         return OnMenuToggle.InvokeAsync();
+    }
+
+    private static string GetDisplayName(System.Security.Claims.ClaimsPrincipal user)
+    {
+        var fullName = user.FindFirst("FullName")?.Value;
+        if (!string.IsNullOrWhiteSpace(fullName))
+        {
+            return fullName;
+        }
+
+        return user.Identity?.Name ?? "Profile";
     }
 }

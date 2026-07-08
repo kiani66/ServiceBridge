@@ -5,7 +5,7 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<MudLayout Class="sb-app-shell">
+<MudLayout Class="sb-app-shell sb-console-shell">
     <TopBar Title="ServiceBridge" OnMenuToggle="ToggleDrawer" />
 
     <MudDrawer @bind-Open="_drawerOpen"
@@ -16,8 +16,8 @@
         <Sidebar CurrentPath="@CurrentPath" />
     </MudDrawer>
 
-    <MudMainContent Class="sb-main-content">
-        <div class="sb-content-frame">
+    <MudMainContent Class="sb-main-content sb-console-main">
+        <div class="sb-content-frame sb-console-content">
             @ChildContent
         </div>
     </MudMainContent>
@@ -34,26 +34,26 @@
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#2563EB",
-            Secondary = "#0F172A",
-            Tertiary = "#0891B2",
+            Primary = "#F97316",
+            Secondary = "#2563EB",
+            Tertiary = "#0EA5E9",
             Success = "#16A34A",
-            Warning = "#D97706",
+            Warning = "#F59E0B",
             Error = "#DC2626",
-            Info = "#0891B2",
-            Background = "#F8FAFC",
+            Info = "#2563EB",
+            Background = "#F6F8FB",
             Surface = "#FFFFFF",
             AppbarBackground = "#FFFFFF",
-            AppbarText = "#0F172A",
+            AppbarText = "#111827",
             DrawerBackground = "#FFFFFF",
-            DrawerText = "#334155",
-            TextPrimary = "#0F172A",
-            TextSecondary = "#475569",
-            LinesDefault = "#E2E8F0"
+            DrawerText = "#374151",
+            TextPrimary = "#111827",
+            TextSecondary = "#5B6472",
+            LinesDefault = "#E5E7EB"
         },
         LayoutProperties = new LayoutProperties
         {
-            DefaultBorderRadius = "8px"
+            DefaultBorderRadius = "10px"
         }
     };
 

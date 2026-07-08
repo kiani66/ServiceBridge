@@ -1,24 +1,24 @@
 /* ===================================================
    ServiceBridge - site.css
    Shared styles loaded once in _Layout.cshtml
-   Theme: Primary #5A32B7, Hover #4a2a9a, BG #f8f9fa
+   Theme tokens are sourced from design-system.css
    =================================================== */
 
 /* ---------- CSS Variables ---------- */
 :root {
-    --pb-primary: #5A32B7;
-    --pb-primary-hover: #4a2a9a;
-    --pb-primary-light: #f0ecf9;
-    --pb-bg-light: #f8f9fa;
-    --pb-text-dark: #212529;
-    --pb-text-muted: #6c757d;
-    --pb-border: #dee2e6;
-    --pb-white: #ffffff;
-    --pb-danger: #dc3545;
-    --pb-success: #198754;
-    --pb-radius: 0.5rem;
-    --pb-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-    --pb-shadow-lg: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    --pb-primary: var(--sb-color-primary);
+    --pb-primary-hover: var(--sb-color-primary-hover);
+    --pb-primary-light: var(--sb-color-primary-soft);
+    --pb-bg-light: var(--sb-color-bg);
+    --pb-text-dark: var(--sb-color-text);
+    --pb-text-muted: var(--sb-color-muted);
+    --pb-border: var(--sb-color-border);
+    --pb-white: var(--sb-color-surface);
+    --pb-danger: var(--sb-color-danger);
+    --pb-success: var(--sb-color-success);
+    --pb-radius: var(--sb-radius);
+    --pb-shadow: var(--sb-shadow-low);
+    --pb-shadow-lg: var(--sb-shadow-medium);
 }
 
 /* ---------- Base ---------- */
@@ -192,7 +192,7 @@ main {
 }
 
 .pb-profile-header {
-    background: linear-gradient(135deg, var(--pb-primary), #7c4dff);
+    background: linear-gradient(135deg, var(--pb-primary), var(--sb-color-secondary));
     padding: 2rem;
     text-align: center;
     color: var(--pb-white);

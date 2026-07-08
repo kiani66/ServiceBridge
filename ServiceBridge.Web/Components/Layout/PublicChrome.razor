@@ -5,12 +5,15 @@
 
 <main class="sb-public-shell">
     <header class="sb-public-topbar">
-        <a class="sb-public-brand" href="/ui">ServiceBridge</a>
+        <a class="sb-public-brand" href="/ui" aria-label="ServiceBridge home">
+            <span class="sb-public-brand-mark">SB</span>
+            <span>ServiceBridge</span>
+        </a>
         <nav class="sb-public-nav" aria-label="Public navigation">
             <a href="/ui/catalog">Services</a>
+            <a href="/ui#about">How it works</a>
             <a href="/ui#faq">FAQ</a>
             <a href="/ui#contact">Contact Us</a>
-            <a href="/ui#about">About</a>
         </nav>
         <div class="sb-public-actions">
             <MudButton Href="/Account/Login" Variant="Variant.Text" Color="Color.Primary">
@@ -32,17 +35,17 @@
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#2563EB",
-            Secondary = "#38BDF8",
-            Background = "#F8FAFC",
+            Primary = "#F97316",
+            Secondary = "#2563EB",
+            Background = "#F6F8FB",
             Surface = "#FFFFFF",
-            TextPrimary = "#0F172A",
-            TextSecondary = "#64748B",
-            LinesDefault = "#E2E8F0"
+            TextPrimary = "#111827",
+            TextSecondary = "#5B6472",
+            LinesDefault = "#E5E7EB"
         },
         LayoutProperties = new LayoutProperties
         {
-            DefaultBorderRadius = "12px"
+            DefaultBorderRadius = "10px"
         }
     };
 }

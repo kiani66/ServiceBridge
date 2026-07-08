@@ -1,0 +1,80 @@
+<ol class="sb-lifecycle" aria-label="Order lifecycle">
+    @foreach (var stage in _stages)
+    {
+        var state = StageState(stage.Status);
+        <li class="sb-lifecycle-item sb-lifecycle-@state">
+            <span class="sb-lifecycle-marker">
+                <MudIcon Icon="@stage.Icon" Size="Size.Small" />
+            </span>
+            <div>
+                <strong>@stage.Label</strong>
+                <span>@StageDescription(stage.Status, state)</span>
+            </div>
+        </li>
+    }
+</ol>
+
+@code {
+    [Parameter] public string CurrentStatus { get; set; } = nameof(OrderStatus.Created);
+
+    private readonly IReadOnlyList<LifecycleStage> _stages =
+    [
+        new(nameof(OrderStatus.Created), "Created", Icons.Material.Outlined.AddCircleOutline),
+        new(nameof(OrderStatus.Paid), "Paid", Icons.Material.Outlined.Payments),
+        new(nameof(OrderStatus.Assigned), "Assigned", Icons.Material.Outlined.AssignmentInd),
+        new(nameof(OrderStatus.Processing), "Processing", Icons.Material.Outlined.ManageHistory),
+        new(nameof(OrderStatus.Completed), "Completed", Icons.Material.Outlined.CheckCircle)
+    ];
+
+    private string StageState(string status)
+    {
+        var currentIndex = StageIndex(CurrentStatus);
+        var stageIndex = StageIndex(status);
+
+        if (CurrentStatus == nameof(OrderStatus.Failed) ||
+            CurrentStatus == nameof(OrderStatus.Cancelled))
+        {
+            return stageIndex <= currentIndex ? "complete" : "pending";
+        }
+
+        if (stageIndex < currentIndex)
+        {
+            return "complete";
+        }
+
+        return stageIndex == currentIndex ? "current" : "pending";
+    }
+
+    private static string StageDescription(string status, string state)
+    {
+        if (state == "complete")
+        {
+            return "Done";
+        }
+
+        if (state == "current")
+        {
+            return status == nameof(OrderStatus.Paid)
+                ? "Awaiting assignment"
+                : "Current step";
+        }
+
+        return "Pending";
+    }
+
+    private static int StageIndex(string status)
+    {
+        return status switch
+        {
+            nameof(OrderStatus.WaitingForPayment) => 0,
+            nameof(OrderStatus.Paid) => 1,
+            nameof(OrderStatus.Assigned) => 2,
+            nameof(OrderStatus.Processing) => 3,
+            nameof(OrderStatus.Completed) => 4,
+            nameof(OrderStatus.Cancelled) or nameof(OrderStatus.Failed) => 3,
+            _ => 0
+        };
+    }
+
+    private sealed record LifecycleStage(string Status, string Label, string Icon);
+}

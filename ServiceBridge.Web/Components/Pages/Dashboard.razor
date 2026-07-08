@@ -1,15 +1,25 @@
 @page "/ui/dashboard"
 @attribute [Authorize(Roles = AppConstants.Roles.User)]
 @inject UserOrdersClient OrdersClient
+@inject TicketsClient TicketsClient
 @inject NavigationManager Navigation
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Dashboard", null) })" />
 
 <PageHeader Eyebrow="User workspace"
             Title="Dashboard"
-            Description="Your recent service requests, payment state, and fulfillment progress." />
+            Description="Track purchased services, payment status, fulfillment progress, and support needs.">
+    <Actions>
+        <MudButton Href="/ui/catalog"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.Apps">
+            Browse Services
+        </MudButton>
+    </Actions>
+</PageHeader>
 
-<PageSection MaxWidth="standard">
+<PageSection MaxWidth="wide">
     @if (_loading)
     {
         <LoadingState Text="Loading dashboard" />
@@ -21,73 +31,241 @@
     else if (_summary is not null)
     {
         <div class="sb-stat-grid">
-            <StatCard Label="Total orders" Value="@_summary.TotalOrders.ToString("N0")" Description="All orders created by your account" Tone="neutral" Icon="@Icons.Material.Outlined.ReceiptLong" />
-            <StatCard Label="Pending" Value="@_summary.PendingOrders.ToString("N0")" Description="Waiting for payment" Tone="warning" Icon="@Icons.Material.Outlined.Payments" />
-            <StatCard Label="Processing" Value="@_summary.ProcessingOrders.ToString("N0")" Description="Currently in fulfillment" Tone="info" Icon="@Icons.Material.Outlined.ManageHistory" />
-            <StatCard Label="Completed" Value="@_summary.CompletedOrders.ToString("N0")" Description="Fulfilled service requests" Tone="success" Icon="@Icons.Material.Outlined.CheckCircle" />
-            <StatCard Label="Failed" Value="@_summary.FailedOrders.ToString("N0")" Description="Orders that could not be completed" Tone="danger" Icon="@Icons.Material.Outlined.ErrorOutline" />
+            <StatCard Label="Active Orders"
+                      Value="@ActiveOrderCount.ToString("N0")"
+                      Description="Paid or in fulfillment"
+                      Tone="info"
+                      Icon="@Icons.Material.Outlined.ManageHistory" />
+            <StatCard Label="Completed Orders"
+                      Value="@_summary.CompletedOrders.ToString("N0")"
+                      Description="Fulfilled service requests"
+                      Tone="success"
+                      Icon="@Icons.Material.Outlined.CheckCircle" />
+            <StatCard Label="Open Tickets"
+                      Value="@_openTicketCount.ToString("N0")"
+                      Description="@(_ticketError ?? "Support conversations needing attention")"
+                      Tone="@(_ticketError is null ? "warning" : "danger")"
+                      Icon="@Icons.Material.Outlined.SupportAgent" />
+            <StatCard Label="Total Payments"
+                      Value="@($"{_summary.TotalPaymentsIrr:N0} IRR")"
+                      Description="@(_summary.IsPaymentTotalPartial ? "From currently loaded paid orders" : "Completed payments")"
+                      Tone="neutral"
+                      Icon="@Icons.Material.Outlined.Payments" />
         </div>
     }
 </PageSection>
 
 @if (!_loading && string.IsNullOrWhiteSpace(_errorMessage) && _summary is not null)
 {
-    <PageSection Title="Recent orders" Description="Newest service requests for your account." MaxWidth="standard">
-        @if (_summary.RecentOrders.Count == 0)
-        {
-            <EmptyState Title="No orders yet"
-                        Description="Your service requests will appear here after checkout."
-                        Icon="@Icons.Material.Outlined.ReceiptLong">
-                <Actions>
-                    <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Apps">
-                        Browse catalog
+    <PageSection MaxWidth="wide">
+        <div class="sb-dashboard-grid sb-dashboard-grid-two">
+            <section class="sb-dashboard-panel">
+                <div class="sb-dashboard-panel-header">
+                    <div>
+                        <h2>Active Orders</h2>
+                        <p>Current service requests that may need payment, assignment, or fulfillment.</p>
+                    </div>
+                    <MudButton Href="/ui/orders"
+                               Variant="Variant.Text"
+                               Color="Color.Primary"
+                               EndIcon="@Icons.Material.Outlined.ArrowForward">
+                        View Orders
                     </MudButton>
-                </Actions>
-            </EmptyState>
-        }
-        else
-        {
-            <div class="sb-order-grid">
-                @foreach (var order in _summary.RecentOrders)
+                </div>
+
+                @if (_summary.ActiveOrders.Count == 0)
                 {
-                    <article class="sb-order-card">
-                        <div class="sb-order-card-head">
-                            <strong>@order.OrderNumber</strong>
-                            <StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(order.Status)"
-                                         Tone="@UserOrderDisplay.OrderTone(order.Status)" />
-                        </div>
-                        <dl class="sb-card-facts">
-                            <div><dt>Service</dt><dd>@order.ServiceName</dd></div>
-                            <div><dt>Variant</dt><dd>@UserOrderDisplay.VariantLabel(order.PlanName, order.PlanDurationDays, order.PlanRegionCode)</dd></div>
-                            <div><dt>Payment</dt><dd><StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(order.PaymentStatus)" Tone="@UserOrderDisplay.PaymentTone(order.PaymentStatus)" /></dd></div>
-                            <div><dt>Total</dt><dd>@order.FinalPriceIrr.ToString("N0") IRR</dd></div>
-                        </dl>
-                        <MudButton Href="@($"/ui/orders/{order.OrderId}")" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Outlined.ArrowForward">
-                            Inspect order
-                        </MudButton>
-                    </article>
+                    <EmptyState Title="No active orders"
+                                Description="Active service requests will appear here after checkout."
+                                Icon="@Icons.Material.Outlined.ReceiptLong">
+                        <Actions>
+                            <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary">
+                                Browse Services
+                            </MudButton>
+                        </Actions>
+                    </EmptyState>
                 }
-            </div>
-        }
+                else
+                {
+                    <MudTable Items="@_summary.ActiveOrders" Hover="true" Dense="true" Class="sb-data-table">
+                        <HeaderContent>
+                            <MudTh>Order Number</MudTh>
+                            <MudTh>Service Name</MudTh>
+                            <MudTh>Current Status</MudTh>
+                            <MudTh>Created Date</MudTh>
+                            <MudTh>Action</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Order Number"><strong>@context.OrderNumber</strong></MudTd>
+                            <MudTd DataLabel="Service Name">@context.ServiceName</MudTd>
+                            <MudTd DataLabel="Current Status">
+                                <StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(context.Status)"
+                                             Tone="@UserOrderDisplay.OrderTone(context.Status)" />
+                            </MudTd>
+                            <MudTd DataLabel="Created Date">@UserOrderDisplay.FormatDateTime(context.CreatedAt)</MudTd>
+                            <MudTd DataLabel="Action">
+                                <MudButton Href="@($"/ui/orders/{context.OrderId}")"
+                                           Variant="Variant.Text"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           EndIcon="@Icons.Material.Outlined.ArrowForward">
+                                    Open
+                                </MudButton>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </section>
+
+            <section class="sb-dashboard-panel">
+                <div class="sb-dashboard-panel-header">
+                    <div>
+                        <h2>Order Lifecycle</h2>
+                        <p>The standard path from request creation to completed fulfillment.</p>
+                    </div>
+                </div>
+                <OrderLifecycle CurrentStatus="@LifecycleStatus" />
+            </section>
+        </div>
+    </PageSection>
+
+    <PageSection MaxWidth="wide">
+        <div class="sb-dashboard-grid sb-dashboard-grid-two">
+            <section class="sb-dashboard-panel">
+                <div class="sb-dashboard-panel-header">
+                    <div>
+                        <h2>Recent Orders</h2>
+                        <p>Newest service requests for this account.</p>
+                    </div>
+                </div>
+
+                @if (_summary.RecentOrders.Count == 0)
+                {
+                    <EmptyState Title="No orders yet"
+                                Description="Your purchased services will appear here after checkout."
+                                Icon="@Icons.Material.Outlined.ShoppingBag" />
+                }
+                else
+                {
+                    <div class="sb-order-grid">
+                        @foreach (var order in _summary.RecentOrders)
+                        {
+                            <article class="sb-order-card">
+                                <div class="sb-order-card-head">
+                                    <strong>@order.OrderNumber</strong>
+                                    <StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(order.Status)"
+                                                 Tone="@UserOrderDisplay.OrderTone(order.Status)" />
+                                </div>
+                                <dl class="sb-card-facts">
+                                    <div><dt>Service</dt><dd>@order.ServiceName</dd></div>
+                                    <div><dt>Payment</dt><dd><StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(order.PaymentStatus)" Tone="@UserOrderDisplay.PaymentTone(order.PaymentStatus)" /></dd></div>
+                                    <div><dt>Total</dt><dd>@order.FinalPriceIrr.ToString("N0") IRR</dd></div>
+                                </dl>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+
+            <section class="sb-dashboard-panel">
+                <div class="sb-dashboard-panel-header">
+                    <div>
+                        <h2>Quick Actions</h2>
+                        <p>Common customer tasks.</p>
+                    </div>
+                </div>
+                <div class="sb-dashboard-actions">
+                    <div class="sb-dashboard-action-row">
+                        <div>
+                            <strong>Browse Services</strong>
+                            <span>Start a new digital service request.</span>
+                        </div>
+                        <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small">
+                            Open
+                        </MudButton>
+                    </div>
+                    <div class="sb-dashboard-action-row">
+                        <div>
+                            <strong>Open Support Ticket</strong>
+                            <span>Ask for help on an order or service.</span>
+                        </div>
+                        <MudButton Href="/ui/tickets/new" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small">
+                            Create
+                        </MudButton>
+                    </div>
+                    <div class="sb-dashboard-action-row">
+                        <div>
+                            <strong>View Orders</strong>
+                            <span>Review payment and fulfillment history.</span>
+                        </div>
+                        <MudButton Href="/ui/orders" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small">
+                            View
+                        </MudButton>
+                    </div>
+                </div>
+            </section>
+        </div>
     </PageSection>
 }
 
 @code {
     private bool _loading = true;
     private string? _errorMessage;
+    private string? _ticketError;
+    private int _openTicketCount;
     private UserDashboardSummary? _summary;
+
+    private int ActiveOrderCount =>
+        (_summary?.PendingOrders ?? 0) +
+        (_summary?.PaidOrders ?? 0) +
+        (_summary?.AssignedOrders ?? 0) +
+        (_summary?.ProcessingOrders ?? 0);
+
+    private string LifecycleStatus =>
+        _summary?.ActiveOrders.FirstOrDefault()?.Status ??
+        (_summary?.CompletedOrders > 0 ? nameof(OrderStatus.Completed) : nameof(OrderStatus.Created));
 
     protected override async Task OnInitializedAsync()
     {
-        var result = await OrdersClient.GetDashboardAsync();
-        if (result.RequiresAuthentication)
+        var dashboardResult = await OrdersClient.GetDashboardAsync();
+        if (dashboardResult.RequiresAuthentication)
         {
             Navigation.NavigateTo("/Account/Login");
             return;
         }
 
-        _summary = result.Success ? result.Data : null;
-        _errorMessage = result.ErrorMessage;
+        _summary = dashboardResult.Success ? dashboardResult.Data : null;
+        _errorMessage = dashboardResult.ErrorMessage;
+
+        await LoadTicketCountAsync();
         _loading = false;
+    }
+
+    private async Task LoadTicketCountAsync()
+    {
+        var statuses = new[]
+        {
+            TicketStatus.Open,
+            TicketStatus.WaitingForSupport,
+            TicketStatus.WaitingForCustomer
+        };
+
+        foreach (var status in statuses)
+        {
+            var result = await TicketsClient.GetMyTicketsAsync(1, 1, status);
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (!result.Success || result.Data is null)
+            {
+                _ticketError = result.ErrorMessage ?? "Unable to load ticket count.";
+                return;
+            }
+
+            _openTicketCount += result.Data.TotalCount;
+        }
     }
 }
