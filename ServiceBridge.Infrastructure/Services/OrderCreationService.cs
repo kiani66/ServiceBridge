@@ -171,6 +171,8 @@ public class OrderCreationService : IOrderCreationService
                 409);
         }
 
+        await _notificationService.PublishQueuedRealtimeAsync();
+
         return ServiceResult<OrderCreatedResponse>.Created(
             new OrderCreatedResponse
             {

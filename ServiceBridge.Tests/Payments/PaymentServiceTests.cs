@@ -196,8 +196,8 @@ public class PaymentServiceTests
         var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
         var payment = CreatePayment(order);
         var repository = new FakePaymentRepository { Payment = payment };
-        var realtimeNotifier = new FakeOrderRealtimeNotifier();
-        var service = CreateService(repository, realtimeNotifier: realtimeNotifier);
+        var realtimePublisher = new FakeRealtimeEventPublisher();
+        var service = CreateService(repository, realtimePublisher: realtimePublisher);
 
         var result = await service.ConfirmAsync(
             new ConfirmPaymentRequest
@@ -214,9 +214,9 @@ public class PaymentServiceTests
         Assert.Equal(OrderStatus.Paid, order.Status);
         Assert.NotNull(order.PaidAt);
         Assert.Equal(1, repository.SaveCount);
-        var message = Assert.Single(realtimeNotifier.Messages);
+        var message = Assert.Single(realtimePublisher.OrderUpdates);
         Assert.Equal(order.Id, message.OrderId);
-        Assert.Equal(OrderStatus.Paid.ToString(), message.NewStatus);
+        Assert.Equal(OrderStatus.Paid.ToString(), message.Status);
         Assert.Equal(order.UserId, message.UserId);
     }
 
@@ -303,8 +303,8 @@ public class PaymentServiceTests
         var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
         var payment = CreatePayment(order);
         var repository = new FakePaymentRepository { Payment = payment };
-        var realtimeNotifier = new FakeOrderRealtimeNotifier();
-        var service = CreateService(repository, realtimeNotifier: realtimeNotifier);
+        var realtimePublisher = new FakeRealtimeEventPublisher();
+        var service = CreateService(repository, realtimePublisher: realtimePublisher);
 
         var result = await service.ConfirmAsync(
             new ConfirmPaymentRequest
@@ -321,7 +321,7 @@ public class PaymentServiceTests
         Assert.Equal(
             PaymentEventType.Failed,
             Assert.Single(payment.Events).EventType);
-        Assert.Empty(realtimeNotifier.Messages);
+        Assert.Empty(realtimePublisher.OrderUpdates);
     }
 
     [Fact]
@@ -330,8 +330,8 @@ public class PaymentServiceTests
         var order = CreateOrder(Guid.NewGuid(), OrderStatus.WaitingForPayment);
         var payment = CreatePayment(order);
         var repository = new FakePaymentRepository { Payment = payment };
-        var realtimeNotifier = new FakeOrderRealtimeNotifier { ThrowOnNotify = true };
-        var service = CreateService(repository, realtimeNotifier: realtimeNotifier);
+        var realtimePublisher = new FakeRealtimeEventPublisher { ThrowOnOrderUpdate = true };
+        var service = CreateService(repository, realtimePublisher: realtimePublisher);
 
         var result = await service.ConfirmAsync(
             new ConfirmPaymentRequest
@@ -345,7 +345,7 @@ public class PaymentServiceTests
         Assert.Equal(PaymentStatus.Completed, payment.Status);
         Assert.Equal(OrderStatus.Paid, order.Status);
         Assert.Equal(1, repository.SaveCount);
-        Assert.Empty(realtimeNotifier.Messages);
+        Assert.Empty(realtimePublisher.OrderUpdates);
     }
 
     [Fact]
@@ -533,17 +533,17 @@ public class PaymentServiceTests
         FakePaymentRepository repository,
         FakeMockPaymentGateway? gateway = null,
         FakePaymentGateway? paymentGateway = null,
-        FakeOrderRealtimeNotifier? realtimeNotifier = null)
+        FakeRealtimeEventPublisher? realtimePublisher = null)
     {
         paymentGateway ??= new FakePaymentGateway();
-        realtimeNotifier ??= new FakeOrderRealtimeNotifier();
+        realtimePublisher ??= new FakeRealtimeEventPublisher();
 
         return new PaymentService(
             repository,
             gateway ?? new FakeMockPaymentGateway(),
             new FakePaymentGatewayFactory([paymentGateway]),
             new FakeNotificationService(),
-            realtimeNotifier,
+            realtimePublisher,
             NullLogger<PaymentService>.Instance);
     }
 }

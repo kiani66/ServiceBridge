@@ -19,7 +19,11 @@ public class RespondToCustomerActionCommandTests
         var action = Assert.Single(order.CustomerActionRequests);
         var repository = new FakeUserOrderCommandRepository { Order = order };
         var notifications = new FakeNotificationService();
-        var command = new RespondToCustomerActionCommand(repository, notifications);
+        var realtimePublisher = new FakeRealtimeEventPublisher();
+        var command = new RespondToCustomerActionCommand(
+            repository,
+            notifications,
+            realtimePublisher);
 
         var result = await command.ExecuteAsync(
             userId,
@@ -38,6 +42,14 @@ public class RespondToCustomerActionCommandTests
         Assert.Contains(
             nameof(FakeNotificationService.QueueCustomerActionRespondedAsync),
             notifications.QueuedTypes);
+        Assert.Contains(
+            nameof(FakeNotificationService.PublishQueuedRealtimeAsync),
+            notifications.QueuedTypes);
+        var realtimeEvent = Assert.Single(realtimePublisher.CustomerActionChanges);
+        Assert.Equal(order.Id, realtimeEvent.OrderId);
+        Assert.Equal(action.Id, realtimeEvent.RequestId);
+        Assert.Equal(order.UserId, realtimeEvent.UserId);
+        Assert.Equal(agentId, realtimeEvent.AgentId);
     }
 
     [Fact]
@@ -50,7 +62,10 @@ public class RespondToCustomerActionCommandTests
         var action = Assert.Single(order.CustomerActionRequests);
         var repository = new FakeUserOrderCommandRepository { Order = order };
         var notifications = new FakeNotificationService();
-        var command = new RespondToCustomerActionCommand(repository, notifications);
+        var command = new RespondToCustomerActionCommand(
+            repository,
+            notifications,
+            new FakeRealtimeEventPublisher());
 
         var result = await command.ExecuteAsync(
             Guid.NewGuid(),
@@ -78,7 +93,10 @@ public class RespondToCustomerActionCommandTests
         var action = Assert.Single(order.CustomerActionRequests);
         var repository = new FakeUserOrderCommandRepository { Order = order };
         var notifications = new FakeNotificationService();
-        var command = new RespondToCustomerActionCommand(repository, notifications);
+        var command = new RespondToCustomerActionCommand(
+            repository,
+            notifications,
+            new FakeRealtimeEventPublisher());
 
         var firstResult = await command.ExecuteAsync(
             userId,
@@ -102,7 +120,10 @@ public class RespondToCustomerActionCommandTests
         Assert.Equal(409, secondResult.StatusCode);
         Assert.Equal("customer@example.com", action.CustomerResponse);
         Assert.Equal(1, repository.SaveCount);
-        Assert.Single(notifications.QueuedTypes);
+        Assert.Equal(
+            1,
+            notifications.QueuedTypes.Count(
+                type => type == nameof(FakeNotificationService.QueueCustomerActionRespondedAsync)));
     }
 
     private static Order CreateProcessingOrder(Guid userId, Guid agentId)

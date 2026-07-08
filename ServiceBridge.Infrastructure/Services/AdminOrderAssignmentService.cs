@@ -10,16 +10,16 @@ public class AdminOrderAssignmentService : IAdminOrderAssignmentService
 {
     private readonly IAdminOrderCommandRepository _repository;
     private readonly INotificationService _notificationService;
-    private readonly IOrderRealtimeNotifier _orderRealtimeNotifier;
+    private readonly IRealtimeEventPublisher _realtimeEventPublisher;
 
     public AdminOrderAssignmentService(
         IAdminOrderCommandRepository repository,
         INotificationService notificationService,
-        IOrderRealtimeNotifier orderRealtimeNotifier)
+        IRealtimeEventPublisher realtimeEventPublisher)
     {
         _repository = repository;
         _notificationService = notificationService;
-        _orderRealtimeNotifier = orderRealtimeNotifier;
+        _realtimeEventPublisher = realtimeEventPublisher;
     }
 
     public async Task<ServiceResult> AssignAsync(
@@ -73,23 +73,36 @@ public class AdminOrderAssignmentService : IAdminOrderAssignmentService
                 409);
         }
 
-        await _orderRealtimeNotifier.NotifyOrderUpdatedAsync(
-            CreateRealtimeMessage(order));
+        await _notificationService.PublishQueuedRealtimeAsync();
+        await _realtimeEventPublisher.PublishOrderAssignedAsync(
+            new OrderAssignedRealtimeEvent
+            {
+                OrderId = order.Id,
+                LinkUrl = $"/ui/agent/orders/{order.Id}",
+                AssignedAtUtc = order.AssignedAt ?? DateTime.UtcNow,
+                UserId = order.UserId,
+                AgentId = request.AgentId
+            });
+        await _realtimeEventPublisher.PublishOrderUpdatedAsync(
+            CreateOrderUpdatedEvent(order, notifyAdmins: true));
 
         return ServiceResult.Ok(AppMessages.OrderAssigned);
     }
 
-    private static OrderUpdatedRealtimeMessage CreateRealtimeMessage(
-        Domain.Entities.Order order)
+    private static OrderUpdatedRealtimeEvent CreateOrderUpdatedEvent(
+        Domain.Entities.Order order,
+        bool notifyAdmins)
     {
-        return new OrderUpdatedRealtimeMessage
+        return new OrderUpdatedRealtimeEvent
         {
             OrderId = order.Id,
-            OrderNumber = order.OrderNumber,
-            NewStatus = order.Status.ToString(),
+            Status = order.Status.ToString(),
+            LinkUrl = $"/ui/orders/{order.Id}",
             UpdatedAtUtc = order.UpdatedAt ?? DateTime.UtcNow,
             UserId = order.UserId,
-            AgentId = order.AssignedAgentId
+            AgentId = order.AssignedAgentId,
+            NotifyAdmins = notifyAdmins
         };
     }
+
 }

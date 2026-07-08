@@ -35,6 +35,12 @@ internal class FakeNotificationService : INotificationService
         return Task.FromResult(ServiceResult.Ok());
     }
 
+    public Task PublishQueuedRealtimeAsync(CancellationToken cancellationToken = default)
+    {
+        QueuedTypes.Add(nameof(PublishQueuedRealtimeAsync));
+        return Task.CompletedTask;
+    }
+
     public Task QueueOrderCreatedAsync(
         Guid userId,
         Guid orderId,

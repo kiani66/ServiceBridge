@@ -10,13 +10,16 @@ public class RespondToCustomerActionCommand
 {
     private readonly IUserOrderCommandRepository _repository;
     private readonly INotificationService _notificationService;
+    private readonly IRealtimeEventPublisher _realtimeEventPublisher;
 
     public RespondToCustomerActionCommand(
         IUserOrderCommandRepository repository,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IRealtimeEventPublisher realtimeEventPublisher)
     {
         _repository = repository;
         _notificationService = notificationService;
+        _realtimeEventPublisher = realtimeEventPublisher;
     }
 
     public async Task<ServiceResult> ExecuteAsync(
@@ -64,6 +67,18 @@ public class RespondToCustomerActionCommand
                 AppConstants.ErrorCodes.Conflict,
                 409);
         }
+
+        await _notificationService.PublishQueuedRealtimeAsync();
+        await _realtimeEventPublisher.PublishCustomerActionChangedAsync(
+            new CustomerActionChangedRealtimeEvent
+            {
+                OrderId = order.Id,
+                RequestId = request.RequestId,
+                LinkUrl = $"/ui/agent/orders/{order.Id}",
+                UpdatedAtUtc = order.UpdatedAt ?? DateTime.UtcNow,
+                UserId = order.UserId,
+                AgentId = notificationAgentId
+            });
 
         return ServiceResult.Ok(AppMessages.CustomerActionResponded);
     }

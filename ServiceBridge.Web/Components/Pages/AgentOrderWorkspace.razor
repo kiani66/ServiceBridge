@@ -3,7 +3,7 @@
 @attribute [Authorize(Roles = AppConstants.Roles.Agent)]
 @implements IDisposable
 @inject AgentOrdersClient AgentOrdersClient
-@inject OrderRealtimeClient OrderRealtimeClient
+@inject RealtimeClient RealtimeClient
 @inject NavigationManager Navigation
 
 @if (_loading)
@@ -329,10 +329,11 @@ else
         ? Array.Empty<TimelineItem>()
         : AgentOrderDisplay.TimelineItems(_order.StatusHistory);
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
-        await OrderRealtimeClient.StartAsync();
+        RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        RealtimeClient.OrderAssigned += HandleOrderAssignedAsync;
+        RealtimeClient.CustomerActionChanged += HandleCustomerActionChangedAsync;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -496,7 +497,38 @@ else
         _actionBusy = false;
     }
 
-    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
+    {
+        if (message.OrderId != OrderId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task HandleOrderAssignedAsync(OrderAssignedRealtimeDto message)
+    {
+        if (message.OrderId != OrderId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task HandleCustomerActionChangedAsync(
+        CustomerActionChangedRealtimeDto message)
+    {
+        if (message.OrderId != OrderId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task ReloadFromRealtimeAsync()
     {
         return InvokeAsync(async () =>
         {
@@ -572,6 +604,8 @@ else
 
     public void Dispose()
     {
-        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+        RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+        RealtimeClient.OrderAssigned -= HandleOrderAssignedAsync;
+        RealtimeClient.CustomerActionChanged -= HandleCustomerActionChangedAsync;
     }
 }

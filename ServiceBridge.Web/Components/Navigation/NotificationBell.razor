@@ -1,5 +1,7 @@
 @inject NotificationsClient NotificationsClient
 @inject NavigationManager Navigation
+@inject RealtimeClient RealtimeClient
+@implements IDisposable
 
 <AuthorizeView>
     <Authorized Context="authContext">
@@ -85,6 +87,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        RealtimeClient.NotificationReceived += HandleNotificationReceivedAsync;
         await RefreshAsync();
     }
 
@@ -152,5 +155,24 @@
     private static string FormatDateTime(DateTime value)
     {
         return value.ToString("yyyy-MM-dd HH:mm") + " UTC";
+    }
+
+    private Task HandleNotificationReceivedAsync(RealtimeEventDto notification)
+    {
+        return InvokeAsync(async () =>
+        {
+            if (notification.UnreadCount.HasValue)
+            {
+                _unreadCount = notification.UnreadCount.Value;
+            }
+
+            await RefreshAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        RealtimeClient.NotificationReceived -= HandleNotificationReceivedAsync;
     }
 }

@@ -110,7 +110,7 @@ builder.Services.AddScoped<IMessageOutboxProcessor, MessageOutboxProcessor>();
 builder.Services.AddHostedService<MessageOutboxBackgroundService>();
 builder.Services.AddScoped<ITicketRepository, TicketRepository>();
 builder.Services.AddScoped<ITicketService, TicketService>();
-builder.Services.AddScoped<IOrderRealtimeNotifier, SignalROrderRealtimeNotifier>();
+builder.Services.AddScoped<IRealtimeEventPublisher, SignalRRealtimeEventPublisher>();
 builder.Services.AddScoped<IAdminOrderQueryRepository, AdminOrderQueryRepository>();
 builder.Services.AddScoped<IAdminOrderCommandRepository, AdminOrderCommandRepository>();
 builder.Services.AddScoped<IAdminOrderQueryService, AdminOrderQueryService>();
@@ -165,7 +165,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             {
                 var accessToken = context.Request.Query["access_token"];
                 if (!string.IsNullOrWhiteSpace(accessToken) &&
-                    context.HttpContext.Request.Path.StartsWithSegments("/hubs/order-updates"))
+                    context.HttpContext.Request.Path.StartsWithSegments("/realtimeHub"))
                 {
                     context.Token = accessToken;
                 }
@@ -364,7 +364,7 @@ app.Use(async (context, next) =>
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<OrderUpdatesHub>("/hubs/order-updates")
+app.MapHub<RealtimeHub>("/realtimeHub")
     .RequireAuthorization();
 
 using (var adminSeedScope = app.Services.CreateScope())

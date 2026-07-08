@@ -16,7 +16,7 @@ public class PaymentService : IPaymentService
     private readonly IMockPaymentGateway _mockPaymentGateway;
     private readonly IPaymentGatewayFactory _gatewayFactory;
     private readonly INotificationService _notificationService;
-    private readonly IOrderRealtimeNotifier _orderRealtimeNotifier;
+    private readonly IRealtimeEventPublisher _realtimeEventPublisher;
     private readonly ILogger<PaymentService> _logger;
 
     public PaymentService(
@@ -24,14 +24,14 @@ public class PaymentService : IPaymentService
         IMockPaymentGateway mockPaymentGateway,
         IPaymentGatewayFactory gatewayFactory,
         INotificationService notificationService,
-        IOrderRealtimeNotifier orderRealtimeNotifier,
+        IRealtimeEventPublisher realtimeEventPublisher,
         ILogger<PaymentService> logger)
     {
         _repository = repository;
         _mockPaymentGateway = mockPaymentGateway;
         _gatewayFactory = gatewayFactory;
         _notificationService = notificationService;
-        _orderRealtimeNotifier = orderRealtimeNotifier;
+        _realtimeEventPublisher = realtimeEventPublisher;
         _logger = logger;
     }
 
@@ -327,6 +327,7 @@ public class PaymentService : IPaymentService
 
         if (request.Status == PaymentStatus.Completed)
         {
+            await _notificationService.PublishQueuedRealtimeAsync();
             await NotifyOrderPaidTransitionAsync(payment);
         }
 
@@ -452,16 +453,17 @@ public class PaymentService : IPaymentService
             });
     }
 
-    private static OrderUpdatedRealtimeMessage CreateRealtimeMessage(Order order)
+    private static OrderUpdatedRealtimeEvent CreateRealtimeEvent(Order order)
     {
-        return new OrderUpdatedRealtimeMessage
+        return new OrderUpdatedRealtimeEvent
         {
             OrderId = order.Id,
-            OrderNumber = order.OrderNumber,
-            NewStatus = order.Status.ToString(),
+            Status = order.Status.ToString(),
+            LinkUrl = $"/ui/orders/{order.Id}",
             UpdatedAtUtc = order.UpdatedAt ?? DateTime.UtcNow,
             UserId = order.UserId,
-            AgentId = order.AssignedAgentId
+            AgentId = order.AssignedAgentId,
+            NotifyAdmins = true
         };
     }
 
@@ -469,8 +471,8 @@ public class PaymentService : IPaymentService
     {
         try
         {
-            await _orderRealtimeNotifier.NotifyOrderUpdatedAsync(
-                CreateRealtimeMessage(payment.Order));
+            await _realtimeEventPublisher.PublishOrderUpdatedAsync(
+                CreateRealtimeEvent(payment.Order));
         }
         catch (Exception ex)
         {
