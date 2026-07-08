@@ -1,4 +1,6 @@
-<MudAppBar Elevation="0" Dense="true" Class="sb-topbar">
+@using Microsoft.AspNetCore.Components.Forms
+
+<MudAppBar Elevation="0" Class="sb-topbar">
     <MudIconButton Icon="@Icons.Material.Outlined.Menu"
                    Color="Color.Primary"
                    Edge="Edge.Start"
@@ -21,15 +23,42 @@
     </AuthorizeView>
     <AuthorizeView>
         <Authorized Context="profileContext">
-            <MudTooltip Text="Profile">
-                <MudButton Href="/ui/profile"
-                           Variant="Variant.Text"
-                           Color="Color.Secondary"
-                           Class="sb-profile-chip"
-                           StartIcon="@Icons.Material.Outlined.AccountCircle">
-                    @GetDisplayName(profileContext.User)
-                </MudButton>
-            </MudTooltip>
+            <MudMenu Dense="true"
+                     AnchorOrigin="Origin.BottomRight"
+                     TransformOrigin="Origin.TopRight"
+                     PopoverClass="sb-profile-menu-popover">
+                <ActivatorContent Context="menuContext">
+                    <MudTooltip Text="Account menu">
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   Class="sb-profile-chip"
+                                   StartIcon="@Icons.Material.Outlined.AccountCircle"
+                                   EndIcon="@Icons.Material.Outlined.KeyboardArrowDown">
+                            @GetDisplayName(profileContext.User)
+                        </MudButton>
+                    </MudTooltip>
+                </ActivatorContent>
+                <ChildContent>
+                    <div class="sb-profile-menu">
+                        <div class="sb-profile-menu-header">
+                            <strong>@GetDisplayName(profileContext.User)</strong>
+                            <span>@GetRole(profileContext.User)</span>
+                        </div>
+                        <MudDivider />
+                        <MudMenuItem Href="/ui/profile"
+                                     Icon="@Icons.Material.Outlined.Person">
+                            Profile
+                        </MudMenuItem>
+                        <form method="post" action="/Account/Logout" class="sb-profile-logout-form">
+                            <AntiforgeryToken />
+                            <button type="submit" class="sb-profile-menu-action">
+                                <MudIcon Icon="@Icons.Material.Outlined.Logout" Size="Size.Small" />
+                                <span>Logout</span>
+                            </button>
+                        </form>
+                    </div>
+                </ChildContent>
+            </MudMenu>
         </Authorized>
     </AuthorizeView>
 </MudAppBar>
@@ -52,5 +81,13 @@
         }
 
         return user.Identity?.Name ?? "Profile";
+    }
+
+    private static string GetRole(System.Security.Claims.ClaimsPrincipal user)
+    {
+        var role = user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ??
+            user.FindFirst("role")?.Value;
+
+        return string.IsNullOrWhiteSpace(role) ? "Authenticated" : role;
     }
 }

@@ -1,0 +1,45 @@
+<section class="sb-detail-panel sb-order-detail-card">
+    <div class="sb-card-heading">
+        <div>
+            <span class="sb-eyebrow">@Eyebrow</span>
+            <h2>@Title</h2>
+            @if (!string.IsNullOrWhiteSpace(Description))
+            {
+                <p>@Description</p>
+            }
+        </div>
+    </div>
+
+    @if (Notes.Count == 0)
+    {
+        <p>@EmptyText</p>
+    }
+    else
+    {
+        <div class="sb-note-list">
+            @foreach (var note in Notes)
+            {
+                <article class="sb-note-item">
+                    <p>@note.Text</p>
+                    <span>@note.Author / @note.Visibility / @note.CreatedAt</span>
+                </article>
+            }
+        </div>
+    }
+
+    @if (Composer is not null)
+    {
+        <div class="sb-panel-divider">
+            @Composer
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Notes";
+    [Parameter] public string Eyebrow { get; set; } = "Communication";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string EmptyText { get; set; } = "No notes are available for this order.";
+    [Parameter, EditorRequired] public IReadOnlyList<NoteDisplayItem> Notes { get; set; } = [];
+    [Parameter] public RenderFragment? Composer { get; set; }
+}

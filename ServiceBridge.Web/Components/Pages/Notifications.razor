@@ -47,9 +47,10 @@
     }
     else if (!string.IsNullOrWhiteSpace(_errorMessage))
     {
-        <EmptyState Title="Notifications unavailable"
-                    Description="@_errorMessage"
-                    Icon="@Icons.Material.Outlined.NotificationsOff" />
+        <ErrorState Title="Notifications unavailable"
+                    Message="@_errorMessage"
+                    Icon="@Icons.Material.Outlined.NotificationsOff"
+                    OnRetry="ReloadAsync" />
     }
     else if (_notifications.Items.Count == 0)
     {

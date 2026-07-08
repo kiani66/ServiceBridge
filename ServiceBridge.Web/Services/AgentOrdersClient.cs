@@ -88,6 +88,20 @@ public sealed class AgentOrdersClient
             cancellationToken);
     }
 
+    public Task<AgentOrdersApiResult<bool>> RequestCustomerActionAsync(
+        Guid orderId,
+        string note,
+        CancellationToken cancellationToken = default)
+    {
+        return SendCommandAsync(
+            client => client.PostAsJsonAsync(
+                $"api/agent/orders/{orderId}/request-customer-action",
+                new RequestCustomerActionRequest { Note = note },
+                cancellationToken),
+            "Unable to request customer information right now.",
+            cancellationToken);
+    }
+
     public Task<AgentOrdersApiResult<bool>> FailAsync(
         Guid orderId,
         string reason,

@@ -28,15 +28,10 @@ else if (_notFound)
 }
 else if (!string.IsNullOrWhiteSpace(_loadErrorMessage))
 {
-    <EmptyState Title="Unable to load payment"
-                Description="@_loadErrorMessage"
-                Icon="@Icons.Material.Outlined.CloudOff">
-        <Actions>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">
-                Try again
-            </MudButton>
-        </Actions>
-    </EmptyState>
+    <ErrorState Title="Unable to load payment"
+                Message="@_loadErrorMessage"
+                Icon="@Icons.Material.Outlined.CloudOff"
+                OnRetry="LoadAsync" />
 }
 else if (_order is not null)
 {

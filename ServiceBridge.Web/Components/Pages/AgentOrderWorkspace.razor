@@ -1,0 +1,365 @@
+@page "/ui/agent/orders/{OrderId:guid}"
+@page "/Agent/Orders/{OrderId:guid}"
+@attribute [Authorize(Roles = AppConstants.Roles.Agent)]
+@implements IDisposable
+@inject AgentOrdersClient AgentOrdersClient
+@inject OrderRealtimeClient OrderRealtimeClient
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <PageHeader Eyebrow="Agent workspace"
+                Title="Loading order"
+                Description="Fetching the assigned order." />
+    <PageSection MaxWidth="standard">
+        <LoadingState Text="Loading assigned order" />
+    </PageSection>
+}
+else if (_order is null)
+{
+    <ErrorState Title="Assigned order unavailable"
+                Message="@(_errorMessage ?? "The requested assigned order could not be loaded.")"
+                Icon="@Icons.Material.Outlined.AssignmentLate"
+                OnRetry="LoadOrderAsync">
+        <Actions>
+            <MudButton Href="/ui/agent" Variant="Variant.Outlined" Color="Color.Primary">Back to workspace</MudButton>
+        </Actions>
+    </ErrorState>
+}
+else
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Agent", "/ui/agent"), (_order.OrderNumber, null) })" />
+
+    <PageHeader Eyebrow="Assigned order"
+                Title="@_order.OrderNumber"
+                Description="@($"{_order.CustomerName} / {_order.ServiceName}")">
+        <Actions>
+            <StatusBadge Text="@AgentOrderDisplay.OrderStatusLabel(_order.Status)"
+                         Tone="@AgentOrderDisplay.OrderTone(_order.Status)" />
+        </Actions>
+    </PageHeader>
+
+    <PageSection MaxWidth="wide">
+        <div class="sb-order-management-grid">
+            <div class="sb-order-stack">
+                @if (!string.IsNullOrWhiteSpace(_actionMessage))
+                {
+                    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">@_actionMessage</MudAlert>
+                }
+                @if (!string.IsNullOrWhiteSpace(_actionError))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_actionError</MudAlert>
+                }
+
+                <OrderSummaryCard Title="Assigned order"
+                                  Eyebrow="Workspace"
+                                  Facts="@SummaryFacts" />
+
+                <CredentialCard Title="Protected credentials"
+                                Description="Credential values are intentionally kept behind the protected fulfillment workflow."
+                                ProtectedPlaceholder="true"
+                                Items="@CredentialItems" />
+
+                <section class="sb-detail-panel sb-order-detail-card">
+                    <div class="sb-card-heading">
+                        <div>
+                            <span class="sb-eyebrow">Customer action</span>
+                            <h2>Information requests</h2>
+                        </div>
+                    </div>
+                    @if (_order.CustomerActions.Count == 0)
+                    {
+                        <p>No customer information requests are attached to this order.</p>
+                    }
+                    else
+                    {
+                        <div class="sb-note-list">
+                            @foreach (var action in _order.CustomerActions.OrderByDescending(action => action.RequestedAt))
+                            {
+                                <article class="sb-note-item">
+                                    <p>@action.RequestText</p>
+                                    <span>
+                                        @(action.IsResolved ? "Resolved" : "Awaiting customer response")
+                                        / @AgentOrderDisplay.FormatDateTime(action.RequestedAt)
+                                    </span>
+                                    @if (!string.IsNullOrWhiteSpace(action.CustomerResponse))
+                                    {
+                                        <p>@action.CustomerResponse</p>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <NotesPanel Title="Order notes"
+                            EmptyText="No notes have been added yet."
+                            Notes="@NoteItems">
+                    <Composer>
+                        <div class="sb-order-form">
+                            <MudTextField T="string"
+                                          Label="Add note"
+                                          Variant="Variant.Outlined"
+                                          Lines="4"
+                                          MaxLength="2000"
+                                          Value="@_noteText"
+                                          ValueChanged="@((string? value) => _noteText = value ?? string.Empty)" />
+                            <MudCheckBox T="bool"
+                                         Label="Visible to customer"
+                                         Value="@_noteVisibleToCustomer"
+                                         ValueChanged="@((bool value) => _noteVisibleToCustomer = value)" />
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Disabled="@_actionBusy"
+                                       StartIcon="@Icons.Material.Outlined.NoteAdd"
+                                       OnClick="AddNoteAsync">
+                                Add note
+                            </MudButton>
+                        </div>
+                    </Composer>
+                </NotesPanel>
+            </div>
+
+            <aside class="sb-order-side-stack">
+                <section class="sb-detail-panel sb-order-detail-card">
+                    <div class="sb-card-heading">
+                        <div>
+                            <span class="sb-eyebrow">Actions</span>
+                            <h2>Order operations</h2>
+                        </div>
+                    </div>
+
+                    <div class="sb-order-action-stack">
+                        <MudTextField T="string"
+                                      Label="Operation note"
+                                      Variant="Variant.Outlined"
+                                      Lines="3"
+                                      MaxLength="1000"
+                                      Value="@_operationNote"
+                                      ValueChanged="@((string? value) => _operationNote = value)" />
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Disabled="@(!CanStart || _actionBusy)"
+                                   StartIcon="@Icons.Material.Outlined.PlayArrow"
+                                   OnClick="StartProcessingAsync">
+                            Start processing
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   Disabled="@(!CanRequestCustomerInfo || _actionBusy)"
+                                   StartIcon="@Icons.Material.Outlined.ContactSupport"
+                                   OnClick="RequestCustomerInfoAsync">
+                            Request customer information
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Success"
+                                   Disabled="@(!CanComplete || _actionBusy)"
+                                   StartIcon="@Icons.Material.Outlined.CheckCircle"
+                                   OnClick="CompleteAsync">
+                            Complete order
+                        </MudButton>
+                    </div>
+                </section>
+
+                <PaymentCard Payments="@_order.Payments" />
+
+                <PricingSnapshotCard BasePriceUsd="@_order.BasePriceUsdSnapshot"
+                                     ExchangeRateIrr="@_order.ExchangeRateSnapshot"
+                                     MarginPercent="@_order.MarginSnapshot"
+                                     FinalPriceIrr="@_order.FinalPriceIrr" />
+
+                <OrderTimeline CurrentStatus="@_order.Status"
+                               Items="@TimelineItems" />
+            </aside>
+        </div>
+    </PageSection>
+}
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+
+    private bool _loading = true;
+    private bool _actionBusy;
+    private bool _noteVisibleToCustomer;
+    private string? _errorMessage;
+    private string? _actionError;
+    private string? _actionMessage;
+    private string? _operationNote;
+    private string _noteText = string.Empty;
+    private AgentOrderDetailDto? _order;
+
+    private bool CanStart => _order?.Status == nameof(OrderStatus.Assigned);
+    private bool CanRequestCustomerInfo => _order?.Status == nameof(OrderStatus.Processing);
+    private bool CanComplete => _order?.Status == nameof(OrderStatus.Processing);
+
+    private IReadOnlyList<OrderFact> SummaryFacts => _order is null
+        ? Array.Empty<OrderFact>()
+        : new[]
+        {
+            new OrderFact("Customer", _order.CustomerName),
+            new OrderFact("Email", _order.CustomerEmail),
+            new OrderFact("Service", _order.ServiceName),
+            new OrderFact("Variant", AgentOrderDisplay.VariantLabel(_order.PlanName, _order.PlanDurationDays, _order.PlanRegionCode)),
+            new OrderFact("Provider", _order.Provider),
+            new OrderFact("Fulfillment", _order.FulfillmentMode),
+            new OrderFact("Status", AgentOrderDisplay.OrderStatusLabel(_order.Status), AgentOrderDisplay.OrderTone(_order.Status)),
+            new OrderFact("Created", AgentOrderDisplay.FormatDateTime(_order.CreatedAt)),
+            new OrderFact("Paid", FormatNullable(_order.PaidAt)),
+            new OrderFact("Assigned", FormatNullable(_order.AssignedAt)),
+            new OrderFact("Completed", FormatNullable(_order.CompletedAt))
+        };
+
+    private IReadOnlyList<CredentialDisplayItem> CredentialItems => _order is null
+        ? Array.Empty<CredentialDisplayItem>()
+        : _order.Fields
+            .Concat(_order.DeliveryFields)
+            .OrderBy(field => field.DisplayOrder)
+            .Select(field => new CredentialDisplayItem(
+                field.FieldLabel,
+                field.Value,
+                field.IsSensitive,
+                field.IsVisibleToCustomerAfterCompletion))
+            .ToArray();
+
+    private IReadOnlyList<NoteDisplayItem> NoteItems => _order is null
+        ? Array.Empty<NoteDisplayItem>()
+        : _order.Notes
+            .OrderByDescending(note => note.CreatedAt)
+            .Select(note => new NoteDisplayItem(
+                note.Text,
+                note.AuthorName,
+                AgentOrderDisplay.FormatDateTime(note.CreatedAt),
+                note.IsVisibleToCustomer ? "Customer visible" : "Internal"))
+            .ToArray();
+
+    private IReadOnlyList<TimelineItem> TimelineItems => _order is null
+        ? Array.Empty<TimelineItem>()
+        : AgentOrderDisplay.TimelineItems(_order.StatusHistory);
+
+    protected override async Task OnInitializedAsync()
+    {
+        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        await OrderRealtimeClient.StartAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadOrderAsync();
+    }
+
+    private async Task LoadOrderAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await AgentOrdersClient.GetOrderAsync(OrderId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _order = result.Success ? result.Data : null;
+        _errorMessage = result.ErrorMessage;
+        _loading = false;
+    }
+
+    private Task StartProcessingAsync()
+    {
+        return RunActionAsync(
+            note => AgentOrdersClient.StartProcessingAsync(OrderId, note),
+            "Processing started.");
+    }
+
+    private Task RequestCustomerInfoAsync()
+    {
+        return RunActionAsync(
+            note => AgentOrdersClient.RequestCustomerActionAsync(OrderId, note ?? string.Empty),
+            "Customer information requested.",
+            requireNote: true,
+            missingNoteMessage: "Enter the customer information request in the operation note.");
+    }
+
+    private Task CompleteAsync()
+    {
+        return RunActionAsync(
+            note => AgentOrdersClient.CompleteAsync(OrderId, note),
+            "Order completed.");
+    }
+
+    private Task AddNoteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_noteText))
+        {
+            _actionError = "Enter a note before saving.";
+            return Task.CompletedTask;
+        }
+
+        return RunActionAsync(
+            _ => AgentOrdersClient.AddNoteAsync(OrderId, _noteText, _noteVisibleToCustomer),
+            "Note added.",
+            clearNote: true);
+    }
+
+    private async Task RunActionAsync(
+        Func<string?, Task<AgentOrdersApiResult<bool>>> action,
+        string successMessage,
+        bool requireNote = false,
+        string? missingNoteMessage = null,
+        bool clearNote = false)
+    {
+        _actionError = null;
+        _actionMessage = null;
+
+        if (requireNote && string.IsNullOrWhiteSpace(_operationNote))
+        {
+            _actionError = missingNoteMessage ?? "Enter a note before continuing.";
+            return;
+        }
+
+        _actionBusy = true;
+        var result = await action(_operationNote);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _actionError = result.ErrorMessage ?? "Unable to update this order.";
+            _actionBusy = false;
+            return;
+        }
+
+        if (clearNote)
+        {
+            _noteText = string.Empty;
+            _noteVisibleToCustomer = false;
+        }
+
+        _operationNote = null;
+        _actionMessage = successMessage;
+        await LoadOrderAsync();
+        _actionBusy = false;
+    }
+
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
+    {
+        return InvokeAsync(async () =>
+        {
+            await LoadOrderAsync();
+            StateHasChanged();
+        });
+    }
+
+    private static string FormatNullable(DateTime? value)
+    {
+        return value.HasValue ? AgentOrderDisplay.FormatDateTime(value.Value) : "-";
+    }
+
+    public void Dispose()
+    {
+        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+    }
+}

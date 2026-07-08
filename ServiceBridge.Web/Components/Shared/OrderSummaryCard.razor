@@ -1,0 +1,40 @@
+<section class="sb-detail-panel sb-order-detail-card">
+    <div class="sb-card-heading">
+        <div>
+            @if (!string.IsNullOrWhiteSpace(Eyebrow))
+            {
+                <span class="sb-eyebrow">@Eyebrow</span>
+            }
+            <h2>@Title</h2>
+        </div>
+        @Actions
+    </div>
+
+    <dl class="sb-fact-list">
+        @foreach (var fact in Facts)
+        {
+            <div>
+                <dt>@fact.Label</dt>
+                <dd>
+                    @if (string.IsNullOrWhiteSpace(fact.BadgeTone))
+                    {
+                        @fact.Value
+                    }
+                    else
+                    {
+                        <StatusBadge Text="@fact.Value"
+                                     Tone="@fact.BadgeTone"
+                                     Icon="@fact.BadgeIcon" />
+                    }
+                </dd>
+            </div>
+        }
+    </dl>
+</section>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Order summary";
+    [Parameter] public string? Eyebrow { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<OrderFact> Facts { get; set; } = [];
+    [Parameter] public RenderFragment? Actions { get; set; }
+}

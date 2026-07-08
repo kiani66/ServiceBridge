@@ -27,7 +27,9 @@
     }
     else if (!string.IsNullOrWhiteSpace(_summaryError))
     {
-        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_summaryError</MudAlert>
+        <ErrorState Title="Unable to load admin dashboard"
+                    Message="@_summaryError"
+                    OnRetry="LoadSummaryAsync" />
     }
     else if (_summary is not null)
     {
@@ -132,7 +134,9 @@
             }
             else if (!string.IsNullOrWhiteSpace(_ordersError))
             {
-                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_ordersError</MudAlert>
+                <ErrorState Title="Unable to load recent orders"
+                            Message="@_ordersError"
+                            OnRetry="LoadOrdersAsync" />
             }
             else if (_orders.Items.Count == 0)
             {
@@ -150,6 +154,7 @@
                         <MudTh>Payment Status</MudTh>
                         <MudTh>Order Status</MudTh>
                         <MudTh>Agent</MudTh>
+                        <MudTh>Action</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd DataLabel="Order Number"><strong>@context.OrderNumber</strong></MudTd>
@@ -158,6 +163,14 @@
                         <MudTd DataLabel="Payment Status"><StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(context.PaymentStatus)" Tone="@UserOrderDisplay.PaymentTone(context.PaymentStatus)" /></MudTd>
                         <MudTd DataLabel="Order Status"><StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(context.OrderStatus)" Tone="@UserOrderDisplay.OrderTone(context.OrderStatus)" /></MudTd>
                         <MudTd DataLabel="Agent">@(context.AssignedAgentName ?? "-")</MudTd>
+                        <MudTd DataLabel="Action">
+                            <MudButton Href="@($"/ui/admin/orders/{context.OrderId}")"
+                                       Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       Size="Size.Small">
+                                Details
+                            </MudButton>
+                        </MudTd>
                     </RowTemplate>
                 </MudTable>
             }
@@ -177,7 +190,9 @@
             }
             else if (!string.IsNullOrWhiteSpace(_agentsError))
             {
-                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_agentsError</MudAlert>
+                <ErrorState Title="Unable to load agents"
+                            Message="@_agentsError"
+                            OnRetry="LoadAgentsAsync" />
             }
             else if (_agents.Count == 0)
             {
@@ -255,7 +270,9 @@
             }
             else if (!string.IsNullOrWhiteSpace(_paymentsError))
             {
-                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_paymentsError</MudAlert>
+                <ErrorState Title="Unable to load payments"
+                            Message="@_paymentsError"
+                            OnRetry="LoadPaymentsAsync" />
             }
             else if (_payments.Items.Count == 0)
             {

@@ -89,7 +89,9 @@
 else if (!string.IsNullOrWhiteSpace(_error))
 {
     <PageSection MaxWidth="wide">
-        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+        <ErrorState Title="Unable to load financial reports"
+                    Message="@_error"
+                    OnRetry="LoadAsync" />
     </PageSection>
 }
 else if (_report is not null)

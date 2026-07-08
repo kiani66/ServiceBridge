@@ -75,6 +75,9 @@
 </PageSection>
 
 @code {
+    [SupplyParameterFromQuery(Name = "orderId")]
+    public Guid? OrderId { get; set; }
+
     private MudForm? _form;
     private bool _saving;
     private string? _error;
@@ -95,6 +98,11 @@
         _orders = ordersResult.Success && ordersResult.Data is not null
             ? ordersResult.Data.Items
             : Array.Empty<UserOrderListItemDto>();
+
+        if (OrderId.HasValue && _orders.Any(order => order.OrderId == OrderId.Value))
+        {
+            _request.OrderId = OrderId;
+        }
     }
 
     private async Task CreateAsync()

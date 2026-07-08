@@ -1,9 +1,16 @@
-<div class="sb-loading-state">
-    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Medium" />
-    <span>@Text</span>
+<div class="sb-loading-state @(Inline ? "sb-loading-inline" : null)"
+     aria-busy="true"
+     role="status">
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="@SpinnerSize" />
+    <span>@DisplayMessage</span>
 </div>
 
 @code {
-    [Parameter] public string Text { get; set; } = "Loading";
+    [Parameter] public string Message { get; set; } = "Loading...";
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public bool Inline { get; set; }
+    [Parameter] public Size SpinnerSize { get; set; } = Size.Medium;
+
+    private string DisplayMessage => Text ?? Message;
 }
 
