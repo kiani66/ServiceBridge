@@ -1,0 +1,30 @@
+<section class="sb-empty-state sb-error-state" role="alert">
+    <MudIcon Icon="@Icon" Color="Color.Error" Size="Size.Large" />
+    <h2>@Title</h2>
+    <p>@Message</p>
+    @if (Actions is not null || OnRetry.HasDelegate)
+    {
+        <div class="sb-empty-actions">
+            @Actions
+            @if (OnRetry.HasDelegate)
+            {
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@RetryIcon"
+                           OnClick="OnRetry">
+                    @RetryText
+                </MudButton>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public string Icon { get; set; } = Icons.Material.Outlined.ErrorOutline;
+    [Parameter] public string Title { get; set; } = "Something went wrong";
+    [Parameter] public string Message { get; set; } = "Try again in a moment.";
+    [Parameter] public string RetryText { get; set; } = "Retry";
+    [Parameter] public string RetryIcon { get; set; } = Icons.Material.Outlined.Refresh;
+    [Parameter] public EventCallback OnRetry { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+}

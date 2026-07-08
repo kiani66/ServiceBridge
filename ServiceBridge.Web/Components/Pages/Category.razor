@@ -13,15 +13,10 @@
 }
 else if (!string.IsNullOrWhiteSpace(_errorMessage))
 {
-    <EmptyState Title="Unable to load category"
-                Description="@_errorMessage"
-                Icon="@Icons.Material.Outlined.CloudOff">
-        <Actions>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">
-                Try again
-            </MudButton>
-        </Actions>
-    </EmptyState>
+    <ErrorState Title="Unable to load category"
+                Message="@_errorMessage"
+                Icon="@Icons.Material.Outlined.CloudOff"
+                OnRetry="LoadAsync" />
 }
 else if (_category is null)
 {

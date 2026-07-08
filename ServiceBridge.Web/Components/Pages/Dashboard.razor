@@ -26,7 +26,9 @@
     }
     else if (!string.IsNullOrWhiteSpace(_errorMessage))
     {
-        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_errorMessage</MudAlert>
+        <ErrorState Title="Unable to load dashboard"
+                    Message="@_errorMessage"
+                    OnRetry="LoadDashboardAsync" />
     }
     else if (_summary is not null)
     {
@@ -227,6 +229,16 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadDashboardAsync();
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+        _ticketError = null;
+        _openTicketCount = 0;
+
         var dashboardResult = await OrdersClient.GetDashboardAsync();
         if (dashboardResult.RequiresAuthentication)
         {

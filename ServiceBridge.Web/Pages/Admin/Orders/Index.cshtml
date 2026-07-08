@@ -55,7 +55,12 @@
                     @foreach (var order in Model.Orders.Items)
                     {
                         <tr>
-                            <td><strong>@order.OrderNumber</strong></td>
+                            <td>
+                                <strong>@order.OrderNumber</strong>
+                                <span class="pb-table-subtext">
+                                    <a href="/Admin/Orders/@order.OrderId">View details</a>
+                                </span>
+                            </td>
                             <td>@order.CustomerName</td>
                             <td>
                                 <strong>@order.ServiceName</strong>

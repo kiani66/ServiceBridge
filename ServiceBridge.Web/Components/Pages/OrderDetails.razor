@@ -17,13 +17,14 @@
 }
 else if (_order is null)
 {
-    <EmptyState Title="Order unavailable"
-                Description="@(_errorMessage ?? "The requested order could not be loaded.")"
-                Icon="@Icons.Material.Outlined.SearchOff">
+    <ErrorState Title="Order unavailable"
+                Message="@(_errorMessage ?? "The requested order could not be loaded.")"
+                Icon="@Icons.Material.Outlined.SearchOff"
+                OnRetry="LoadOrderAsync">
         <Actions>
-            <MudButton Href="/ui/orders" Variant="Variant.Filled" Color="Color.Primary">Back to orders</MudButton>
+            <MudButton Href="/ui/orders" Variant="Variant.Outlined" Color="Color.Primary">Back to orders</MudButton>
         </Actions>
-    </EmptyState>
+    </ErrorState>
 }
 else
 {
@@ -33,105 +34,45 @@ else
                 Title="@_order.OrderNumber"
                 Description="@($"{_order.ServiceName} via {_order.Provider}")">
         <Actions>
-            <MudButton Variant="Variant.Outlined"
+            <MudButton Href="@SupportHref"
+                       Variant="Variant.Filled"
                        Color="Color.Primary"
-                       StartIcon="@Icons.Material.Outlined.Timeline"
-                       OnClick="OpenDrawer">
-                Timeline
+                       StartIcon="@Icons.Material.Outlined.SupportAgent">
+                Open support ticket
             </MudButton>
         </Actions>
     </PageHeader>
 
     <PageSection MaxWidth="wide">
-        <div class="sb-detail-grid">
-            <div class="sb-detail-panel">
-                <h2>Order summary</h2>
-                <dl class="sb-fact-list">
-                    <div><dt>Service</dt><dd>@_order.ServiceName</dd></div>
-                    <div><dt>Variant</dt><dd>@UserOrderDisplay.VariantLabel(_order.PlanName, _order.PlanDurationDays, _order.PlanRegionCode)</dd></div>
-                    <div><dt>Provider</dt><dd>@_order.Provider</dd></div>
-                    <div><dt>Fulfillment</dt><dd>@_order.FulfillmentMode</dd></div>
-                    <div><dt>Order status</dt><dd><StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(_order.Status)" Tone="@UserOrderDisplay.OrderTone(_order.Status)" /></dd></div>
-                    <div><dt>Created</dt><dd>@UserOrderDisplay.FormatDateTime(_order.CreatedAt)</dd></div>
-                </dl>
+        <div class="sb-order-management-grid">
+            <div class="sb-order-stack">
+                <OrderSummaryCard Title="Order information"
+                                  Eyebrow="Customer order"
+                                  Facts="@SummaryFacts" />
+
+                <CredentialCard Title="Credential summary"
+                                Eyebrow="Fulfillment"
+                                Description="Sensitive values stay hidden in the customer console."
+                                Items="@CredentialItems" />
+
+                <NotesPanel Title="Agent notes"
+                            Description="Customer-visible fulfillment notes."
+                            EmptyText="Agent notes will appear here when there is an update for you."
+                            Notes="@NoteItems" />
             </div>
 
-            <PaymentSummaryPanel Order="_order"
-                                 Payment="@LatestPayment"
-                                 Title="Payment summary" />
+            <aside class="sb-order-side-stack">
+                <PaymentCard Payments="@_order.Payments" />
+
+                <PricingSnapshotCard BasePriceUsd="@_order.BasePriceUsdSnapshot"
+                                     ExchangeRateIrr="@_order.ExchangeRateSnapshot"
+                                     MarginPercent="@_order.MarginSnapshot"
+                                     FinalPriceIrr="@_order.FinalPriceIrr" />
+
+                <OrderTimeline CurrentStatus="@_order.Status"
+                               Items="@TimelineItems" />
+            </aside>
         </div>
-    </PageSection>
-
-    <PageSection MaxWidth="wide">
-        <div class="sb-detail-grid">
-            <div class="sb-detail-panel">
-                <h2>Pricing snapshot</h2>
-                <dl class="sb-fact-list">
-                    <div><dt>Foreign price</dt><dd>@_order.BasePriceUsdSnapshot.ToString("0.##") USD</dd></div>
-                    <div><dt>Exchange rate</dt><dd>@_order.ExchangeRateSnapshot.ToString("N0") IRR</dd></div>
-                    <div><dt>Margin</dt><dd>@_order.MarginSnapshot.ToString("0.##")%</dd></div>
-                    <div><dt>Final price</dt><dd>@_order.FinalPriceIrr.ToString("N0") IRR</dd></div>
-                </dl>
-            </div>
-
-            <div class="sb-detail-panel">
-                <h2>Credential summary</h2>
-                @if (_order.Fields.Count == 0 && _order.DeliveryFields.Count == 0)
-                {
-                    <p>No credential or fulfillment fields are attached to this order.</p>
-                }
-                else
-                {
-                    <dl class="sb-fact-list">
-                        @foreach (var field in _order.Fields.OrderBy(field => field.DisplayOrder))
-                        {
-                            <div>
-                                <dt>@field.FieldLabel</dt>
-                                <dd>@(field.IsSensitive ? "Sensitive value hidden" : "Provided")</dd>
-                            </div>
-                        }
-                        @foreach (var field in _order.DeliveryFields.OrderBy(field => field.DisplayOrder))
-                        {
-                            <div>
-                                <dt>@field.FieldLabel</dt>
-                                <dd>@(field.IsSensitive ? "Delivery credential hidden" : "Delivery information available")</dd>
-                            </div>
-                        }
-                    </dl>
-                }
-            </div>
-        </div>
-    </PageSection>
-
-    <PageSection Title="Payment information" Description="Recorded payment attempts for this order." MaxWidth="wide">
-        @if (_order.Payments.Count == 0)
-        {
-            <EmptyState Title="No payments recorded"
-                        Description="Payment attempts will appear here after checkout."
-                        Icon="@Icons.Material.Outlined.Payments" />
-        }
-        else
-        {
-            <MudTable Items="@_order.Payments" Hover="true" Dense="true" Class="sb-data-table">
-                <HeaderContent>
-                    <MudTh>Created</MudTh>
-                    <MudTh>Amount</MudTh>
-                    <MudTh>Status</MudTh>
-                    <MudTh>Gateway reference</MudTh>
-                    <MudTh>Completed</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd DataLabel="Created">@UserOrderDisplay.FormatDateTime(context.CreatedAt)</MudTd>
-                    <MudTd DataLabel="Amount">@context.AmountIrr.ToString("N0") IRR</MudTd>
-                    <MudTd DataLabel="Status">
-                        <StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(context.Status)"
-                                     Tone="@UserOrderDisplay.PaymentTone(context.Status)" />
-                    </MudTd>
-                    <MudTd DataLabel="Gateway reference">@(context.GatewayReference ?? "-")</MudTd>
-                    <MudTd DataLabel="Completed">@(context.CompletedAt.HasValue ? UserOrderDisplay.FormatDateTime(context.CompletedAt.Value) : "-")</MudTd>
-                </RowTemplate>
-            </MudTable>
-        }
     </PageSection>
 
     <PageSection Title="Refund requests" Description="Controlled refund review for eligible paid orders." MaxWidth="wide">
@@ -148,20 +89,22 @@ else
                 }
                 @if (CanRequestRefund)
                 {
-                    <MudTextField T="string"
-                                  Label="Refund reason"
-                                  Variant="Variant.Outlined"
-                                  Lines="3"
-                                  MaxLength="1000"
-                                  Value="_refundReason"
-                                  ValueChanged="@((string? value) => _refundReason = value)" />
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               Disabled="@_refundBusy"
-                               StartIcon="@Icons.Material.Outlined.AssignmentReturn"
-                               OnClick="RequestRefundAsync">
-                        Request refund
-                    </MudButton>
+                    <div class="sb-order-form">
+                        <MudTextField T="string"
+                                      Label="Refund reason"
+                                      Variant="Variant.Outlined"
+                                      Lines="3"
+                                      MaxLength="1000"
+                                      Value="_refundReason"
+                                      ValueChanged="@((string? value) => _refundReason = value)" />
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Disabled="@_refundBusy"
+                                   StartIcon="@Icons.Material.Outlined.AssignmentReturn"
+                                   OnClick="RequestRefundAsync">
+                            Request refund
+                        </MudButton>
+                    </div>
                 }
                 else
                 {
@@ -198,62 +141,12 @@ else
             </div>
         </div>
     </PageSection>
-
-    <PageSection Title="Order timeline" Description="Status history recorded for this order." MaxWidth="wide">
-        @if (TimelineItems.Count == 0)
-        {
-            <EmptyState Title="No timeline yet"
-                        Description="Timeline entries will appear after order status changes are recorded."
-                        Icon="@Icons.Material.Outlined.Timeline" />
-        }
-        else
-        {
-            <div class="sb-detail-panel">
-                <Timeline Items="@TimelineItems" />
-            </div>
-        }
-    </PageSection>
-
-    <PageSection Title="Agent notes" Description="Customer-visible fulfillment notes." MaxWidth="wide">
-        @if (_order.Notes.Count == 0)
-        {
-            <EmptyState Title="No notes available"
-                        Description="Agent notes will appear here when there is an update for you."
-                        Icon="@Icons.Material.Outlined.Notes" />
-        }
-        else
-        {
-            <div class="sb-note-list">
-                @foreach (var note in _order.Notes)
-                {
-                    <article class="sb-detail-panel">
-                        <p>@note.Text</p>
-                        <span>@note.AuthorName - @UserOrderDisplay.FormatDateTime(note.CreatedAt)</span>
-                    </article>
-                }
-            </div>
-        }
-    </PageSection>
-
-    <Drawer @bind-Open="_drawerOpen" Title="@_order.OrderNumber" Eyebrow="Order timeline">
-        @if (TimelineItems.Count == 0)
-        {
-            <EmptyState Title="No timeline yet"
-                        Description="No status history has been recorded for this order."
-                        Icon="@Icons.Material.Outlined.Timeline" />
-        }
-        else
-        {
-            <Timeline Items="@TimelineItems" />
-        }
-    </Drawer>
 }
 
 @code {
     [Parameter] public Guid OrderId { get; set; }
 
     private bool _loading = true;
-    private bool _drawerOpen;
     private bool _refundBusy;
     private bool _refundsLoading;
     private string? _errorMessage;
@@ -263,8 +156,46 @@ else
     private UserOrderDetailDto? _order;
     private IReadOnlyCollection<RefundRequestDto> _refunds = Array.Empty<RefundRequestDto>();
 
-    private PaymentHistoryDto? LatestPayment =>
-        _order is null ? null : UserOrderDisplay.LatestPayment(_order);
+    private string SupportHref => _order is null
+        ? "/ui/tickets/new"
+        : $"/ui/tickets/new?orderId={_order.OrderId}";
+
+    private IReadOnlyList<OrderFact> SummaryFacts => _order is null
+        ? Array.Empty<OrderFact>()
+        : new[]
+        {
+            new OrderFact("Service", _order.ServiceName),
+            new OrderFact("Variant", UserOrderDisplay.VariantLabel(_order.PlanName, _order.PlanDurationDays, _order.PlanRegionCode)),
+            new OrderFact("Provider", _order.Provider),
+            new OrderFact("Fulfillment", _order.FulfillmentMode),
+            new OrderFact("Order status", UserOrderDisplay.OrderStatusLabel(_order.Status), UserOrderDisplay.OrderTone(_order.Status)),
+            new OrderFact("Created", UserOrderDisplay.FormatDateTime(_order.CreatedAt)),
+            new OrderFact("Paid", FormatNullable(_order.PaidAt)),
+            new OrderFact("Assigned", FormatNullable(_order.AssignedAt)),
+            new OrderFact("Completed", FormatNullable(_order.CompletedAt))
+        };
+
+    private IReadOnlyList<CredentialDisplayItem> CredentialItems => _order is null
+        ? Array.Empty<CredentialDisplayItem>()
+        : _order.Fields
+            .Concat(_order.DeliveryFields)
+            .OrderBy(field => field.DisplayOrder)
+            .Select(field => new CredentialDisplayItem(
+                field.FieldLabel,
+                field.Value,
+                field.IsSensitive))
+            .ToArray();
+
+    private IReadOnlyList<NoteDisplayItem> NoteItems => _order is null
+        ? Array.Empty<NoteDisplayItem>()
+        : _order.Notes
+            .OrderByDescending(note => note.CreatedAt)
+            .Select(note => new NoteDisplayItem(
+                note.Text,
+                note.AuthorName,
+                UserOrderDisplay.FormatDateTime(note.CreatedAt),
+                "Customer visible"))
+            .ToArray();
 
     private IReadOnlyList<TimelineItem> TimelineItems =>
         _order is null
@@ -286,11 +217,6 @@ else
     protected override async Task OnParametersSetAsync()
     {
         await LoadOrderAsync();
-    }
-
-    private void OpenDrawer()
-    {
-        _drawerOpen = true;
     }
 
     private async Task LoadOrderAsync()
@@ -372,6 +298,11 @@ else
             await LoadOrderAsync();
             StateHasChanged();
         });
+    }
+
+    private static string FormatNullable(DateTime? value)
+    {
+        return value.HasValue ? UserOrderDisplay.FormatDateTime(value.Value) : "-";
     }
 
     public void Dispose()

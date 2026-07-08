@@ -12,13 +12,14 @@
 }
 else if (_ticket is null)
 {
-    <EmptyState Title="Ticket unavailable"
-                Description="@(_error ?? "The requested ticket could not be loaded.")"
-                Icon="@Icons.Material.Outlined.SearchOff">
+    <ErrorState Title="Ticket unavailable"
+                Message="@(_error ?? "The requested ticket could not be loaded.")"
+                Icon="@Icons.Material.Outlined.SearchOff"
+                OnRetry="LoadTicketAsync">
         <Actions>
-            <MudButton Href="/ui/tickets" Variant="Variant.Filled" Color="Color.Primary">Back to tickets</MudButton>
+            <MudButton Href="/ui/tickets" Variant="Variant.Outlined" Color="Color.Primary">Back to tickets</MudButton>
         </Actions>
-    </EmptyState>
+    </ErrorState>
 }
 else
 {

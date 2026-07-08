@@ -1,0 +1,239 @@
+@page "/ui/admin/orders/{OrderId:guid}"
+@page "/Admin/Orders/{OrderId:guid}"
+@attribute [Authorize(Roles = AppConstants.Roles.Admin)]
+@implements IDisposable
+@inject AdminOrdersClient AdminOrdersClient
+@inject OrderRealtimeClient OrderRealtimeClient
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <PageHeader Eyebrow="Admin management"
+                Title="Loading order"
+                Description="Fetching the order management view." />
+    <PageSection MaxWidth="standard">
+        <LoadingState Text="Loading order management" />
+    </PageSection>
+}
+else if (_order is null)
+{
+    <ErrorState Title="Order unavailable"
+                Message="@(_errorMessage ?? "The requested order could not be loaded.")"
+                Icon="@Icons.Material.Outlined.SearchOff"
+                OnRetry="LoadOrderAsync">
+        <Actions>
+            <MudButton Href="/ui/admin" Variant="Variant.Outlined" Color="Color.Primary">Back to admin</MudButton>
+        </Actions>
+    </ErrorState>
+}
+else
+{
+    <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), (_order.OrderNumber, null) })" />
+
+    <PageHeader Eyebrow="Admin order management"
+                Title="@_order.OrderNumber"
+                Description="@($"{_order.CustomerName} / {_order.ServiceName}")">
+        <Actions>
+            <StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(_order.Status)"
+                         Tone="@UserOrderDisplay.OrderTone(_order.Status)" />
+        </Actions>
+    </PageHeader>
+
+    <PageSection MaxWidth="wide">
+        <div class="sb-order-management-grid">
+            <div class="sb-order-stack">
+                <OrderSummaryCard Title="Complete order information"
+                                  Eyebrow="Admin"
+                                  Facts="@SummaryFacts" />
+
+                <CredentialCard Title="Credential information"
+                                Eyebrow="Credentials"
+                                Description="Values shown here come from the existing admin order detail endpoint."
+                                RevealValues="true"
+                                Items="@CredentialItems" />
+
+                <section class="sb-detail-panel sb-order-detail-card">
+                    <div class="sb-card-heading">
+                        <div>
+                            <span class="sb-eyebrow">Assignment</span>
+                            <h2>Assignment information</h2>
+                        </div>
+                    </div>
+
+                    <dl class="sb-fact-list">
+                        <div><dt>Current agent</dt><dd>@(_order.AssignedAgentName ?? "-")</dd></div>
+                        <div><dt>Assigned at</dt><dd>@FormatNullable(_order.AssignedAt)</dd></div>
+                    </dl>
+
+                    @if (_order.Assignments.Count > 0)
+                    {
+                        <div class="sb-panel-divider">
+                            <div class="sb-note-list">
+                                @foreach (var assignment in _order.Assignments.OrderByDescending(item => item.AssignedAt))
+                                {
+                                    <article class="sb-note-item">
+                                        <p>@assignment.AgentName</p>
+                                        <span>
+                                            Assigned by @(assignment.AssignedByAdminName ?? "admin")
+                                            / @UserOrderDisplay.FormatDateTime(assignment.AssignedAt)
+                                        </span>
+                                        @if (!string.IsNullOrWhiteSpace(assignment.Notes))
+                                        {
+                                            <p>@assignment.Notes</p>
+                                        }
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                    }
+                </section>
+
+                <NotesPanel Title="Order notes"
+                            EmptyText="No notes are attached to this order."
+                            Notes="@NoteItems" />
+            </div>
+
+            <aside class="sb-order-side-stack">
+                <section class="sb-detail-panel sb-order-detail-card">
+                    <div class="sb-card-heading">
+                        <div>
+                            <span class="sb-eyebrow">Operations</span>
+                            <h2>Admin operations</h2>
+                            <p>These controls are placeholders until matching admin endpoints are available.</p>
+                        </div>
+                    </div>
+
+                    <div class="sb-order-action-stack">
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   Disabled="true"
+                                   StartIcon="@Icons.Material.Outlined.AssignmentInd">
+                            Reassign order
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   Disabled="true"
+                                   StartIcon="@Icons.Material.Outlined.ManageHistory">
+                            Override status
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   Disabled="true"
+                                   StartIcon="@Icons.Material.Outlined.ReceiptLong">
+                            Export order packet
+                        </MudButton>
+                    </div>
+                </section>
+
+                <PaymentCard Title="Payment information"
+                             Payments="@_order.Payments" />
+
+                <PricingSnapshotCard BasePriceUsd="@_order.BasePriceUsdSnapshot"
+                                     ExchangeRateIrr="@_order.ExchangeRateSnapshot"
+                                     MarginPercent="@_order.MarginSnapshot"
+                                     FinalPriceIrr="@_order.FinalPriceIrr" />
+
+                <OrderTimeline CurrentStatus="@_order.Status"
+                               Items="@TimelineItems" />
+            </aside>
+        </div>
+    </PageSection>
+}
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+
+    private bool _loading = true;
+    private string? _errorMessage;
+    private AdminOrderDetailDto? _order;
+
+    private IReadOnlyList<OrderFact> SummaryFacts => _order is null
+        ? Array.Empty<OrderFact>()
+        : new[]
+        {
+            new OrderFact("Customer", _order.CustomerName),
+            new OrderFact("Email", _order.CustomerEmail),
+            new OrderFact("Service", _order.ServiceName),
+            new OrderFact("Variant", UserOrderDisplay.VariantLabel(_order.PlanName, _order.PlanDurationDays, _order.PlanRegionCode)),
+            new OrderFact("Provider", _order.Provider),
+            new OrderFact("Fulfillment", _order.FulfillmentMode),
+            new OrderFact("Status", UserOrderDisplay.OrderStatusLabel(_order.Status), UserOrderDisplay.OrderTone(_order.Status)),
+            new OrderFact("Created", UserOrderDisplay.FormatDateTime(_order.CreatedAt)),
+            new OrderFact("Paid", FormatNullable(_order.PaidAt)),
+            new OrderFact("Assigned", FormatNullable(_order.AssignedAt)),
+            new OrderFact("Completed", FormatNullable(_order.CompletedAt))
+        };
+
+    private IReadOnlyList<CredentialDisplayItem> CredentialItems => _order is null
+        ? Array.Empty<CredentialDisplayItem>()
+        : _order.Credentials
+            .OrderBy(field => field.DisplayOrder)
+            .Select(field => new CredentialDisplayItem(
+                field.FieldLabel,
+                field.Value,
+                field.IsSensitive,
+                field.IsVisibleToCustomerAfterCompletion))
+            .ToArray();
+
+    private IReadOnlyList<NoteDisplayItem> NoteItems => _order is null
+        ? Array.Empty<NoteDisplayItem>()
+        : _order.Notes
+            .OrderByDescending(note => note.CreatedAt)
+            .Select(note => new NoteDisplayItem(
+                note.Text,
+                note.AuthorName,
+                UserOrderDisplay.FormatDateTime(note.CreatedAt),
+                note.IsVisibleToCustomer ? "Customer visible" : "Internal"))
+            .ToArray();
+
+    private IReadOnlyList<TimelineItem> TimelineItems => _order is null
+        ? Array.Empty<TimelineItem>()
+        : UserOrderDisplay.TimelineItems(_order.StatusHistory);
+
+    protected override async Task OnInitializedAsync()
+    {
+        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        await OrderRealtimeClient.StartAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadOrderAsync();
+    }
+
+    private async Task LoadOrderAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await AdminOrdersClient.GetOrderAsync(OrderId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _order = result.Success ? result.Data : null;
+        _errorMessage = result.ErrorMessage;
+        _loading = false;
+    }
+
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
+    {
+        return InvokeAsync(async () =>
+        {
+            await LoadOrderAsync();
+            StateHasChanged();
+        });
+    }
+
+    private static string FormatNullable(DateTime? value)
+    {
+        return value.HasValue ? UserOrderDisplay.FormatDateTime(value.Value) : "-";
+    }
+
+    public void Dispose()
+    {
+        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+    }
+}
