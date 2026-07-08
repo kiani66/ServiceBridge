@@ -1,0 +1,300 @@
+@page "/ui/admin/orders"
+@attribute [Authorize(Roles = AppConstants.Roles.Admin)]
+@implements IDisposable
+@inject AdminOrdersClient AdminOrdersClient
+@inject OrderRealtimeClient OrderRealtimeClient
+@inject NavigationManager Navigation
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Orders", null) })" />
+
+<PageHeader Eyebrow="Admin operations"
+            Title="Assignment Queue"
+            Description="Assign paid, unassigned orders to active agents.">
+    <Actions>
+        <MudButton Href="/ui/admin"
+                   Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.SpaceDashboard">
+            Dashboard
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<PageSection MaxWidth="wide">
+    @if (_loading)
+    {
+        <LoadingState Text="Loading assignment queue" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <ErrorState Title="Unable to load assignment queue"
+                    Message="@_errorMessage"
+                    OnRetry="@(() => LoadAsync(Math.Max(_orders.Page, 1)))" />
+    }
+    else if (_orders.Items.Count == 0)
+    {
+        <EmptyState Title="Queue is clear"
+                    Description="New paid orders will appear here for assignment."
+                    Icon="@Icons.Material.Outlined.AssignmentTurnedIn" />
+    }
+    else if (_agents.Count == 0)
+    {
+        <EmptyState Title="No active agents"
+                    Description="Activate an agent before assigning paid orders."
+                    Icon="@Icons.Material.Outlined.SupportAgent" />
+    }
+    else
+    {
+        <MudTable Items="@_orders.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Order</MudTh>
+                <MudTh>Customer</MudTh>
+                <MudTh>Service</MudTh>
+                <MudTh>Paid</MudTh>
+                <MudTh>Amount</MudTh>
+                <MudTh>Assignment</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Order">
+                    <strong>@context.OrderNumber</strong>
+                    <span class="sb-table-subtext">
+                        <MudLink Href="@($"/ui/admin/orders/{context.OrderId}")">View details</MudLink>
+                    </span>
+                </MudTd>
+                <MudTd DataLabel="Customer">@context.CustomerName</MudTd>
+                <MudTd DataLabel="Service">
+                    @context.ServiceName
+                    <span class="sb-table-subtext">
+                        @VariantLabel(context.PlanName, context.PlanDurationDays, context.PlanRegionCode)
+                    </span>
+                </MudTd>
+                <MudTd DataLabel="Paid">@UserOrderDisplay.FormatDateTime(context.PaidAt)</MudTd>
+                <MudTd DataLabel="Amount">@context.FinalAmountIrr.ToString("N0") IRR</MudTd>
+                <MudTd DataLabel="Assignment">
+                    <div class="sb-action-cell">
+                        <MudSelect T="Guid?"
+                                   Label="Agent"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Value="@SelectedAgent(context.OrderId)"
+                                   ValueChanged="@((Guid? value) => SetSelectedAgent(context.OrderId, value))"
+                                   Class="sb-search-compact">
+                            <MudSelectItem T="Guid?" Value="null">Select agent</MudSelectItem>
+                            @foreach (var agent in _agents)
+                            {
+                                <MudSelectItem T="Guid?" Value="@agent.AgentId">
+                                    @agent.FullName (@agent.ActiveOrderCount active)
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudTextField T="string"
+                                      Label="Notes"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      MaxLength="1000"
+                                      Value="@SelectedNotes(context.OrderId)"
+                                      ValueChanged="@((string? value) => SetSelectedNotes(context.OrderId, value))"
+                                      Class="sb-search-compact" />
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   Disabled="@(_actionBusy || !SelectedAgent(context.OrderId).HasValue)"
+                                   StartIcon="@Icons.Material.Outlined.AssignmentInd"
+                                   OnClick="@(() => AssignAsync(context.OrderId))">
+                            Assign
+                        </MudButton>
+                    </div>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        @if (_orders.TotalPages > 1)
+        {
+            <div class="sb-pagination">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_orders.Page <= 1 || _loading)"
+                           StartIcon="@Icons.Material.Outlined.ChevronLeft"
+                           OnClick="PreviousPage">
+                    Previous
+                </MudButton>
+                <span>Page @_orders.Page of @_orders.TotalPages</span>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_orders.Page >= _orders.TotalPages || _loading)"
+                           EndIcon="@Icons.Material.Outlined.ChevronRight"
+                           OnClick="NextPage">
+                    Next
+                </MudButton>
+            </div>
+        }
+    }
+</PageSection>
+
+@code {
+    private const int PageSize = 20;
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int? Page { get; set; }
+
+    private bool _loading = true;
+    private bool _actionBusy;
+    private string? _errorMessage;
+    private PagedResultDto<AdminAssignableOrderDto> _orders = new();
+    private IReadOnlyCollection<AgentSummaryDto> _agents = Array.Empty<AgentSummaryDto>();
+    private readonly Dictionary<Guid, Guid?> _selectedAgents = new();
+    private readonly Dictionary<Guid, string?> _assignmentNotes = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        OrderRealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        await OrderRealtimeClient.StartAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync(Math.Max(Page ?? 1, 1));
+    }
+
+    private Task PreviousPage()
+    {
+        var page = Math.Max(_orders.Page - 1, 1);
+        NavigateToPage(page);
+        return LoadAsync(page);
+    }
+
+    private Task NextPage()
+    {
+        var page = _orders.Page + 1;
+        NavigateToPage(page);
+        return LoadAsync(page);
+    }
+
+    private async Task LoadAsync(int page)
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var ordersResult = await AdminOrdersClient.GetPaidUnassignedOrdersAsync(page, PageSize);
+        if (RedirectIfAuthRequired(ordersResult.RequiresAuthentication))
+        {
+            return;
+        }
+
+        var agentsResult = await AdminOrdersClient.GetActiveAgentsAsync();
+        if (RedirectIfAuthRequired(agentsResult.RequiresAuthentication))
+        {
+            return;
+        }
+
+        _orders = ordersResult.Success && ordersResult.Data is not null
+            ? ordersResult.Data
+            : new PagedResultDto<AdminAssignableOrderDto>();
+        _agents = agentsResult.Success && agentsResult.Data is not null
+            ? agentsResult.Data
+            : Array.Empty<AgentSummaryDto>();
+        _errorMessage = ordersResult.ErrorMessage ?? agentsResult.ErrorMessage;
+        _loading = false;
+    }
+
+    private async Task AssignAsync(Guid orderId)
+    {
+        var agentId = SelectedAgent(orderId);
+        if (!agentId.HasValue)
+        {
+            _errorMessage = "Select an agent before assigning the order.";
+            return;
+        }
+
+        _actionBusy = true;
+        _errorMessage = null;
+        var result = await AdminOrdersClient.AssignAsync(
+            orderId,
+            agentId.Value,
+            SelectedNotes(orderId));
+        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        {
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _errorMessage = result.ErrorMessage ?? "Unable to assign the order.";
+            _actionBusy = false;
+            return;
+        }
+
+        _selectedAgents.Remove(orderId);
+        _assignmentNotes.Remove(orderId);
+        await LoadAsync(Math.Max(_orders.Page, 1));
+        _actionBusy = false;
+    }
+
+    private Guid? SelectedAgent(Guid orderId)
+    {
+        return _selectedAgents.TryGetValue(orderId, out var agentId)
+            ? agentId
+            : null;
+    }
+
+    private void SetSelectedAgent(Guid orderId, Guid? agentId)
+    {
+        _selectedAgents[orderId] = agentId;
+    }
+
+    private string? SelectedNotes(Guid orderId)
+    {
+        return _assignmentNotes.TryGetValue(orderId, out var notes)
+            ? notes
+            : null;
+    }
+
+    private void SetSelectedNotes(Guid orderId, string? notes)
+    {
+        _assignmentNotes[orderId] = notes;
+    }
+
+    private void NavigateToPage(int page)
+    {
+        var query = new Dictionary<string, object?>
+        {
+            ["page"] = page <= 1 ? null : page
+        };
+
+        Navigation.NavigateTo(
+            Navigation.GetUriWithQueryParameters("/ui/admin/orders", query),
+            replace: true);
+    }
+
+    private bool RedirectIfAuthRequired(bool requiresAuthentication)
+    {
+        if (!requiresAuthentication)
+        {
+            return false;
+        }
+
+        Navigation.NavigateTo("/Account/Login");
+        return true;
+    }
+
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeMessage message)
+    {
+        return InvokeAsync(async () =>
+        {
+            await LoadAsync(Math.Max(_orders.Page, 1));
+            StateHasChanged();
+        });
+    }
+
+    private static string VariantLabel(string? planName, int? durationDays, string? regionCode)
+    {
+        var parts = new[] { planName, durationDays.HasValue ? $"{durationDays.Value} days" : null, regionCode }
+            .Where(part => !string.IsNullOrWhiteSpace(part));
+        return string.Join(" / ", parts);
+    }
+
+    public void Dispose()
+    {
+        OrderRealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+    }
+}

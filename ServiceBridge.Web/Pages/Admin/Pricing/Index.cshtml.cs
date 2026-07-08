@@ -36,7 +36,7 @@ public class IndexModel : PageModel
 
     public Task<IActionResult> OnGetAsync()
     {
-        return LoadAsync();
+        return Task.FromResult<IActionResult>(LocalRedirect("/ui/admin/pricing"));
     }
 
     public async Task<IActionResult> OnPostCreateExchangeRateAsync(

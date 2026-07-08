@@ -19,7 +19,7 @@ public class RoleNavigationTests
     [InlineData(
         AppConstants.Roles.Admin,
         "Dashboard|Catalog|Pricing|Users|Orders|Support|Profile",
-        "/ui/admin|/Admin/Catalog|/Admin/Pricing|/Admin/Users|/Admin/Orders|/ui/admin/tickets|/ui/profile")]
+        "/ui/admin|/ui/admin/catalog|/ui/admin/pricing|/ui/admin/users|/ui/admin/orders|/ui/admin/tickets|/ui/profile")]
     public void GetItems_ReturnsOnlyItemsForRole(
         string role,
         string expectedText,

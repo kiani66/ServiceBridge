@@ -38,7 +38,27 @@ public class IndexModel : PageModel
 
     public Task<IActionResult> OnGetAsync()
     {
-        return LoadAsync();
+        var query = new Dictionary<string, string?>();
+        if (PageNumber > 1)
+        {
+            query["page"] = PageNumber.ToString();
+        }
+
+        if (!string.IsNullOrWhiteSpace(Search))
+        {
+            query["search"] = Search;
+        }
+
+        var target = "/ui/admin/users";
+        if (query.Count > 0)
+        {
+            target += "?" + string.Join(
+                "&",
+                query.Select(item =>
+                    $"{Uri.EscapeDataString(item.Key)}={Uri.EscapeDataString(item.Value ?? string.Empty)}"));
+        }
+
+        return Task.FromResult<IActionResult>(LocalRedirect(target));
     }
 
     public async Task<IActionResult> OnPostResetPasswordAsync()

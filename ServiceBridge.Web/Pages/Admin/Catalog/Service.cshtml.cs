@@ -28,7 +28,10 @@ public class ServiceModel : PageModel
 
     public Task<IActionResult> OnGetAsync(Guid id)
     {
-        return LoadAsync(id);
+        var target = id == Guid.Empty
+            ? "/ui/admin/catalog"
+            : $"/ui/admin/catalog/services/{id}";
+        return Task.FromResult<IActionResult>(LocalRedirect(target));
     }
 
     public async Task<IActionResult> OnPostUpdateServiceAsync(
