@@ -144,6 +144,16 @@ public sealed class UserOrdersClient
             cancellationToken);
     }
 
+    public Task<UserOrdersApiResult<bool>> CancelOrderAsync(
+        Guid orderId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendCommandAsync(
+            client => client.PostAsync($"api/orders/my/{orderId}/cancel", null, cancellationToken),
+            "Unable to cancel this order right now.",
+            cancellationToken);
+    }
+
     private async Task<UserOrdersApiResult<T>> SendAsync<T>(
         Func<HttpClient, Task<HttpResponseMessage>> send,
         string fallbackMessage,

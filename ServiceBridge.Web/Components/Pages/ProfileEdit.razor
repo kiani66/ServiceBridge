@@ -1,0 +1,257 @@
+@page "/ui/profile/edit"
+@attribute [Authorize]
+@using System.ComponentModel.DataAnnotations
+@inject UserProfileClient ProfileClient
+@inject NavigationManager Navigation
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Profile", "/ui/profile"), ("Edit", null) })" />
+
+<PageHeader Eyebrow="Account"
+            Title="Edit profile"
+            Description="Update the account details visible in the ServiceBridge console.">
+    <Actions>
+        <MudButton Href="/ui/profile"
+                   Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.ArrowBack">
+            Back
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<PageSection MaxWidth="form">
+    @if (_loading)
+    {
+        <LoadingState Text="Loading profile" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <ErrorState Title="Unable to load profile"
+                    Message="@_loadError"
+                    Icon="@Icons.Material.Outlined.PersonOff"
+                    OnRetry="LoadProfileAsync" />
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_successMessage))
+        {
+            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">@_successMessage</MudAlert>
+        }
+        @if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_errorMessage</MudAlert>
+        }
+        @if (_validationErrors.Count > 0)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                @foreach (var error in _validationErrors)
+                {
+                    <div>@error</div>
+                }
+            </MudAlert>
+        }
+
+        <EditForm Model="_profileInput" OnValidSubmit="SaveProfileAsync">
+            <DataAnnotationsValidator />
+            <FormSection Title="Profile details" Description="Email is managed by the account record and cannot be edited here.">
+                <MudTextField T="string"
+                              Label="Full name"
+                              Variant="Variant.Outlined"
+                              For="@(() => _profileInput.FullName)"
+                              @bind-Value="_profileInput.FullName"
+                              Required="true"
+                              MaxLength="150"
+                              autocomplete="name" />
+                <MudTextField T="string"
+                              Label="Email"
+                              Variant="Variant.Outlined"
+                              Value="_currentEmail"
+                              Disabled="true" />
+                <MudButton ButtonType="ButtonType.Submit"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@_savingProfile"
+                           StartIcon="@Icons.Material.Outlined.Save">
+                    Save
+                </MudButton>
+            </FormSection>
+        </EditForm>
+
+        <EditForm Model="_photoInput" OnValidSubmit="SavePhotoAsync">
+            <DataAnnotationsValidator />
+            <FormSection Title="Profile photo" Description="Use a direct image URL for the profile photo shown in account views.">
+                <div class="sb-profile-photo-edit">
+                    <div class="sb-profile-avatar-large">
+                        @if (!string.IsNullOrWhiteSpace(PhotoPreviewUrl))
+                        {
+                            <img src="@PhotoPreviewUrl" alt="Profile photo preview" />
+                        }
+                        else
+                        {
+                            <span>@Initial</span>
+                        }
+                    </div>
+                    <MudTextField T="string"
+                                  Label="Photo URL"
+                                  Variant="Variant.Outlined"
+                                  For="@(() => _photoInput.ProfileImageUrl)"
+                                  @bind-Value="_photoInput.ProfileImageUrl"
+                                  Required="true"
+                                  MaxLength="500"
+                                  Placeholder="https://example.com/photo.jpg" />
+                </div>
+                <MudButton ButtonType="ButtonType.Submit"
+                           Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@_savingPhoto"
+                           StartIcon="@Icons.Material.Outlined.Image">
+                    Update photo
+                </MudButton>
+            </FormSection>
+        </EditForm>
+    }
+</PageSection>
+
+@code {
+    private readonly ProfileInput _profileInput = new();
+    private readonly PhotoInput _photoInput = new();
+    private readonly List<string> _validationErrors = [];
+    private bool _loading = true;
+    private bool _savingProfile;
+    private bool _savingPhoto;
+    private string _currentEmail = string.Empty;
+    private string _currentRole = string.Empty;
+    private string? _loadError;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    private string? PhotoPreviewUrl => string.IsNullOrWhiteSpace(_photoInput.ProfileImageUrl)
+        ? null
+        : _photoInput.ProfileImageUrl;
+
+    private string Initial =>
+        string.IsNullOrWhiteSpace(_profileInput.FullName)
+            ? "U"
+            : _profileInput.FullName.Trim()[0].ToString().ToUpperInvariant();
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        _loading = true;
+        _loadError = null;
+        ClearMessages();
+
+        var result = await ProfileClient.GetProfileAsync();
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success || result.Data is null)
+        {
+            _loadError = result.ErrorMessage ?? "Unable to load your profile.";
+            _loading = false;
+            return;
+        }
+
+        ApplyProfile(result.Data);
+        _loading = false;
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        _savingProfile = true;
+        ClearMessages();
+
+        var result = await ProfileClient.UpdateProfileAsync(_profileInput.FullName);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success || result.Data is null)
+        {
+            ApplyErrors(result, "Failed to update profile.");
+            _savingProfile = false;
+            return;
+        }
+
+        ApplyProfile(result.Data);
+        _successMessage = "Profile updated successfully.";
+        _savingProfile = false;
+    }
+
+    private async Task SavePhotoAsync()
+    {
+        _savingPhoto = true;
+        ClearMessages();
+
+        var result = await ProfileClient.UpdatePhotoAsync(_photoInput.ProfileImageUrl);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success || result.Data is null)
+        {
+            ApplyErrors(result, "Failed to update profile photo.");
+            _savingPhoto = false;
+            return;
+        }
+
+        ApplyProfile(result.Data);
+        _successMessage = "Profile photo updated successfully.";
+        _savingPhoto = false;
+    }
+
+    private void ApplyProfile(UserProfileResponse profile)
+    {
+        _profileInput.FullName = profile.FullName;
+        _photoInput.ProfileImageUrl = profile.ProfileImageUrl ?? string.Empty;
+        _currentEmail = profile.Email;
+        _currentRole = profile.Role;
+    }
+
+    private void ApplyErrors<T>(UserProfileApiResult<T> result, string fallbackMessage)
+    {
+        _errorMessage = result.ErrorMessage ?? fallbackMessage;
+        foreach (var error in FlattenValidationErrors(result.ValidationErrors))
+        {
+            _validationErrors.Add(error);
+        }
+    }
+
+    private void ClearMessages()
+    {
+        _errorMessage = null;
+        _successMessage = null;
+        _validationErrors.Clear();
+    }
+
+    private static IEnumerable<string> FlattenValidationErrors(Dictionary<string, string[]>? errors)
+    {
+        return errors?.Values.SelectMany(value => value) ?? [];
+    }
+
+    private sealed class ProfileInput
+    {
+        [Required(ErrorMessage = "Full name is required.")]
+        [MaxLength(150, ErrorMessage = "Full name cannot exceed 150 characters.")]
+        public string FullName { get; set; } = string.Empty;
+    }
+
+    private sealed class PhotoInput
+    {
+        [Required(ErrorMessage = "Profile image URL is required.")]
+        [MaxLength(500, ErrorMessage = "Profile image URL cannot exceed 500 characters.")]
+        [Url(ErrorMessage = "Please enter a valid URL.")]
+        public string ProfileImageUrl { get; set; } = string.Empty;
+    }
+}

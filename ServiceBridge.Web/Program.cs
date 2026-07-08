@@ -26,6 +26,7 @@ builder.Services.AddScoped<PublicCatalogClient>();
 builder.Services.AddScoped<CheckoutClient>();
 builder.Services.AddScoped<PaymentClient>();
 builder.Services.AddScoped<UserOrdersClient>();
+builder.Services.AddScoped<UserProfileClient>();
 builder.Services.AddScoped<AgentOrdersClient>();
 builder.Services.AddScoped<AdminOrdersClient>();
 builder.Services.AddScoped<AdminCatalogClient>();

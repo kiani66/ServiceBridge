@@ -31,6 +31,15 @@ public class IndexModel : PageModel
 
     public async Task<IActionResult> OnGetAsync()
     {
+        if (!Request.HasFormContentType)
+        {
+            var target = Status.HasValue
+                ? $"/ui/orders?status={Uri.EscapeDataString(Status.Value.ToString())}"
+                : "/ui/orders";
+
+            return LocalRedirect(target);
+        }
+
         var client = _httpClientFactory.CreateClient(AppConstants.Api.HttpClientName);
 
         try

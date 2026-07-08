@@ -40,6 +40,11 @@ public class UpdatePhotoModel : PageModel
 
     public async Task<IActionResult> OnGetAsync()
     {
+        if (!Request.HasFormContentType)
+        {
+            return LocalRedirect("/ui/profile/edit");
+        }
+
         var (profile, error) = await LoadProfileAsync();
         if (profile == null)
         {
