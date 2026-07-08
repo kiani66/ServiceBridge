@@ -35,6 +35,10 @@ public interface INotificationService
         Guid userId,
         Guid orderId,
         string orderNumber);
+    Task QueueCustomerActionRespondedAsync(
+        Guid agentId,
+        Guid orderId,
+        string orderNumber);
     Task QueueTicketCreatedForAdminsAsync(Guid ticketId, string ticketNumber);
     Task QueueTicketPublicReplyForUserAsync(
         Guid userId,

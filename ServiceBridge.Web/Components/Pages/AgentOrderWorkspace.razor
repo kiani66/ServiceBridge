@@ -64,7 +64,7 @@ else
                     <div class="sb-card-heading">
                         <div>
                             <span class="sb-eyebrow">Customer action</span>
-                            <h2>Information requests</h2>
+                            <h2>Customer Response</h2>
                         </div>
                     </div>
                     @if (_order.CustomerActions.Count == 0)
@@ -77,6 +77,7 @@ else
                             @foreach (var action in _order.CustomerActions.OrderByDescending(action => action.RequestedAt))
                             {
                                 <article class="sb-note-item">
+                                    <strong>Request message</strong>
                                     <p>@action.RequestText</p>
                                     <span>
                                         @(action.IsResolved ? "Resolved" : "Awaiting customer response")
@@ -84,7 +85,9 @@ else
                                     </span>
                                     @if (!string.IsNullOrWhiteSpace(action.CustomerResponse))
                                     {
+                                        <strong>Customer response</strong>
                                         <p>@action.CustomerResponse</p>
+                                        <span>Response date / @FormatNullable(action.RespondedAt)</span>
                                     }
                                 </article>
                             }
@@ -131,9 +134,9 @@ else
 
                     <div class="sb-order-action-stack">
                         <MudTextField T="string"
-                                      Label="Operation note"
-                                      Variant="Variant.Outlined"
-                                      Lines="3"
+                                       Label="Operation note"
+                                       Variant="Variant.Outlined"
+                                       Lines="3"
                                       MaxLength="1000"
                                       Value="@_operationNote"
                                       ValueChanged="@((string? value) => _operationNote = value)" />
@@ -148,9 +151,30 @@ else
                                    Color="Color.Primary"
                                    Disabled="@(!CanRequestCustomerInfo || _actionBusy)"
                                    StartIcon="@Icons.Material.Outlined.ContactSupport"
-                                   OnClick="RequestCustomerInfoAsync">
-                            Request customer information
+                                   OnClick="@(() => _showInformationRequestForm = !_showInformationRequestForm)">
+                            Request Information
                         </MudButton>
+                        @if (_showInformationRequestForm)
+                        {
+                            <div class="sb-order-form">
+                                <h3>Information Required</h3>
+                                <MudTextField T="string"
+                                              Label="Message"
+                                              Variant="Variant.Outlined"
+                                              Lines="4"
+                                              Required="true"
+                                              MaxLength="1000"
+                                              Value="@_informationRequestMessage"
+                                              ValueChanged="@((string? value) => _informationRequestMessage = value ?? string.Empty)" />
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Disabled="@_actionBusy"
+                                           StartIcon="@Icons.Material.Outlined.Send"
+                                           OnClick="SubmitInformationRequestAsync">
+                                    Submit
+                                </MudButton>
+                            </div>
+                        }
                         <MudButton Variant="Variant.Outlined"
                                    Color="Color.Success"
                                    Disabled="@(!CanComplete || _actionBusy)"
@@ -185,12 +209,18 @@ else
     private string? _actionError;
     private string? _actionMessage;
     private string? _operationNote;
+    private string _informationRequestMessage = string.Empty;
     private string _noteText = string.Empty;
+    private bool _showInformationRequestForm;
     private AgentOrderDetailDto? _order;
 
     private bool CanStart => _order?.Status == nameof(OrderStatus.Assigned);
-    private bool CanRequestCustomerInfo => _order?.Status == nameof(OrderStatus.Processing);
-    private bool CanComplete => _order?.Status == nameof(OrderStatus.Processing);
+    private bool HasPendingCustomerAction =>
+        _order?.CustomerActions.Any(action => !action.IsResolved) == true;
+    private bool CanRequestCustomerInfo =>
+        _order?.Status == nameof(OrderStatus.Processing) && !HasPendingCustomerAction;
+    private bool CanComplete =>
+        _order?.Status == nameof(OrderStatus.Processing) && !HasPendingCustomerAction;
 
     private IReadOnlyList<OrderFact> SummaryFacts => _order is null
         ? Array.Empty<OrderFact>()
@@ -271,13 +301,17 @@ else
             "Processing started.");
     }
 
-    private Task RequestCustomerInfoAsync()
+    private Task SubmitInformationRequestAsync()
     {
         return RunActionAsync(
-            note => AgentOrdersClient.RequestCustomerActionAsync(OrderId, note ?? string.Empty),
+            _ => AgentOrdersClient.RequestCustomerActionAsync(
+                OrderId,
+                _informationRequestMessage),
             "Customer information requested.",
             requireNote: true,
-            missingNoteMessage: "Enter the customer information request in the operation note.");
+            missingNoteMessage: "Enter the requested information message.",
+            useInformationRequestMessage: true,
+            clearInformationRequestMessage: true);
     }
 
     private Task CompleteAsync()
@@ -306,19 +340,24 @@ else
         string successMessage,
         bool requireNote = false,
         string? missingNoteMessage = null,
-        bool clearNote = false)
+        bool clearNote = false,
+        bool useInformationRequestMessage = false,
+        bool clearInformationRequestMessage = false)
     {
         _actionError = null;
         _actionMessage = null;
+        var actionNote = useInformationRequestMessage
+            ? _informationRequestMessage
+            : _operationNote;
 
-        if (requireNote && string.IsNullOrWhiteSpace(_operationNote))
+        if (requireNote && string.IsNullOrWhiteSpace(actionNote))
         {
             _actionError = missingNoteMessage ?? "Enter a note before continuing.";
             return;
         }
 
         _actionBusy = true;
-        var result = await action(_operationNote);
+        var result = await action(actionNote);
         if (result.RequiresAuthentication)
         {
             Navigation.NavigateTo("/Account/Login");
@@ -338,7 +377,16 @@ else
             _noteVisibleToCustomer = false;
         }
 
-        _operationNote = null;
+        if (clearInformationRequestMessage)
+        {
+            _informationRequestMessage = string.Empty;
+            _showInformationRequestForm = false;
+        }
+        else
+        {
+            _operationNote = null;
+        }
+
         _actionMessage = successMessage;
         await LoadOrderAsync();
         _actionBusy = false;

@@ -143,7 +143,7 @@
         var user = state.User;
         if (user.IsInRole(AppConstants.Roles.Agent))
         {
-            _orderRoute = "/ui/agent";
+            _orderRoute = "/ui/agent/orders";
             return;
         }
 
@@ -258,6 +258,7 @@
             nameof(NotificationType.OrderCompleted) => "Order completed",
             nameof(NotificationType.OrderFailed) => "Order failed",
             nameof(NotificationType.CustomerActionRequested) => "Action requested",
+            nameof(NotificationType.CustomerActionResponded) => "Customer responded",
             nameof(NotificationType.TicketCreated) => "Ticket created",
             nameof(NotificationType.TicketReplied) => "Ticket replied",
             nameof(NotificationType.TicketClosed) => "Ticket closed",
@@ -276,7 +277,9 @@
 
         return _orderRoute == "/ui/orders"
             ? $"/ui/orders/{notification.RelatedEntityId}"
-            : _orderRoute;
+            : _orderRoute == "/ui/agent/orders"
+                ? $"/ui/agent/orders/{notification.RelatedEntityId}"
+                : _orderRoute;
     }
 
     private static string FormatDateTime(DateTime value)
