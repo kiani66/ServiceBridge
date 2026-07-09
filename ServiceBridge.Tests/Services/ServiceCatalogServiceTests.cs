@@ -69,6 +69,43 @@ public class ServiceCatalogServiceTests
     }
 
     [Fact]
+    public async Task GetActiveServiceBySlugAsync_WhenServiceExists_ReturnsPublicDetail()
+    {
+        var repository = new FakeServiceCatalogRepository();
+        var service = CreateDigitalService();
+        service.Variants.Add(CreateVariant(service, "monthly-global"));
+        service.RequiredFields.Add(CreateField(service, "account_email", 1, false));
+        repository.SeedService(service);
+        var catalogService = CreateQueryService(repository);
+
+        var result = await catalogService.GetActiveServiceBySlugAsync("chatgpt-plus");
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(service.Id, result.Data.Id);
+        Assert.Equal("chatgpt-plus", result.Data.Slug);
+        Assert.Equal("OpenAI", result.Data.Provider);
+        Assert.Single(result.Data.Plans);
+        Assert.Single(result.Data.RequiredFields);
+    }
+
+    [Fact]
+    public async Task GetActiveServiceBySlugAsync_WhenServiceCannotBePurchased_ReturnsNotFound()
+    {
+        var repository = new FakeServiceCatalogRepository();
+        var service = CreateDigitalService();
+        service.Provider.IsActive = false;
+        repository.SeedService(service);
+        var catalogService = CreateQueryService(repository);
+
+        var result = await catalogService.GetActiveServiceBySlugAsync("chatgpt-plus");
+
+        Assert.False(result.Success);
+        Assert.Equal(404, result.StatusCode);
+        Assert.Equal(AppConstants.ErrorCodes.NotFound, result.ErrorCode);
+    }
+
+    [Fact]
     public async Task GetAllServicesAsync_IncludesInactiveServicesForAdmin()
     {
         var repository = new FakeServiceCatalogRepository();

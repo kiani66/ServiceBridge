@@ -64,6 +64,18 @@ public class CatalogControllerAuthorizationTests
     }
 
     [Fact]
+    public void PublicServiceDetailBySlug_UsesExpectedRoute()
+    {
+        var method = typeof(ServicesController)
+            .GetMethod(nameof(ServicesController.GetActiveServiceBySlug))!;
+        var route = Assert.Single(
+            method.GetCustomAttributes(typeof(HttpMethodAttribute), false)
+                .Cast<HttpMethodAttribute>());
+
+        Assert.Equal("slug/{slug}", route.Template);
+    }
+
+    [Fact]
     public void OrdersController_RequiresUserRole()
     {
         var attribute = Assert.Single(

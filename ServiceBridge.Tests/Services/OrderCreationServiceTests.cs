@@ -52,6 +52,48 @@ public class OrderCreationServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_WhenCheckoutSubmitsCredentials_UsesResolvedPriceAndEncryptsSensitiveFields()
+    {
+        var setup = CreateSetup();
+        setup.OrderRepository.ServiceDefinition!.BasePrice = 50m;
+        var request = new CreateOrderRequest
+        {
+            ServiceId = setup.OrderRepository.ServiceDefinition.ServiceId,
+            ServiceVariantId = setup.OrderRepository.ServiceDefinition.ServiceVariantId,
+            OrderType = OrderType.Purchase,
+            Credentials =
+            [
+                new CreateOrderFieldRequest
+                {
+                    FieldKey = "email",
+                    Value = "buyer@example.com"
+                },
+                new CreateOrderFieldRequest
+                {
+                    FieldKey = "password",
+                    Value = "checkout-secret"
+                }
+            ]
+        };
+
+        var result = await setup.Service.CreateAsync(Guid.NewGuid(), request);
+
+        Assert.True(result.Success);
+        Assert.Equal(8_250_000m, result.Data?.FinalAmountIrr);
+        Assert.Equal(1, setup.PricingRepository.ExchangeRateCallCount);
+        var order = Assert.IsType<Domain.Entities.Order>(
+            setup.OrderRepository.AddedOrder);
+        Assert.Equal(50m, order.ForeignPrice);
+        Assert.Equal(8_250_000m, order.FinalAmountIrr);
+        Assert.All(
+            order.FieldValues,
+            field => Assert.StartsWith("protected::", field.EncryptedValue));
+        Assert.DoesNotContain(
+            order.FieldValues,
+            field => field.EncryptedValue == "checkout-secret");
+    }
+
+    [Fact]
     public async Task CreateAsync_WhenRequiredFieldIsMissing_ReturnsValidationErrors()
     {
         var setup = CreateSetup();
@@ -67,6 +109,39 @@ public class OrderCreationServiceTests
         Assert.Equal(400, result.StatusCode);
         Assert.Equal(AppConstants.ErrorCodes.ValidationFailed, result.ErrorCode);
         Assert.NotNull(result.ValidationErrors);
+        Assert.Null(setup.OrderRepository.AddedOrder);
+        Assert.Equal(0, setup.PricingRepository.ExchangeRateCallCount);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenCheckoutCredentialsMissRequiredData_FailsBeforePricingOrPersistence()
+    {
+        var setup = CreateSetup();
+
+        var result = await setup.Service.CreateAsync(Guid.NewGuid(), new CreateOrderRequest
+        {
+            ServiceId = setup.OrderRepository.ServiceDefinition!.ServiceId,
+            ServiceVariantId = setup.OrderRepository.ServiceDefinition.ServiceVariantId,
+            OrderType = OrderType.Purchase,
+            Credentials =
+            [
+                new CreateOrderFieldRequest
+                {
+                    FieldKey = "email",
+                    Value = "buyer@example.com"
+                },
+                new CreateOrderFieldRequest
+                {
+                    FieldKey = "password",
+                    Value = " "
+                }
+            ]
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal(400, result.StatusCode);
+        Assert.NotNull(result.ValidationErrors);
+        Assert.Contains("password", result.ValidationErrors.Keys);
         Assert.Null(setup.OrderRepository.AddedOrder);
         Assert.Equal(0, setup.PricingRepository.ExchangeRateCallCount);
     }

@@ -47,7 +47,7 @@ internal class FakeServiceCatalogRepository : IServiceCatalogRepository
     public Task<IReadOnlyCollection<DigitalService>> GetActiveServicesAsync()
     {
         IReadOnlyCollection<DigitalService> result = _services.Values
-            .Where(x => x.IsActive && x.Category.IsActive)
+            .Where(x => x.IsActive && x.Category.IsActive && x.Provider.IsActive)
             .ToArray();
         return Task.FromResult(result);
     }
@@ -56,7 +56,23 @@ internal class FakeServiceCatalogRepository : IServiceCatalogRepository
     {
         var service = _services.GetValueOrDefault(id);
         return Task.FromResult(
-            service is { IsActive: true } && service.Category.IsActive ? service : null);
+            service is { IsActive: true } &&
+            service.Category.IsActive &&
+            service.Provider.IsActive
+                ? service
+                : null);
+    }
+
+    public Task<DigitalService?> GetActiveServiceBySlugAsync(string slug)
+    {
+        var service = _services.Values.FirstOrDefault(x =>
+            string.Equals(x.Slug, slug, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(
+            service is { IsActive: true } &&
+            service.Category.IsActive &&
+            service.Provider.IsActive
+                ? service
+                : null);
     }
 
     public Task<IReadOnlyCollection<ServiceCategory>> GetAllCategoriesAsync()

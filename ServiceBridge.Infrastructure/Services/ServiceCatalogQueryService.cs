@@ -38,6 +38,29 @@ public class ServiceCatalogQueryService : IServiceCatalogQueryService
             ServiceCatalogMapper.MapDetail(service));
     }
 
+    public async Task<ServiceResult<ServiceDetailResponse>> GetActiveServiceBySlugAsync(string slug)
+    {
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            return ServiceResult<ServiceDetailResponse>.Fail(
+                AppMessages.ServiceNotFound,
+                AppConstants.ErrorCodes.NotFound,
+                404);
+        }
+
+        var service = await _repository.GetActiveServiceBySlugAsync(slug.Trim());
+        if (service == null)
+        {
+            return ServiceResult<ServiceDetailResponse>.Fail(
+                AppMessages.ServiceNotFound,
+                AppConstants.ErrorCodes.NotFound,
+                404);
+        }
+
+        return ServiceResult<ServiceDetailResponse>.Ok(
+            ServiceCatalogMapper.MapDetail(service));
+    }
+
     public async Task<ServiceResult<IReadOnlyCollection<ServiceCategoryResponse>>> GetAllCategoriesAsync()
     {
         var categories = await _repository.GetAllCategoriesAsync();
