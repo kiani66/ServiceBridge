@@ -13,5 +13,6 @@ public enum AuditActionType
     PaymentManuallyReviewed = 9,
     RefundRequested = 10,
     RefundConfirmed = 11,
-    SettingsChanged = 12
+    SettingsChanged = 12,
+    TicketClosed = 13
 }

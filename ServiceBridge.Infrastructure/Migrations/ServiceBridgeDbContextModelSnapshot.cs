@@ -1228,7 +1228,12 @@ namespace ServiceBridge.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Tickets");
+                    b.ToTable("Tickets", t =>
+                        {
+                            t.HasCheckConstraint("CK_Tickets_Priority_Valid", "[Priority] IN (1, 2, 3)");
+
+                            t.HasCheckConstraint("CK_Tickets_Status_Valid", "[Status] IN (1, 2, 3, 5)");
+                        });
                 });
 
             modelBuilder.Entity("ServiceBridge.Domain.Entities.TicketCategory", b =>

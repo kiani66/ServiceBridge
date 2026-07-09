@@ -68,7 +68,7 @@ public class Ticket : BaseEntity
                 "Only the ticket owner can reply to this ticket.");
         }
 
-        if (Status is TicketStatus.Resolved or TicketStatus.Closed)
+        if (Status == TicketStatus.Closed)
         {
             throw new InvalidOperationException(
                 "This ticket can no longer receive customer replies.");
@@ -113,7 +113,7 @@ public class Ticket : BaseEntity
 
         if (!isInternal)
         {
-            Status = TicketStatus.WaitingForCustomer;
+            Status = TicketStatus.WaitingForUser;
             FirstResponseAt ??= createdAtUtc;
         }
 
@@ -128,7 +128,6 @@ public class Ticket : BaseEntity
         }
 
         Status = TicketStatus.Closed;
-        ResolvedAt ??= closedAtUtc;
         ClosedAt = closedAtUtc;
         LastActivityAt = closedAtUtc;
         UpdatedAt = closedAtUtc;

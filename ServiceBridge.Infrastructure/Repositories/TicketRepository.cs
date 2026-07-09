@@ -29,13 +29,6 @@ public class TicketRepository : ITicketRepository
             x.UserId == userId);
     }
 
-    public Task<bool> CategoryExistsAsync(Guid categoryId)
-    {
-        return _context.TicketCategories.AnyAsync(x =>
-            x.Id == categoryId &&
-            x.IsActive);
-    }
-
     public Task<bool> TicketNumberExistsAsync(string ticketNumber)
     {
         return _context.Tickets.AnyAsync(x => x.TicketNumber == ticketNumber);
@@ -63,7 +56,8 @@ public class TicketRepository : ITicketRepository
         int page,
         int pageSize,
         TicketStatus? status,
-        TicketPriority? priority,
+        Guid? userId,
+        Guid? orderId,
         string? search)
     {
         var query = _context.Tickets.AsNoTracking();
@@ -73,9 +67,14 @@ public class TicketRepository : ITicketRepository
             query = query.Where(x => x.Status == status.Value);
         }
 
-        if (priority.HasValue)
+        if (userId.HasValue)
         {
-            query = query.Where(x => x.Priority == priority.Value);
+            query = query.Where(x => x.UserId == userId.Value);
+        }
+
+        if (orderId.HasValue)
+        {
+            query = query.Where(x => x.OrderId == orderId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -112,18 +111,11 @@ public class TicketRepository : ITicketRepository
                 Priority = x.Priority.ToString(),
                 OrderId = x.OrderId,
                 OrderNumber = x.Order != null ? x.Order.OrderNumber : null,
-                CategoryId = x.CategoryId,
-                CategoryName = x.Category != null ? x.Category.Name : null,
-                AssignedAgentId = x.AssignedAgentId,
-                AssignedAgentName = x.AssignedAgent != null
-                    ? x.AssignedAgent.FullName
-                    : null,
                 CustomerName = x.User.FullName,
                 CustomerEmail = x.User.Email,
                 CreatedAt = x.CreatedAt,
                 LastActivityAt = x.LastActivityAt,
                 FirstResponseAt = x.FirstResponseAt,
-                ResolvedAt = x.ResolvedAt,
                 ClosedAt = x.ClosedAt
             })
             .FirstOrDefaultAsync();
@@ -212,9 +204,6 @@ public class TicketRepository : ITicketRepository
                 OrderNumber = x.Order != null ? x.Order.OrderNumber : null,
                 CustomerName = x.User.FullName,
                 CustomerEmail = x.User.Email,
-                AssignedAgentName = x.AssignedAgent != null
-                    ? x.AssignedAgent.FullName
-                    : null,
                 CreatedAt = x.CreatedAt,
                 LastActivityAt = x.LastActivityAt
             })

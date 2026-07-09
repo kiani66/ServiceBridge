@@ -4,7 +4,6 @@ public enum TicketStatus
 {
     Open = 1,
     WaitingForSupport = 2,
-    WaitingForCustomer = 3,
-    Resolved = 4,
+    WaitingForUser = 3,
     Closed = 5
 }

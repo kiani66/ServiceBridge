@@ -45,6 +45,7 @@ public class ServiceBridgeDbContext : DbContext
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         EnsureOrderHistoryIsAppendOnly();
+        EnsureTicketMessagesAreAppendOnly();
         EnsureAuditRecordsAreAppendOnly();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -54,6 +55,7 @@ public class ServiceBridgeDbContext : DbContext
         CancellationToken cancellationToken = default)
     {
         EnsureOrderHistoryIsAppendOnly();
+        EnsureTicketMessagesAreAppendOnly();
         EnsureAuditRecordsAreAppendOnly();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -95,6 +97,18 @@ public class ServiceBridgeDbContext : DbContext
             auditLogsChanged)
         {
             throw new InvalidOperationException("Audit records are append-only.");
+        }
+    }
+
+    private void EnsureTicketMessagesAreAppendOnly()
+    {
+        var invalidEntries = ChangeTracker
+            .Entries<TicketMessage>()
+            .Where(x => x.State is EntityState.Modified or EntityState.Deleted);
+
+        if (invalidEntries.Any())
+        {
+            throw new InvalidOperationException("Ticket messages are append-only.");
         }
     }
 }

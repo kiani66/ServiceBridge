@@ -13,7 +13,6 @@ public class TicketListItemDto
     public string? OrderNumber { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerEmail { get; set; } = string.Empty;
-    public string? AssignedAgentName { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime LastActivityAt { get; set; }
 }
@@ -21,11 +20,7 @@ public class TicketListItemDto
 public class TicketDetailDto : TicketListItemDto
 {
     public Guid UserId { get; set; }
-    public Guid? CategoryId { get; set; }
-    public string? CategoryName { get; set; }
-    public Guid? AssignedAgentId { get; set; }
     public DateTime? FirstResponseAt { get; set; }
-    public DateTime? ResolvedAt { get; set; }
     public DateTime? ClosedAt { get; set; }
     public IReadOnlyCollection<TicketMessageDto> Messages { get; set; } =
         Array.Empty<TicketMessageDto>();
@@ -45,7 +40,6 @@ public class TicketMessageDto
 public class CreateTicketRequest
 {
     public Guid? OrderId { get; set; }
-    public Guid? CategoryId { get; set; }
     public string Subject { get; set; } = string.Empty;
     public string Body { get; set; } = string.Empty;
 }
@@ -56,7 +50,3 @@ public class CreateTicketMessageRequest
     public bool IsInternal { get; set; }
 }
 
-public class UpdateTicketPriorityRequest
-{
-    public TicketPriority Priority { get; set; }
-}

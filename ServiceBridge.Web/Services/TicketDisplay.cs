@@ -20,8 +20,7 @@ public static class TicketDisplay
         {
             nameof(TicketStatus.Open) => "info",
             nameof(TicketStatus.WaitingForSupport) => "warning",
-            nameof(TicketStatus.WaitingForCustomer) => "success",
-            nameof(TicketStatus.Resolved) => "success",
+            nameof(TicketStatus.WaitingForUser) => "success",
             nameof(TicketStatus.Closed) => "neutral",
             _ => "neutral"
         };
@@ -34,7 +33,6 @@ public static class TicketDisplay
             nameof(TicketPriority.Low) => "neutral",
             nameof(TicketPriority.Normal) => "info",
             nameof(TicketPriority.High) => "warning",
-            nameof(TicketPriority.Urgent) => "danger",
             _ => "neutral"
         };
     }
@@ -51,7 +49,7 @@ public static class TicketDisplay
 
     public static bool IsClosed(string status)
     {
-        return status is nameof(TicketStatus.Closed) or nameof(TicketStatus.Resolved);
+        return status == nameof(TicketStatus.Closed);
     }
 
     private static string SplitPascalCase(string value)

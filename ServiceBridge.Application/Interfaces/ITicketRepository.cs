@@ -8,7 +8,6 @@ public interface ITicketRepository
 {
     Task<bool> UserExistsAsync(Guid userId);
     Task<bool> OrderBelongsToUserAsync(Guid userId, Guid orderId);
-    Task<bool> CategoryExistsAsync(Guid categoryId);
     Task<bool> TicketNumberExistsAsync(string ticketNumber);
     Task<PagedResultDto<TicketListItemDto>> GetMyTicketsAsync(
         Guid userId,
@@ -19,7 +18,8 @@ public interface ITicketRepository
         int page,
         int pageSize,
         TicketStatus? status,
-        TicketPriority? priority,
+        Guid? userId,
+        Guid? orderId,
         string? search);
     Task<TicketDetailDto?> GetTicketDetailAsync(
         Guid ticketId,

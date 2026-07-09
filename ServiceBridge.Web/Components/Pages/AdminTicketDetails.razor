@@ -43,7 +43,6 @@ else
                     <div><dt>Status</dt><dd><StatusBadge Text="@TicketDisplay.StatusLabel(_ticket.Status)" Tone="@TicketDisplay.StatusTone(_ticket.Status)" /></dd></div>
                     <div><dt>Priority</dt><dd><StatusBadge Text="@TicketDisplay.PriorityLabel(_ticket.Priority)" Tone="@TicketDisplay.PriorityTone(_ticket.Priority)" /></dd></div>
                     <div><dt>Linked order</dt><dd>@(_ticket.OrderNumber ?? "-")</dd></div>
-                    <div><dt>Assigned agent</dt><dd>@(_ticket.AssignedAgentName ?? "-")</dd></div>
                     <div><dt>Created</dt><dd>@TicketDisplay.FormatDateTime(_ticket.CreatedAt)</dd></div>
                     <div><dt>First response</dt><dd>@TicketDisplay.FormatDateTime(_ticket.FirstResponseAt)</dd></div>
                     <div><dt>Closed</dt><dd>@TicketDisplay.FormatDateTime(_ticket.ClosedAt)</dd></div>
@@ -60,7 +59,7 @@ else
         </div>
     </PageSection>
 
-    <PageSection Title="Admin controls" Description="Update ticket priority or close the ticket." MaxWidth="wide">
+    <PageSection Title="Admin controls" Description="Close the support ticket when no further response is needed." MaxWidth="wide">
         @if (!string.IsNullOrWhiteSpace(_actionMessage))
         {
             <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">@_actionMessage</MudAlert>
@@ -71,27 +70,6 @@ else
         }
 
         <div class="sb-grid-toolbar-actions">
-            <MudSelect T="TicketPriority"
-                       Label="Priority"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       Value="_selectedPriority"
-                       ValueChanged="OnSelectedPriorityChanged"
-                       Class="sb-search-compact">
-                @foreach (var priority in Enum.GetValues<TicketPriority>())
-                {
-                    <MudSelectItem T="TicketPriority" Value="@priority">
-                        @TicketDisplay.PriorityLabel(priority.ToString())
-                    </MudSelectItem>
-                }
-            </MudSelect>
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       Disabled="@_actionBusy"
-                       StartIcon="@Icons.Material.Outlined.PriorityHigh"
-                       OnClick="UpdatePriorityAsync">
-                Update priority
-            </MudButton>
             <MudButton Variant="Variant.Outlined"
                        Color="Color.Error"
                        Disabled="@(_actionBusy || _ticket.Status == nameof(TicketStatus.Closed))"
@@ -180,17 +158,11 @@ else
     private string? _actionError;
     private string? _actionMessage;
     private string _replyBody = string.Empty;
-    private TicketPriority _selectedPriority = TicketPriority.Normal;
     private TicketDetailDto? _ticket;
 
     protected override async Task OnParametersSetAsync()
     {
         await LoadTicketAsync();
-    }
-
-    private void OnSelectedPriorityChanged(TicketPriority priority)
-    {
-        _selectedPriority = priority;
     }
 
     private async Task LoadTicketAsync()
@@ -207,12 +179,6 @@ else
 
         _ticket = result.Success ? result.Data : null;
         _error = result.ErrorMessage;
-        if (_ticket is not null &&
-            Enum.TryParse<TicketPriority>(_ticket.Priority, out var priority))
-        {
-            _selectedPriority = priority;
-        }
-
         _loading = false;
     }
 
@@ -274,30 +240,4 @@ else
         _actionBusy = false;
     }
 
-    private async Task UpdatePriorityAsync()
-    {
-        _actionBusy = true;
-        _actionError = null;
-        _actionMessage = null;
-
-        var result = await TicketsClient.UpdatePriorityAsync(
-            TicketId,
-            _selectedPriority);
-        if (result.RequiresAuthentication)
-        {
-            Navigation.NavigateTo("/Account/Login");
-            return;
-        }
-
-        if (!result.Success)
-        {
-            _actionError = result.ErrorMessage ?? "Unable to update priority.";
-            _actionBusy = false;
-            return;
-        }
-
-        _actionMessage = "Priority updated.";
-        await LoadTicketAsync();
-        _actionBusy = false;
-    }
 }
