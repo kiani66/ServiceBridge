@@ -1,3 +1,4 @@
+using ServiceBridge.Application.Audit;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Results;
@@ -20,13 +21,16 @@ public class CreateRefundRequest
 
     private readonly IRefundRequestRepository _repository;
     private readonly INotificationService _notificationService;
+    private readonly IAuditLogWriter _auditLogWriter;
 
     public CreateRefundRequest(
         IRefundRequestRepository repository,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IAuditLogWriter auditLogWriter)
     {
         _repository = repository;
         _notificationService = notificationService;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<ServiceResult<RefundRequestDto>> ExecuteAsync(
@@ -101,6 +105,23 @@ public class CreateRefundRequest
                 AppConstants.ErrorCodes.Conflict,
                 409);
         }
+
+        await _auditLogWriter.WriteAsync(new AuditLogEntry
+        {
+            ActorId = userId,
+            ActorRole = nameof(UserRole.User),
+            ActionType = AuditActionType.RefundRequested,
+            EntityName = nameof(RefundRequest),
+            EntityId = refundRequest.Id,
+            After = new
+            {
+                refundRequest.OrderId,
+                refundRequest.PaymentId,
+                refundRequest.Amount,
+                Status = refundRequest.Status.ToString()
+            },
+            Description = $"Refund requested for order {order.OrderNumber}."
+        });
 
         return ServiceResult<RefundRequestDto>.Created(
             new RefundRequestDto

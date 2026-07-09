@@ -38,7 +38,12 @@ public class AdminUsersController : BaseApiController
     public async Task<IActionResult> CreateAgent(
         [FromBody] CreateAgentRequest request)
     {
-        var result = await _managementService.CreateAgentAsync(request);
+        if (!TryGetUserId(out var adminId))
+        {
+            return UnauthorizedServiceResult();
+        }
+
+        var result = await _managementService.CreateAgentAsync(adminId, request);
         return ToActionResult(result);
     }
 
@@ -47,7 +52,15 @@ public class AdminUsersController : BaseApiController
         Guid userId,
         [FromBody] SetUserStatusRequest request)
     {
-        var result = await _managementService.SetStatusAsync(userId, request);
+        if (!TryGetUserId(out var adminId))
+        {
+            return UnauthorizedServiceResult();
+        }
+
+        var result = await _managementService.SetStatusAsync(
+            adminId,
+            userId,
+            request);
         return ToActionResult(result);
     }
 

@@ -34,6 +34,7 @@ public class ServiceBridgeDbContext : DbContext
     public DbSet<Ticket> Tickets { get; set; } = null!;
     public DbSet<TicketMessage> TicketMessages { get; set; } = null!;
     public DbSet<TicketCategory> TicketCategories { get; set; } = null!;
+    public DbSet<AuditLog> AuditLogs { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -83,11 +84,15 @@ public class ServiceBridgeDbContext : DbContext
         var refundHistoryChanged = ChangeTracker
             .Entries<RefundRequestStatusHistory>()
             .Any(x => x.State is EntityState.Modified or EntityState.Deleted);
+        var auditLogsChanged = ChangeTracker
+            .Entries<AuditLog>()
+            .Any(x => x.State is EntityState.Modified or EntityState.Deleted);
 
         if (paymentEventsChanged ||
             assignmentsChanged ||
             credentialLogsChanged ||
-            refundHistoryChanged)
+            refundHistoryChanged ||
+            auditLogsChanged)
         {
             throw new InvalidOperationException("Audit records are append-only.");
         }

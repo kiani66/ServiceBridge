@@ -1,3 +1,4 @@
+using ServiceBridge.Application.Audit;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Results;
@@ -13,16 +14,20 @@ public class AdminUserManagementService : IAdminUserManagementService
 {
     private readonly IAdminUserCommandRepository _repository;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IAuditLogWriter _auditLogWriter;
 
     public AdminUserManagementService(
         IAdminUserCommandRepository repository,
-        IPasswordHasher passwordHasher)
+        IPasswordHasher passwordHasher,
+        IAuditLogWriter auditLogWriter)
     {
         _repository = repository;
         _passwordHasher = passwordHasher;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<ServiceResult<AdminUserListItemDto>> CreateAgentAsync(
+        Guid adminId,
         CreateAgentRequest request)
     {
         if (!PasswordPolicy.IsValid(request.Password))
@@ -55,6 +60,22 @@ public class AdminUserManagementService : IAdminUserManagementService
 
         await _repository.AddAsync(agent);
         await _repository.SaveChangesAsync();
+        await _auditLogWriter.WriteAsync(new AuditLogEntry
+        {
+            ActorId = adminId,
+            ActorRole = nameof(UserRole.Admin),
+            ActionType = AuditActionType.AgentCreated,
+            EntityName = nameof(User),
+            EntityId = agent.Id,
+            After = new
+            {
+                agent.Id,
+                agent.Email,
+                Role = agent.Role.ToString(),
+                agent.IsActive
+            },
+            Description = $"Agent account {agent.Email} was created."
+        });
 
         return ServiceResult<AdminUserListItemDto>.Created(
             Map(agent),
@@ -62,6 +83,7 @@ public class AdminUserManagementService : IAdminUserManagementService
     }
 
     public async Task<ServiceResult<AdminUserListItemDto>> SetStatusAsync(
+        Guid adminId,
         Guid userId,
         SetUserStatusRequest request)
     {
@@ -82,9 +104,23 @@ public class AdminUserManagementService : IAdminUserManagementService
                 409);
         }
 
+        var previousIsActive = user.IsActive;
         user.IsActive = request.IsActive;
         user.UpdatedAt = DateTime.UtcNow;
         await _repository.SaveChangesAsync();
+        await _auditLogWriter.WriteAsync(new AuditLogEntry
+        {
+            ActorId = adminId,
+            ActorRole = nameof(UserRole.Admin),
+            ActionType = user.IsActive
+                ? AuditActionType.UserActivated
+                : AuditActionType.UserDeactivated,
+            EntityName = nameof(User),
+            EntityId = user.Id,
+            Before = new { IsActive = previousIsActive },
+            After = new { user.IsActive },
+            Description = $"User account {user.Email} was {(user.IsActive ? "activated" : "deactivated")}."
+        });
 
         return ServiceResult<AdminUserListItemDto>.Ok(
             Map(user),

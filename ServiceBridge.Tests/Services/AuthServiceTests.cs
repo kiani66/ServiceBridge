@@ -52,6 +52,31 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task RegisterAsync_WhenValid_WritesUserCreatedAudit()
+    {
+        var repository = new FakeUserRepository();
+        var jwtService = new FakeJwtTokenService();
+        var auditLogWriter = new FakeAuditLogWriter();
+        var service = CreateService(repository, jwtService, auditLogWriter);
+
+        var result = await service.RegisterAsync(new UserRegisterRequest
+        {
+            FullName = "New User",
+            Email = "new@servicebridge.test",
+            Password = "Password123!"
+        });
+
+        Assert.True(result.Success);
+        var user = Assert.Single(repository.Users);
+        var audit = Assert.Single(auditLogWriter.Entries);
+        Assert.Equal(AuditActionType.UserCreated, audit.ActionType);
+        Assert.Equal(user.Id, audit.ActorId);
+        Assert.Equal(user.Id, audit.EntityId);
+        Assert.DoesNotContain("Password123!", audit.Description);
+        Assert.DoesNotContain("Password", audit.Description, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task LoginAsync_WhenUserDoesNotExist_ReturnsInvalidCredentials()
     {
         var repository = new FakeUserRepository();
@@ -136,13 +161,15 @@ public class AuthServiceTests
 
     private static AuthService CreateService(
         FakeUserRepository repository,
-        FakeJwtTokenService jwtService)
+        FakeJwtTokenService jwtService,
+        FakeAuditLogWriter? auditLogWriter = null)
     {
         return new AuthService(
             repository,
             jwtService,
             new BcryptPasswordHasher(),
-            NullLogger<AuthService>.Instance);
+            NullLogger<AuthService>.Instance,
+            auditLogWriter ?? new FakeAuditLogWriter());
     }
 
     private static User CreateUser(string email, string password)

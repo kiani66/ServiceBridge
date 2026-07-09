@@ -18,10 +18,12 @@ public class AdminOrderAssignmentTests
         var order = CreateOrder(OrderStatus.Paid);
         var repository = new FakeAdminOrderCommandRepository { Order = order };
         var realtimePublisher = new FakeRealtimeEventPublisher();
+        var auditLogWriter = new FakeAuditLogWriter();
         var service = new AdminOrderAssignmentService(
             repository,
             new FakeNotificationService(),
-            realtimePublisher);
+            realtimePublisher,
+            auditLogWriter);
 
         var result = await service.AssignAsync(
             adminId,
@@ -49,6 +51,11 @@ public class AdminOrderAssignmentTests
         Assert.Equal(OrderLogActorType.Admin, log.ActorType);
         Assert.Equal(adminId, log.ActorId);
         Assert.Equal(adminId, log.ChangedByUserId);
+        var audit = Assert.Single(auditLogWriter.Entries);
+        Assert.Equal(Domain.Enums.AuditActionType.OrderAssigned, audit.ActionType);
+        Assert.Equal(adminId, audit.ActorId);
+        Assert.Equal(nameof(Domain.Entities.Order), audit.EntityName);
+        Assert.Equal(order.Id, audit.EntityId);
     }
 
     [Fact]
@@ -57,7 +64,8 @@ public class AdminOrderAssignmentTests
         var service = new AdminOrderAssignmentService(
             new FakeAdminOrderCommandRepository(),
             new FakeNotificationService(),
-            new FakeRealtimeEventPublisher());
+            new FakeRealtimeEventPublisher(),
+            new FakeAuditLogWriter());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -80,7 +88,8 @@ public class AdminOrderAssignmentTests
         var service = new AdminOrderAssignmentService(
             repository,
             new FakeNotificationService(),
-            new FakeRealtimeEventPublisher());
+            new FakeRealtimeEventPublisher(),
+            new FakeAuditLogWriter());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -105,7 +114,8 @@ public class AdminOrderAssignmentTests
         var service = new AdminOrderAssignmentService(
             repository,
             new FakeNotificationService(),
-            new FakeRealtimeEventPublisher());
+            new FakeRealtimeEventPublisher(),
+            new FakeAuditLogWriter());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -128,10 +138,12 @@ public class AdminOrderAssignmentTests
             SaveSucceeds = false
         };
         var realtimePublisher = new FakeRealtimeEventPublisher();
+        var auditLogWriter = new FakeAuditLogWriter();
         var service = new AdminOrderAssignmentService(
             repository,
             new FakeNotificationService(),
-            realtimePublisher);
+            realtimePublisher,
+            auditLogWriter);
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -143,6 +155,7 @@ public class AdminOrderAssignmentTests
         Assert.Equal(1, repository.SaveCount);
         Assert.Empty(realtimePublisher.OrderUpdates);
         Assert.Empty(realtimePublisher.OrderAssignments);
+        Assert.Empty(auditLogWriter.Entries);
     }
 
     [Fact]
@@ -154,7 +167,8 @@ public class AdminOrderAssignmentTests
         var service = new AdminOrderAssignmentService(
             repository,
             new FakeNotificationService(),
-            new FakeRealtimeEventPublisher());
+            new FakeRealtimeEventPublisher(),
+            new FakeAuditLogWriter());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
