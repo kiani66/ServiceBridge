@@ -22,7 +22,7 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
             .Include(x => x.Category)
             .Include(x => x.Provider)
             .Include(x => x.Variants.Where(plan => plan.IsActive).OrderBy(plan => plan.DisplayOrder))
-            .Where(x => x.IsActive && x.Category.IsActive)
+            .Where(x => x.IsActive && x.Category.IsActive && x.Provider.IsActive)
             .OrderBy(x => x.Category.DisplayOrder)
             .ThenBy(x => x.Name)
             .ToListAsync();
@@ -39,7 +39,23 @@ public class ServiceCatalogRepository : IServiceCatalogRepository
             .FirstOrDefaultAsync(x =>
                 x.Id == id &&
                 x.IsActive &&
-                x.Category.IsActive);
+                x.Category.IsActive &&
+                x.Provider.IsActive);
+    }
+
+    public async Task<DigitalService?> GetActiveServiceBySlugAsync(string slug)
+    {
+        return await _context.DigitalServices
+            .AsNoTracking()
+            .Include(x => x.Category)
+            .Include(x => x.Provider)
+            .Include(x => x.Variants.Where(plan => plan.IsActive).OrderBy(plan => plan.DisplayOrder))
+            .Include(x => x.RequiredFields.OrderBy(field => field.DisplayOrder))
+            .FirstOrDefaultAsync(x =>
+                x.Slug == slug &&
+                x.IsActive &&
+                x.Category.IsActive &&
+                x.Provider.IsActive);
     }
 
     public async Task<IReadOnlyCollection<ServiceCategory>> GetAllCategoriesAsync()

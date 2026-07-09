@@ -28,4 +28,11 @@ public class ServicesController : BaseApiController
         var result = await _serviceCatalogQueryService.GetActiveServiceByIdAsync(id);
         return ToActionResult(result);
     }
+
+    [HttpGet("slug/{slug}")]
+    public async Task<IActionResult> GetActiveServiceBySlug(string slug)
+    {
+        var result = await _serviceCatalogQueryService.GetActiveServiceBySlugAsync(slug);
+        return ToActionResult(result);
+    }
 }

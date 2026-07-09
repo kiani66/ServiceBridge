@@ -7,6 +7,7 @@ public interface IServiceCatalogRepository
 {
     Task<IReadOnlyCollection<DigitalService>> GetActiveServicesAsync();
     Task<DigitalService?> GetActiveServiceByIdAsync(Guid id);
+    Task<DigitalService?> GetActiveServiceBySlugAsync(string slug);
     Task<IReadOnlyCollection<ServiceCategory>> GetAllCategoriesAsync();
     Task<IReadOnlyCollection<DigitalService>> GetAllServicesAsync();
     Task<Provider?> GetProviderBySlugAsync(string slug);

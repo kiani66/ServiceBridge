@@ -54,28 +54,26 @@ public sealed class PublicCatalogClient
         Guid serviceId;
         if (!Guid.TryParse(routeKey, out serviceId))
         {
-            var servicesResult = await GetActiveServicesAsync(loadQuotes: false, cancellationToken);
-            if (!servicesResult.Success)
-            {
-                return PublicServiceDetailResult.Fail(servicesResult.ErrorMessage);
-            }
-
-            var summary = servicesResult.Data.FirstOrDefault(service =>
-                string.Equals(service.Slug, routeKey, StringComparison.OrdinalIgnoreCase));
-            if (summary is null)
-            {
-                return PublicServiceDetailResult.Missing();
-            }
-
-            serviceId = summary.Id;
+            return await GetServiceDetailFromEndpointAsync(
+                $"api/services/slug/{Uri.EscapeDataString(routeKey.Trim())}",
+                cancellationToken);
         }
 
+        return await GetServiceDetailFromEndpointAsync(
+            $"api/services/{serviceId}",
+            cancellationToken);
+    }
+
+    private async Task<PublicServiceDetailResult> GetServiceDetailFromEndpointAsync(
+        string endpoint,
+        CancellationToken cancellationToken)
+    {
         var client = _httpClientFactory.CreateClient(AppConstants.Api.HttpClientName);
         try
         {
             var result = await client
                 .GetFromJsonAsync<ServiceResult<ServiceDetailResponse>>(
-                    $"api/services/{serviceId}",
+                    endpoint,
                     cancellationToken);
 
             if (result?.Success != true || result.Data is null)
