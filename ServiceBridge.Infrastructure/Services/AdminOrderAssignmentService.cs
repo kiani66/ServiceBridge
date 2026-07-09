@@ -1,6 +1,9 @@
+using ServiceBridge.Application.Audit;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Results;
+using ServiceBridge.Domain.Entities;
+using ServiceBridge.Domain.Enums;
 using ServiceBridge.Shared.Constants;
 using ServiceBridge.Shared.Messages;
 
@@ -11,15 +14,18 @@ public class AdminOrderAssignmentService : IAdminOrderAssignmentService
     private readonly IAdminOrderCommandRepository _repository;
     private readonly INotificationService _notificationService;
     private readonly IRealtimeEventPublisher _realtimeEventPublisher;
+    private readonly IAuditLogWriter _auditLogWriter;
 
     public AdminOrderAssignmentService(
         IAdminOrderCommandRepository repository,
         INotificationService notificationService,
-        IRealtimeEventPublisher realtimeEventPublisher)
+        IRealtimeEventPublisher realtimeEventPublisher,
+        IAuditLogWriter auditLogWriter)
     {
         _repository = repository;
         _notificationService = notificationService;
         _realtimeEventPublisher = realtimeEventPublisher;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<ServiceResult> AssignAsync(
@@ -44,6 +50,8 @@ public class AdminOrderAssignmentService : IAdminOrderAssignmentService
                 404);
         }
 
+        var previousAgentId = order.AssignedAgentId;
+        var previousStatus = order.Status;
         try
         {
             order.AssignToAgent(
@@ -73,6 +81,27 @@ public class AdminOrderAssignmentService : IAdminOrderAssignmentService
                 409);
         }
 
+        await _auditLogWriter.WriteAsync(new AuditLogEntry
+        {
+            ActorId = adminId,
+            ActorRole = nameof(UserRole.Admin),
+            ActionType = previousAgentId.HasValue
+                ? AuditActionType.OrderReassigned
+                : AuditActionType.OrderAssigned,
+            EntityName = nameof(Order),
+            EntityId = order.Id,
+            Before = new
+            {
+                Status = previousStatus.ToString(),
+                AssignedAgentId = previousAgentId
+            },
+            After = new
+            {
+                Status = order.Status.ToString(),
+                order.AssignedAgentId
+            },
+            Description = $"Order {order.OrderNumber} was assigned to agent {request.AgentId}."
+        });
         await _notificationService.PublishQueuedRealtimeAsync();
         await _realtimeEventPublisher.PublishOrderAssignedAsync(
             new OrderAssignedRealtimeEvent

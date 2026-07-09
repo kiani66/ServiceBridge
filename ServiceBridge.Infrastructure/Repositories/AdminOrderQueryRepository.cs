@@ -1,3 +1,4 @@
+using ServiceBridge.Application.Audit;
 using Microsoft.EntityFrameworkCore;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
@@ -11,13 +12,16 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
 {
     private readonly ServiceBridgeDbContext _context;
     private readonly IOrderFieldProtector _fieldProtector;
+    private readonly IAuditLogWriter _auditLogWriter;
 
     public AdminOrderQueryRepository(
         ServiceBridgeDbContext context,
-        IOrderFieldProtector fieldProtector)
+        IOrderFieldProtector fieldProtector,
+        IAuditLogWriter auditLogWriter)
     {
         _context = context;
         _fieldProtector = fieldProtector;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<PagedResultDto<AdminOrderListItemDto>> GetOrdersAsync(
@@ -297,6 +301,15 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
                     CreatedAt = DateTime.UtcNow
                 });
             await _context.SaveChangesAsync();
+            await _auditLogWriter.WriteAsync(new AuditLogEntry
+            {
+                ActorId = adminId,
+                ActorRole = nameof(UserRole.Admin),
+                ActionType = AuditActionType.CredentialViewed,
+                EntityName = nameof(Order),
+                EntityId = orderId,
+                Description = $"Admin viewed protected fields for order {order.OrderNumber}."
+            });
         }
 
         order.Payments = await _context.Payments

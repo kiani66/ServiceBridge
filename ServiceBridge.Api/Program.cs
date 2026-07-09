@@ -9,6 +9,7 @@ using ServiceBridge.Api.HealthChecks;
 using ServiceBridge.Api.Hubs;
 using ServiceBridge.Api.Middleware;
 using ServiceBridge.Api.Realtime;
+using ServiceBridge.Application.Audit;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Orders;
 using ServiceBridge.Application.Refunds;
@@ -27,6 +28,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddDataProtection();
 var startupConfiguration = StartupConfigurationValidator.Validate(
     builder.Configuration,
@@ -73,6 +75,9 @@ builder.Services.AddScoped<IAdminUserQueryRepository, AdminUserQueryRepository>(
 builder.Services.AddScoped<IAdminUserQueryService, AdminUserQueryService>();
 builder.Services.AddScoped<IAdminUserCommandRepository, AdminUserCommandRepository>();
 builder.Services.AddScoped<IAdminUserManagementService, AdminUserManagementService>();
+builder.Services.AddScoped<IAuditLogWriter, AuditLogWriter>();
+builder.Services.AddScoped<IAuditLogQueryRepository, AuditLogQueryRepository>();
+builder.Services.AddScoped<GetAuditLogsQuery>();
 builder.Services.AddScoped<IServiceCatalogRepository, ServiceCatalogRepository>();
 builder.Services.AddScoped<IServiceCatalogQueryService, ServiceCatalogQueryService>();
 builder.Services.AddScoped<IAdminCatalogService, AdminCatalogService>();

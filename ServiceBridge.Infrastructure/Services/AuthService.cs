@@ -1,3 +1,4 @@
+using ServiceBridge.Application.Audit;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Results;
@@ -16,17 +17,20 @@ public class AuthService : IAuthService
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ILogger<AuthService> _logger;
+    private readonly IAuditLogWriter _auditLogWriter;
 
     public AuthService(
         IUserRepository userRepository,
         IJwtTokenService jwtTokenService,
         IPasswordHasher passwordHasher,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger,
+        IAuditLogWriter auditLogWriter)
     {
         _userRepository = userRepository;
         _jwtTokenService = jwtTokenService;
         _passwordHasher = passwordHasher;
         _logger = logger;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<ServiceResult> RegisterAsync(UserRegisterRequest request)
@@ -62,6 +66,22 @@ public class AuthService : IAuthService
         };
 
         await _userRepository.AddAsync(user);
+        await _auditLogWriter.WriteAsync(new AuditLogEntry
+        {
+            ActorId = user.Id,
+            ActorRole = nameof(UserRole.User),
+            ActionType = AuditActionType.UserCreated,
+            EntityName = nameof(User),
+            EntityId = user.Id,
+            After = new
+            {
+                user.Id,
+                user.Email,
+                Role = user.Role.ToString(),
+                user.IsActive
+            },
+            Description = $"User account {user.Email} was created."
+        });
 
         _logger.LogInformation("User registered successfully: {Email}", request.Email);
         return ServiceResult.Created(AppMessages.RegistrationSuccess);

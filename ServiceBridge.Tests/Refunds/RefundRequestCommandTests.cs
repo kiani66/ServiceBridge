@@ -23,7 +23,8 @@ public class RefundRequestCommandTests
         var repository = new FakeRefundRequestRepository { Order = order };
         var command = new CreateRefundRequest(
             repository,
-            new FakeNotificationService());
+            new FakeNotificationService(),
+            new FakeAuditLogWriter());
 
         var result = await command.ExecuteAsync(
             userId,
@@ -49,7 +50,11 @@ public class RefundRequestCommandTests
         var order = CreateOrder(userId, status);
         var notifications = new FakeNotificationService();
         var repository = new FakeRefundRequestRepository { Order = order };
-        var command = new CreateRefundRequest(repository, notifications);
+        var auditLogWriter = new FakeAuditLogWriter();
+        var command = new CreateRefundRequest(
+            repository,
+            notifications,
+            auditLogWriter);
 
         var result = await command.ExecuteAsync(
             userId,
@@ -64,6 +69,10 @@ public class RefundRequestCommandTests
         Assert.Contains(
             nameof(FakeNotificationService.QueueRefundRequestedForAdminsAsync),
             notifications.QueuedTypes);
+        var auditLog = Assert.Single(auditLogWriter.Entries);
+        Assert.Equal(AuditActionType.RefundRequested, auditLog.ActionType);
+        Assert.Equal(userId, auditLog.ActorId);
+        Assert.Equal(repository.RefundRequest.Id, auditLog.EntityId);
 
         var audit = Assert.Single(repository.RefundRequest.StatusHistory);
         Assert.Null(audit.PreviousStatus);
@@ -84,7 +93,8 @@ public class RefundRequestCommandTests
         var repository = new FakeRefundRequestRepository { Order = order };
         var command = new CreateRefundRequest(
             repository,
-            new FakeNotificationService());
+            new FakeNotificationService(),
+            new FakeAuditLogWriter());
 
         var result = await command.ExecuteAsync(
             userId,
@@ -109,7 +119,8 @@ public class RefundRequestCommandTests
         };
         var command = new CreateRefundRequest(
             repository,
-            new FakeNotificationService());
+            new FakeNotificationService(),
+            new FakeAuditLogWriter());
 
         var result = await command.ExecuteAsync(
             userId,
@@ -133,7 +144,11 @@ public class RefundRequestCommandTests
         {
             RefundRequest = refundRequest
         };
-        var command = new ApproveRefundRequest(repository, notifications);
+        var auditLogWriter = new FakeAuditLogWriter();
+        var command = new ApproveRefundRequest(
+            repository,
+            notifications,
+            auditLogWriter);
 
         var result = await command.ExecuteAsync(
             adminId,
@@ -147,6 +162,10 @@ public class RefundRequestCommandTests
         Assert.Contains(
             nameof(FakeNotificationService.QueueRefundApprovedForUserAsync),
             notifications.QueuedTypes);
+        var auditLog = Assert.Single(auditLogWriter.Entries);
+        Assert.Equal(AuditActionType.RefundConfirmed, auditLog.ActionType);
+        Assert.Equal(adminId, auditLog.ActorId);
+        Assert.Equal(refundRequest.Id, auditLog.EntityId);
         Assert.Contains(refundRequest.StatusHistory, x =>
             x.PreviousStatus == RefundStatus.Requested &&
             x.NewStatus == RefundStatus.Approved &&
@@ -165,7 +184,8 @@ public class RefundRequestCommandTests
         };
         var command = new ApproveRefundRequest(
             repository,
-            new FakeNotificationService());
+            new FakeNotificationService(),
+            new FakeAuditLogWriter());
 
         var result = await command.ExecuteAsync(
             adminId,
@@ -220,7 +240,8 @@ public class RefundRequestCommandTests
         };
         var command = new ApproveRefundRequest(
             repository,
-            new FakeNotificationService());
+            new FakeNotificationService(),
+            new FakeAuditLogWriter());
 
         var result = await command.ExecuteAsync(
             Guid.NewGuid(),

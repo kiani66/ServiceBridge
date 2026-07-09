@@ -14,9 +14,11 @@ public class AdminUserManagementServiceTests
     public async Task CreateAgentAsync_WhenValid_CreatesActiveAgent()
     {
         var repository = new FakeAdminUserCommandRepository();
-        var service = CreateService(repository);
+        var auditLogWriter = new FakeAuditLogWriter();
+        var service = CreateService(repository, auditLogWriter);
+        var adminId = Guid.NewGuid();
 
-        var result = await service.CreateAgentAsync(new CreateAgentRequest
+        var result = await service.CreateAgentAsync(adminId, new CreateAgentRequest
         {
             FullName = "Agent One",
             Email = "AGENT@SERVICEBRIDGE.TEST",
@@ -32,6 +34,10 @@ public class AdminUserManagementServiceTests
         Assert.True(
             BCrypt.Net.BCrypt.Verify("AgentPassword1!", agent.PasswordHash));
         Assert.Equal(1, repository.SaveCount);
+        var audit = Assert.Single(auditLogWriter.Entries);
+        Assert.Equal(Domain.Enums.AuditActionType.AgentCreated, audit.ActionType);
+        Assert.Equal(adminId, audit.ActorId);
+        Assert.Equal(agent.Id, audit.EntityId);
     }
 
     [Fact]
@@ -41,7 +47,7 @@ public class AdminUserManagementServiceTests
         repository.Seed(CreateUser(UserRole.User));
         var service = CreateService(repository);
 
-        var result = await service.CreateAgentAsync(new CreateAgentRequest
+        var result = await service.CreateAgentAsync(Guid.NewGuid(), new CreateAgentRequest
         {
             FullName = "Agent One",
             Email = "user@servicebridge.test",
@@ -60,9 +66,12 @@ public class AdminUserManagementServiceTests
         var repository = new FakeAdminUserCommandRepository();
         var user = CreateUser(UserRole.User);
         repository.Seed(user);
-        var service = CreateService(repository);
+        var auditLogWriter = new FakeAuditLogWriter();
+        var service = CreateService(repository, auditLogWriter);
+        var adminId = Guid.NewGuid();
 
         var result = await service.SetStatusAsync(
+            adminId,
             user.Id,
             new SetUserStatusRequest { IsActive = false });
 
@@ -70,6 +79,10 @@ public class AdminUserManagementServiceTests
         Assert.False(user.IsActive);
         Assert.NotNull(user.UpdatedAt);
         Assert.Equal(1, repository.SaveCount);
+        var audit = Assert.Single(auditLogWriter.Entries);
+        Assert.Equal(Domain.Enums.AuditActionType.UserDeactivated, audit.ActionType);
+        Assert.Equal(adminId, audit.ActorId);
+        Assert.Equal(user.Id, audit.EntityId);
     }
 
     [Fact]
@@ -81,6 +94,7 @@ public class AdminUserManagementServiceTests
         var service = CreateService(repository);
 
         var result = await service.SetStatusAsync(
+            Guid.NewGuid(),
             admin.Id,
             new SetUserStatusRequest { IsActive = false });
 
@@ -97,6 +111,7 @@ public class AdminUserManagementServiceTests
 
         var result = await service.SetStatusAsync(
             Guid.NewGuid(),
+            Guid.NewGuid(),
             new SetUserStatusRequest { IsActive = false });
 
         Assert.False(result.Success);
@@ -104,11 +119,13 @@ public class AdminUserManagementServiceTests
     }
 
     private static AdminUserManagementService CreateService(
-        FakeAdminUserCommandRepository repository)
+        FakeAdminUserCommandRepository repository,
+        FakeAuditLogWriter? auditLogWriter = null)
     {
         return new AdminUserManagementService(
             repository,
-            new BcryptPasswordHasher());
+            new BcryptPasswordHasher(),
+            auditLogWriter ?? new FakeAuditLogWriter());
     }
 
     private static User CreateUser(UserRole role)

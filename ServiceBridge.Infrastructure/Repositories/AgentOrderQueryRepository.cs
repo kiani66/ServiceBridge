@@ -1,3 +1,4 @@
+using ServiceBridge.Application.Audit;
 using Microsoft.EntityFrameworkCore;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
@@ -11,13 +12,16 @@ public class AgentOrderQueryRepository : IAgentOrderQueryRepository
 {
     private readonly ServiceBridgeDbContext _context;
     private readonly IOrderFieldProtector _fieldProtector;
+    private readonly IAuditLogWriter _auditLogWriter;
 
     public AgentOrderQueryRepository(
         ServiceBridgeDbContext context,
-        IOrderFieldProtector fieldProtector)
+        IOrderFieldProtector fieldProtector,
+        IAuditLogWriter auditLogWriter)
     {
         _context = context;
         _fieldProtector = fieldProtector;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<AgentOrderDashboardSummaryDto> GetDashboardSummaryAsync(
@@ -188,6 +192,15 @@ public class AgentOrderQueryRepository : IAgentOrderQueryRepository
                         CreatedAt = DateTime.UtcNow
                     });
                 await _context.SaveChangesAsync();
+                await _auditLogWriter.WriteAsync(new AuditLogEntry
+                {
+                    ActorId = agentId,
+                    ActorRole = nameof(UserRole.Agent),
+                    ActionType = AuditActionType.CredentialViewed,
+                    EntityName = nameof(Order),
+                    EntityId = orderId,
+                    Description = $"Agent viewed protected customer fields for order {order.OrderNumber}."
+                });
             }
 
             var deliveryDefinitions = await _context.Orders
