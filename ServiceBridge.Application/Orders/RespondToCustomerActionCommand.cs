@@ -27,6 +27,18 @@ public class RespondToCustomerActionCommand
         Guid orderId,
         RespondToCustomerActionRequest request)
     {
+        if (string.IsNullOrWhiteSpace(request.Response))
+        {
+            return ServiceResult.ValidationFailed(
+                new Dictionary<string, string[]>
+                {
+                    [nameof(request.Response)] =
+                    [
+                        "Response is required."
+                    ]
+                });
+        }
+
         var order = await _repository.GetOwnedOrderForUpdateAsync(userId, orderId);
         if (order == null)
         {

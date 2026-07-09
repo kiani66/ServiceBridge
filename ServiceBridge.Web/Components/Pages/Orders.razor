@@ -73,6 +73,7 @@
                 <MudTh>Payment</MudTh>
                 <MudTh>Status</MudTh>
                 <MudTh>Created</MudTh>
+                <MudTh>Paid</MudTh>
                 <MudTh>Actions</MudTh>
             </HeaderContent>
             <RowTemplate>
@@ -92,6 +93,7 @@
                                  Tone="@UserOrderDisplay.OrderTone(context.Status)" />
                 </MudTd>
                 <MudTd DataLabel="Created">@UserOrderDisplay.FormatDateTime(context.CreatedAt)</MudTd>
+                <MudTd DataLabel="Paid">@FormatNullable(context.PaidAt)</MudTd>
                 <MudTd DataLabel="Actions">
                     <MudButton Href="@($"/ui/orders/{context.OrderId}")"
                                Variant="Variant.Text"
@@ -222,5 +224,10 @@
         return Enum.TryParse<OrderStatus>(status, ignoreCase: true, out var parsed)
             ? parsed
             : null;
+    }
+
+    private static string FormatNullable(DateTime? value)
+    {
+        return value.HasValue ? UserOrderDisplay.FormatDateTime(value.Value) : "-";
     }
 }
