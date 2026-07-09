@@ -126,6 +126,41 @@ public class RespondToCustomerActionCommandTests
                 type => type == nameof(FakeNotificationService.QueueCustomerActionRespondedAsync)));
     }
 
+    [Fact]
+    public async Task ExecuteAsync_WhenResponseIsEmpty_ReturnsValidationFailure()
+    {
+        var userId = Guid.NewGuid();
+        var agentId = Guid.NewGuid();
+        var order = CreateProcessingOrder(userId, agentId);
+        order.RequestCustomerAction(agentId, "Please confirm your account email.");
+        var action = Assert.Single(order.CustomerActionRequests);
+        var repository = new FakeUserOrderCommandRepository { Order = order };
+        var notifications = new FakeNotificationService();
+        var realtimePublisher = new FakeRealtimeEventPublisher();
+        var command = new RespondToCustomerActionCommand(
+            repository,
+            notifications,
+            realtimePublisher);
+
+        var result = await command.ExecuteAsync(
+            userId,
+            order.Id,
+            new RespondToCustomerActionRequest
+            {
+                RequestId = action.Id,
+                Response = "   "
+            });
+
+        Assert.False(result.Success);
+        Assert.Equal(400, result.StatusCode);
+        Assert.NotNull(result.ValidationErrors);
+        Assert.Contains(nameof(RespondToCustomerActionRequest.Response), result.ValidationErrors.Keys);
+        Assert.False(action.IsResolved);
+        Assert.Equal(0, repository.SaveCount);
+        Assert.Empty(notifications.QueuedTypes);
+        Assert.Empty(realtimePublisher.CustomerActionChanges);
+    }
+
     private static Order CreateProcessingOrder(Guid userId, Guid agentId)
     {
         return new Order

@@ -16,5 +16,6 @@ public class UserOrderListItemDto
     public string PaymentStatus { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    public DateTime? PaidAt { get; set; }
     public bool CanCancel { get; set; }
 }

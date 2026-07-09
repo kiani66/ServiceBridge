@@ -54,7 +54,8 @@ public class UserOrderQueryRepository : IUserOrderQueryRepository
                 BasePriceUsdSnapshot = x.ForeignPrice,
                 FinalPriceIrr = x.FinalAmountIrr,
                 Status = x.Status.ToString(),
-                CreatedAt = x.CreatedAt
+                CreatedAt = x.CreatedAt,
+                PaidAt = x.PaidAt
             })
             .ToListAsync();
 
@@ -98,7 +99,8 @@ public class UserOrderQueryRepository : IUserOrderQueryRepository
                     ? paymentStatus.ToString()
                     : "Not started",
                 Status = x.Status,
-                CreatedAt = x.CreatedAt
+                CreatedAt = x.CreatedAt,
+                PaidAt = x.PaidAt
             })
             .ToList();
 

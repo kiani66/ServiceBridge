@@ -2,7 +2,9 @@
 @attribute [Authorize(Roles = AppConstants.Roles.User)]
 @using ServiceBridge.Application.DTOs
 @using ServiceBridge.Domain.Enums
+@implements IDisposable
 @inject PaymentClient PaymentClient
+@inject RealtimeClient RealtimeClient
 @inject NavigationManager Navigation
 
 @if (_loading)
@@ -40,6 +42,12 @@ else
                        StartIcon="@Icons.Material.Outlined.Replay">
                 Try payment again
             </MudButton>
+            <MudButton Href="@($"/ui/orders/{OrderId}")"
+                       Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.ReceiptLong">
+                View order
+            </MudButton>
         </Actions>
     </PageHeader>
 
@@ -70,7 +78,8 @@ else
                     <div><dt>Order number</dt><dd>@_order.OrderNumber</dd></div>
                     <div><dt>Payment status</dt><dd>@(SelectedPayment?.Status ?? "-")</dd></div>
                     <div><dt>Order status</dt><dd>@_order.Status</dd></div>
-                    <div><dt>Total</dt><dd>@_order.FinalPriceIrr.ToString("N0") IRR</dd></div>
+                    <div><dt>Attempted amount</dt><dd>@AttemptedAmountIrr.ToString("N0") IRR</dd></div>
+                    <div><dt>Next action</dt><dd>Try payment again or review the order details.</dd></div>
                 </dl>
             </div>
 
@@ -101,8 +110,22 @@ else
     private bool IsPaid =>
         string.Equals(_order?.Status, nameof(OrderStatus.Paid), StringComparison.OrdinalIgnoreCase);
 
+    private decimal AttemptedAmountIrr => SelectedPayment?.AmountIrr ?? _order?.FinalPriceIrr ?? 0m;
+
+    protected override void OnInitialized()
+    {
+        RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
+        RealtimeClient.CustomerActionChanged += HandleCustomerActionChangedAsync;
+    }
+
     protected override async Task OnParametersSetAsync()
     {
+        await LoadResultAsync();
+    }
+
+    private async Task LoadResultAsync()
+    {
+        _loading = true;
         var result = await PaymentClient.GetOrderAsync(OrderId);
         if (result.RequiresAuthentication)
         {
@@ -115,6 +138,35 @@ else
         _loading = false;
     }
 
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
+    {
+        if (message.OrderId != OrderId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task HandleCustomerActionChangedAsync(CustomerActionChangedRealtimeDto message)
+    {
+        if (message.OrderId != OrderId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return ReloadFromRealtimeAsync();
+    }
+
+    private Task ReloadFromRealtimeAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            await LoadResultAsync();
+            StateHasChanged();
+        });
+    }
+
     private PaymentHistoryDto? FindPayment(Guid? paymentId, string status)
     {
         if (!paymentId.HasValue || _order is null)
@@ -125,5 +177,11 @@ else
         return _order.Payments.FirstOrDefault(payment =>
             payment.PaymentId == paymentId.Value &&
             string.Equals(payment.Status, status, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public void Dispose()
+    {
+        RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
+        RealtimeClient.CustomerActionChanged -= HandleCustomerActionChangedAsync;
     }
 }
