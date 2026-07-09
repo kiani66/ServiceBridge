@@ -29,6 +29,7 @@ builder.Services.AddScoped<UserOrdersClient>();
 builder.Services.AddScoped<UserProfileClient>();
 builder.Services.AddScoped<AgentOrdersClient>();
 builder.Services.AddScoped<AdminOrdersClient>();
+builder.Services.AddScoped<AdminAuditLogsClient>();
 builder.Services.AddScoped<AdminCatalogClient>();
 builder.Services.AddScoped<AdminPricingClient>();
 builder.Services.AddScoped<AdminUsersClient>();

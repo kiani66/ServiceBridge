@@ -1,0 +1,287 @@
+@page "/ui/admin/audit-logs"
+@attribute [Authorize(Roles = AppConstants.Roles.Admin)]
+@inject AdminAuditLogsClient AuditLogsClient
+@inject NavigationManager Navigation
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Audit Logs", null) })" />
+
+<PageHeader Eyebrow="Admin operations"
+            Title="Audit Logs"
+            Description="Review administrative audit records without exposing stored change payloads.">
+    <Actions>
+        <MudButton Href="/ui/admin/audit"
+                   Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.ManageSearch">
+            Order Events
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<PageSection MaxWidth="wide">
+    <DataGridToolbar Title="Audit log records"
+                     Description="Newest audit records are shown first."
+                     ShowSearch="false">
+        <Actions>
+            <MudTextField T="string"
+                          Label="Actor ID"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Value="@_actorIdFilter"
+                          ValueChanged="OnActorIdChanged"
+                          Immediate="true"
+                          Clearable="true"
+                          Class="sb-search-compact" />
+            <MudTextField T="string"
+                          Label="Entity"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Value="@_entityNameFilter"
+                          ValueChanged="OnEntityNameChanged"
+                          Immediate="true"
+                          Clearable="true"
+                          Class="sb-search-compact" />
+            <MudTextField T="string"
+                          Label="Entity ID"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Value="@_entityIdFilter"
+                          ValueChanged="OnEntityIdChanged"
+                          Immediate="true"
+                          Clearable="true"
+                          Class="sb-search-compact" />
+            <MudSelect T="AuditActionType?"
+                       Label="Action"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Value="_actionTypeFilter"
+                       ValueChanged="OnActionTypeChanged"
+                       Class="sb-search-compact">
+                <MudSelectItem T="AuditActionType?" Value="null">All actions</MudSelectItem>
+                @foreach (var actionType in Enum.GetValues<AuditActionType>())
+                {
+                    <MudSelectItem T="AuditActionType?" Value="@((AuditActionType?)actionType)">
+                        @FormatLabel(actionType.ToString())
+                    </MudSelectItem>
+                }
+            </MudSelect>
+            <MudIconButton Icon="@Icons.Material.Outlined.Refresh"
+                           Color="Color.Primary"
+                           Disabled="@_loading"
+                           OnClick="@(() => LoadAuditLogsAsync(Math.Max(_auditLogs.Page, 1)))"
+                           aria-label="Refresh audit logs" />
+        </Actions>
+    </DataGridToolbar>
+
+    @if (!string.IsNullOrWhiteSpace(_filterError))
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">@_filterError</MudAlert>
+    }
+
+    @if (_loading)
+    {
+        <LoadingState Text="Loading audit logs" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <ErrorState Title="Unable to load audit logs"
+                    Message="@_error"
+                    OnRetry="@(() => LoadAuditLogsAsync(Math.Max(_auditLogs.Page, 1)))" />
+    }
+    else if (_auditLogs.Items.Count == 0)
+    {
+        <EmptyState Title="No audit logs found"
+                    Description="No audit records match the current filters."
+                    Icon="@Icons.Material.Outlined.ManageSearch" />
+    }
+    else
+    {
+        <MudTable Items="@_auditLogs.Items" Hover="true" Dense="true" Class="sb-data-table">
+            <HeaderContent>
+                <MudTh>Created</MudTh>
+                <MudTh>Actor</MudTh>
+                <MudTh>Action</MudTh>
+                <MudTh>Entity</MudTh>
+                <MudTh>Description</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Created">@UserOrderDisplay.FormatDateTime(context.CreatedAtUtc)</MudTd>
+                <MudTd DataLabel="Actor">
+                    @context.ActorRole
+                    <span class="sb-table-subtext">@FormatNullableId(context.ActorId)</span>
+                </MudTd>
+                <MudTd DataLabel="Action">
+                    <StatusBadge Text="@FormatLabel(context.ActionType)"
+                                 Tone="@ActionTone(context.ActionType)" />
+                </MudTd>
+                <MudTd DataLabel="Entity">
+                    @context.EntityName
+                    <span class="sb-table-subtext">@FormatNullableId(context.EntityId)</span>
+                </MudTd>
+                <MudTd DataLabel="Description">@(context.Description ?? "-")</MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        @if (_auditLogs.TotalPages > 1)
+        {
+            <div class="sb-pagination">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_auditLogs.Page <= 1 || _loading)"
+                           StartIcon="@Icons.Material.Outlined.ChevronLeft"
+                           OnClick="PreviousPage">
+                    Previous
+                </MudButton>
+                <span>Page @_auditLogs.Page of @_auditLogs.TotalPages</span>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(_auditLogs.Page >= _auditLogs.TotalPages || _loading)"
+                           EndIcon="@Icons.Material.Outlined.ChevronRight"
+                           OnClick="NextPage">
+                    Next
+                </MudButton>
+            </div>
+        }
+    }
+</PageSection>
+
+@code {
+    private const int PageSize = 20;
+
+    private bool _loading = true;
+    private string? _error;
+    private string? _filterError;
+    private string? _actorIdFilter;
+    private string? _entityNameFilter;
+    private string? _entityIdFilter;
+    private AuditActionType? _actionTypeFilter;
+    private PagedResultDto<AuditLogListItemDto> _auditLogs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuditLogsAsync();
+    }
+
+    private async Task OnActorIdChanged(string? value)
+    {
+        _actorIdFilter = value;
+        await LoadAuditLogsAsync();
+    }
+
+    private async Task OnEntityNameChanged(string? value)
+    {
+        _entityNameFilter = value;
+        await LoadAuditLogsAsync();
+    }
+
+    private async Task OnEntityIdChanged(string? value)
+    {
+        _entityIdFilter = value;
+        await LoadAuditLogsAsync();
+    }
+
+    private async Task OnActionTypeChanged(AuditActionType? value)
+    {
+        _actionTypeFilter = value;
+        await LoadAuditLogsAsync();
+    }
+
+    private Task PreviousPage()
+    {
+        return LoadAuditLogsAsync(Math.Max(_auditLogs.Page - 1, 1));
+    }
+
+    private Task NextPage()
+    {
+        return LoadAuditLogsAsync(_auditLogs.Page + 1);
+    }
+
+    private async Task LoadAuditLogsAsync(int page = 1)
+    {
+        _loading = true;
+        _error = null;
+        _filterError = null;
+
+        if (!TryParseOptionalGuid(_actorIdFilter, "Actor ID", out var actorId) ||
+            !TryParseOptionalGuid(_entityIdFilter, "Entity ID", out var entityId))
+        {
+            _auditLogs = new PagedResultDto<AuditLogListItemDto>();
+            _loading = false;
+            return;
+        }
+
+        var result = await AuditLogsClient.GetAuditLogsAsync(
+            page,
+            PageSize,
+            actorId,
+            _entityNameFilter,
+            entityId,
+            _actionTypeFilter);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        _auditLogs = result.Success && result.Data is not null
+            ? result.Data
+            : new PagedResultDto<AuditLogListItemDto>();
+        _error = result.ErrorMessage;
+        _loading = false;
+    }
+
+    private bool TryParseOptionalGuid(
+        string? value,
+        string label,
+        out Guid? parsedValue)
+    {
+        parsedValue = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (Guid.TryParse(value.Trim(), out var guid))
+        {
+            parsedValue = guid;
+            return true;
+        }
+
+        _filterError = $"{label} must be a valid GUID.";
+        return false;
+    }
+
+    private static string FormatNullableId(Guid? value)
+    {
+        return value.HasValue ? value.Value.ToString() : "-";
+    }
+
+    private static string FormatLabel(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "-";
+        }
+
+        return string.Concat(value.Select((character, index) =>
+            index > 0 && char.IsUpper(character)
+                ? $" {character}"
+                : character.ToString()));
+    }
+
+    private static string ActionTone(string actionType)
+    {
+        return actionType switch
+        {
+            nameof(AuditActionType.UserDeactivated) or
+                nameof(AuditActionType.OrderCancelledByAdmin) => "danger",
+            nameof(AuditActionType.CredentialViewed) or
+                nameof(AuditActionType.PaymentManuallyReviewed) => "warning",
+            nameof(AuditActionType.UserCreated) or
+                nameof(AuditActionType.AgentCreated) or
+                nameof(AuditActionType.OrderAssigned) or
+                nameof(AuditActionType.RefundConfirmed) => "success",
+            _ => "neutral"
+        };
+    }
+}

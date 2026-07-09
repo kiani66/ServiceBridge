@@ -2,6 +2,7 @@ using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Infrastructure.Services;
+using ServiceBridge.Tests.TestDoubles;
 using Xunit;
 
 namespace ServiceBridge.Tests.AdminOrders;
@@ -12,7 +13,7 @@ public class AdminOrderQueryTests
     public async Task PaidUnassignedOrders_BoundsPagingBeforeRepositoryCall()
     {
         var repository = new FakeAdminOrderQueryRepository();
-        var service = new AdminOrderQueryService(repository);
+        var service = CreateService(repository);
 
         var result = await service.GetPaidUnassignedOrdersAsync(0, 1000);
 
@@ -27,7 +28,7 @@ public class AdminOrderQueryTests
     public async Task AuditEvents_BoundsPagingBeforeRepositoryCall()
     {
         var repository = new FakeAdminOrderQueryRepository();
-        var service = new AdminOrderQueryService(repository);
+        var service = CreateService(repository);
 
         var result = await service.GetAuditEventsAsync(new AdminAuditQueryDto
         {
@@ -47,7 +48,7 @@ public class AdminOrderQueryTests
     public async Task AuditEvents_RejectsInvalidDateRange()
     {
         var repository = new FakeAdminOrderQueryRepository();
-        var service = new AdminOrderQueryService(repository);
+        var service = CreateService(repository);
 
         var result = await service.GetAuditEventsAsync(new AdminAuditQueryDto
         {
@@ -64,7 +65,7 @@ public class AdminOrderQueryTests
     public async Task OrderTimeline_ReturnsNotFoundWhenOrderIsMissing()
     {
         var repository = new FakeAdminOrderQueryRepository();
-        var service = new AdminOrderQueryService(repository);
+        var service = CreateService(repository);
 
         var result = await service.GetOrderTimelineAsync(Guid.NewGuid());
 
@@ -72,19 +73,152 @@ public class AdminOrderQueryTests
         Assert.Equal(404, result.StatusCode);
     }
 
+    [Fact]
+    public async Task Orders_ForwardsSearchStatusAndAssignedAgentFilter()
+    {
+        var repository = new FakeAdminOrderQueryRepository();
+        var service = CreateService(repository);
+        var agentId = Guid.NewGuid();
+
+        var result = await service.GetOrdersAsync(
+            0,
+            1000,
+            OrderStatus.Processing,
+            "SB-1001",
+            agentId);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, repository.LastOrderPage);
+        Assert.Equal(
+            IAdminOrderQueryService.MaximumPageSize,
+            repository.LastOrderPageSize);
+        Assert.Equal(OrderStatus.Processing, repository.LastOrderStatus);
+        Assert.Equal("SB-1001", repository.LastOrderSearch);
+        Assert.Equal(agentId, repository.LastAssignedAgentId);
+    }
+
+    [Fact]
+    public async Task OrderDetail_ReturnsMaskedCredentialMetadataByDefault()
+    {
+        var orderId = Guid.NewGuid();
+        var repository = new FakeAdminOrderQueryRepository
+        {
+            Detail = new AdminOrderDetailDto
+            {
+                OrderId = orderId,
+                OrderNumber = "SB-1001",
+                Credentials =
+                [
+                    new AgentOrderFieldDto
+                    {
+                        FieldKey = "password",
+                        FieldLabel = "Password",
+                        Value = string.Empty,
+                        IsSensitive = true
+                    }
+                ]
+            }
+        };
+        var service = CreateService(repository);
+
+        var result = await service.GetOrderDetailAsync(Guid.NewGuid(), orderId);
+
+        Assert.True(result.Success);
+        var credential = Assert.Single(result.Data!.Credentials);
+        Assert.Equal("Password", credential.FieldLabel);
+        Assert.Equal(string.Empty, credential.Value);
+    }
+
+    [Fact]
+    public async Task RevealOrderCredentials_ReturnsValuesAndWritesCredentialViewedAudit()
+    {
+        var adminId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var auditLogWriter = new FakeAuditLogWriter();
+        var repository = new FakeAdminOrderQueryRepository
+        {
+            RevealedCredentials = new AdminOrderCredentialsDto
+            {
+                OrderId = orderId,
+                OrderNumber = "SB-1001",
+                Credentials =
+                [
+                    new AgentOrderFieldDto
+                    {
+                        FieldKey = "password",
+                        FieldLabel = "Password",
+                        Value = "super-secret",
+                        IsSensitive = true
+                    }
+                ]
+            }
+        };
+        var service = CreateService(repository, auditLogWriter);
+
+        var result = await service.RevealOrderCredentialsAsync(adminId, orderId);
+
+        Assert.True(result.Success);
+        Assert.Equal("super-secret", Assert.Single(result.Data!.Credentials).Value);
+        Assert.Equal(adminId, repository.LastCredentialAccessUserId);
+
+        var auditEntry = Assert.Single(auditLogWriter.Entries);
+        Assert.Equal(adminId, auditEntry.ActorId);
+        Assert.Equal(AuditActionType.CredentialViewed, auditEntry.ActionType);
+        Assert.Equal(orderId, auditEntry.EntityId);
+        Assert.Null(auditEntry.Before);
+        Assert.Null(auditEntry.After);
+        Assert.DoesNotContain("super-secret", auditEntry.Description!);
+    }
+
+    [Fact]
+    public void AdminOrderListItemDto_DoesNotExposeCredentialValues()
+    {
+        var properties = typeof(AdminOrderListItemDto)
+            .GetProperties()
+            .Select(x => x.Name)
+            .ToArray();
+
+        Assert.DoesNotContain("Credentials", properties);
+        Assert.DoesNotContain("CredentialValues", properties);
+        Assert.DoesNotContain("DecryptedCredentials", properties);
+    }
+
+    private static AdminOrderQueryService CreateService(
+        FakeAdminOrderQueryRepository repository,
+        FakeAuditLogWriter? auditLogWriter = null)
+    {
+        return new AdminOrderQueryService(
+            repository,
+            auditLogWriter ?? new FakeAuditLogWriter());
+    }
+
     private sealed class FakeAdminOrderQueryRepository
         : IAdminOrderQueryRepository
     {
         public int? LastPage { get; private set; }
         public int? LastPageSize { get; private set; }
+        public int? LastOrderPage { get; private set; }
+        public int? LastOrderPageSize { get; private set; }
+        public OrderStatus? LastOrderStatus { get; private set; }
+        public string? LastOrderSearch { get; private set; }
+        public Guid? LastAssignedAgentId { get; private set; }
         public AdminAuditQueryDto? LastAuditQuery { get; private set; }
+        public AdminOrderDetailDto? Detail { get; init; }
+        public AdminOrderCredentialsDto? RevealedCredentials { get; init; }
 
         public Task<PagedResultDto<AdminOrderListItemDto>> GetOrdersAsync(
             int page,
             int pageSize,
             OrderStatus? status,
-            string? search)
+            string? search,
+            Guid? assignedAgentId)
         {
+            LastOrderPage = page;
+            LastOrderPageSize = pageSize;
+            LastOrderStatus = status;
+            LastOrderSearch = search;
+            LastAssignedAgentId = assignedAgentId;
+
             return Task.FromResult(new PagedResultDto<AdminOrderListItemDto>
             {
                 Page = page,
@@ -119,7 +253,17 @@ public class AdminOrderQueryTests
             Guid adminId,
             Guid orderId)
         {
-            return Task.FromResult<AdminOrderDetailDto?>(null);
+            return Task.FromResult(Detail);
+        }
+
+        public Guid? LastCredentialAccessUserId { get; private set; }
+
+        public Task<AdminOrderCredentialsDto?> GetOrderCredentialsAsync(
+            Guid orderId,
+            Guid accessedByUserId)
+        {
+            LastCredentialAccessUserId = accessedByUserId;
+            return Task.FromResult(RevealedCredentials);
         }
 
         public Task<PagedResultDto<AdminPaymentListItemDto>> GetPaymentsAsync(

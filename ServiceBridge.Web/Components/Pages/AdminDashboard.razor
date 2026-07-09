@@ -118,14 +118,48 @@
             <div class="sb-dashboard-panel-header">
                 <div>
                     <h2>Recent Orders</h2>
-                    <p>Newest order activity across customers, payments, fulfillment, and assignment.</p>
+                    <p>Newest order activity across customers, payments, refunds, fulfillment, and assignment.</p>
                 </div>
-                <MudButton Href="/ui/admin/orders"
-                           Variant="Variant.Text"
-                           Color="Color.Primary"
-                           EndIcon="@Icons.Material.Outlined.ArrowForward">
-                    View All
-                </MudButton>
+                <div class="sb-grid-toolbar-actions">
+                    <SearchBar Value="@_orderSearch"
+                               ValueChanged="OnOrderSearchChanged"
+                               Placeholder="Search order number"
+                               Compact="true" />
+                    <MudSelect T="OrderStatus?"
+                               Label="Status"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Value="_orderStatusFilter"
+                               ValueChanged="OnOrderStatusChanged"
+                               Class="sb-search-compact">
+                        <MudSelectItem T="OrderStatus?" Value="null">All statuses</MudSelectItem>
+                        @foreach (var status in Enum.GetValues<OrderStatus>())
+                        {
+                            <MudSelectItem T="OrderStatus?" Value="@status">
+                                @UserOrderDisplay.OrderStatusLabel(status.ToString())
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="Guid?"
+                               Label="Agent"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Value="_assignedAgentFilter"
+                               ValueChanged="OnAssignedAgentChanged"
+                               Class="sb-search-compact">
+                        <MudSelectItem T="Guid?" Value="null">All agents</MudSelectItem>
+                        @foreach (var agent in _agents)
+                        {
+                            <MudSelectItem T="Guid?" Value="@agent.AgentId">@agent.FullName</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudButton Href="/ui/admin/orders"
+                               Variant="Variant.Text"
+                               Color="Color.Primary"
+                               EndIcon="@Icons.Material.Outlined.ArrowForward">
+                        Queue
+                    </MudButton>
+                </div>
             </div>
 
             @if (_ordersLoading)
@@ -152,6 +186,8 @@
                         <MudTh>Customer</MudTh>
                         <MudTh>Service</MudTh>
                         <MudTh>Payment Status</MudTh>
+                        <MudTh>Payment</MudTh>
+                        <MudTh>Refund</MudTh>
                         <MudTh>Order Status</MudTh>
                         <MudTh>Agent</MudTh>
                         <MudTh>Action</MudTh>
@@ -161,6 +197,23 @@
                         <MudTd DataLabel="Customer">@context.CustomerName<span class="sb-table-subtext">@context.CustomerEmail</span></MudTd>
                         <MudTd DataLabel="Service">@context.ServiceName</MudTd>
                         <MudTd DataLabel="Payment Status"><StatusBadge Text="@UserOrderDisplay.PaymentStatusLabel(context.PaymentStatus)" Tone="@UserOrderDisplay.PaymentTone(context.PaymentStatus)" /></MudTd>
+                        <MudTd DataLabel="Payment">
+                            @(context.PaymentAmountIrr.HasValue ? $"{context.PaymentAmountIrr.Value:N0} IRR" : "-")
+                            <span class="sb-table-subtext">
+                                @(context.PaidAt.HasValue ? UserOrderDisplay.FormatDateTime(context.PaidAt.Value) : "No paid date")
+                            </span>
+                        </MudTd>
+                        <MudTd DataLabel="Refund">
+                            @if (string.IsNullOrWhiteSpace(context.RefundStatus))
+                            {
+                                <span>-</span>
+                            }
+                            else
+                            {
+                                <StatusBadge Text="@UserOrderDisplay.RefundStatusLabel(context.RefundStatus)"
+                                             Tone="@UserOrderDisplay.RefundTone(context.RefundStatus)" />
+                            }
+                        </MudTd>
                         <MudTd DataLabel="Order Status"><StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(context.OrderStatus)" Tone="@UserOrderDisplay.OrderTone(context.OrderStatus)" /></MudTd>
                         <MudTd DataLabel="Agent">@(context.AssignedAgentName ?? "-")</MudTd>
                         <MudTd DataLabel="Action">
@@ -326,6 +379,20 @@
                     </div>
                     <MudButton Href="/ui/admin/users" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small">Open</MudButton>
                 </div>
+                <div class="sb-dashboard-action-row">
+                    <div>
+                        <strong>Refunds</strong>
+                        <span>Review existing refund requests.</span>
+                    </div>
+                    <MudButton Href="/ui/admin/refunds" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small">Open</MudButton>
+                </div>
+                <div class="sb-dashboard-action-row">
+                    <div>
+                        <strong>Audit Logs</strong>
+                        <span>Inspect admin audit records.</span>
+                    </div>
+                    <MudButton Href="/ui/admin/audit-logs" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small">Open</MudButton>
+                </div>
             </div>
         </section>
     </div>
@@ -342,6 +409,9 @@
     private string? _ordersError;
     private string? _agentsError;
     private string? _paymentsError;
+    private string? _orderSearch;
+    private OrderStatus? _orderStatusFilter;
+    private Guid? _assignedAgentFilter;
     private AdminOrderDashboardSummaryDto? _summary;
     private PagedResultDto<AdminOrderListItemDto> _orders = new();
     private PagedResultDto<AdminPaymentListItemDto> _payments = new();
@@ -449,7 +519,12 @@
         _ordersLoading = true;
         _ordersError = null;
 
-        var result = await AdminOrdersClient.GetOrdersAsync(1, PageSize, null, null);
+        var result = await AdminOrdersClient.GetOrdersAsync(
+            1,
+            PageSize,
+            _orderStatusFilter,
+            _orderSearch,
+            _assignedAgentFilter);
         if (RedirectIfAuthRequired(result.RequiresAuthentication))
         {
             return;
@@ -460,6 +535,24 @@
             : new PagedResultDto<AdminOrderListItemDto>();
         _ordersError = result.ErrorMessage;
         _ordersLoading = false;
+    }
+
+    private async Task OnOrderSearchChanged(string? value)
+    {
+        _orderSearch = value;
+        await LoadOrdersAsync();
+    }
+
+    private async Task OnOrderStatusChanged(OrderStatus? value)
+    {
+        _orderStatusFilter = value;
+        await LoadOrdersAsync();
+    }
+
+    private async Task OnAssignedAgentChanged(Guid? value)
+    {
+        _assignedAgentFilter = value;
+        await LoadOrdersAsync();
     }
 
     private async Task LoadAgentsAsync()

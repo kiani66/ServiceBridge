@@ -9,13 +9,17 @@ public interface IAdminOrderQueryRepository
         int page,
         int pageSize,
         OrderStatus? status,
-        string? search);
+        string? search,
+        Guid? assignedAgentId);
     Task<PagedResultDto<AdminAssignableOrderDto>> GetPaidUnassignedOrdersAsync(
         int page,
         int pageSize);
     Task<IReadOnlyCollection<AgentSummaryDto>> GetActiveAgentsAsync();
     Task<AdminOrderDashboardSummaryDto> GetDashboardSummaryAsync();
     Task<AdminOrderDetailDto?> GetOrderDetailAsync(Guid adminId, Guid orderId);
+    Task<AdminOrderCredentialsDto?> GetOrderCredentialsAsync(
+        Guid orderId,
+        Guid accessedByUserId);
     Task<PagedResultDto<AdminPaymentListItemDto>> GetPaymentsAsync(
         int page,
         int pageSize,

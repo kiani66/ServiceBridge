@@ -1,6 +1,8 @@
+using ServiceBridge.Application.Audit;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Results;
+using ServiceBridge.Domain.Entities;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Shared.Constants;
 using ServiceBridge.Shared.Messages;
@@ -10,10 +12,14 @@ namespace ServiceBridge.Infrastructure.Services;
 public class AdminOrderQueryService : IAdminOrderQueryService
 {
     private readonly IAdminOrderQueryRepository _repository;
+    private readonly IAuditLogWriter _auditLogWriter;
 
-    public AdminOrderQueryService(IAdminOrderQueryRepository repository)
+    public AdminOrderQueryService(
+        IAdminOrderQueryRepository repository,
+        IAuditLogWriter auditLogWriter)
     {
         _repository = repository;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<ServiceResult<PagedResultDto<AdminOrderListItemDto>>>
@@ -21,7 +27,8 @@ public class AdminOrderQueryService : IAdminOrderQueryService
             int page,
             int pageSize,
             OrderStatus? status,
-            string? search)
+            string? search,
+            Guid? assignedAgentId)
     {
         page = Math.Max(page, 1);
         pageSize = NormalizePageSize(pageSize);
@@ -30,7 +37,8 @@ public class AdminOrderQueryService : IAdminOrderQueryService
             page,
             pageSize,
             status,
-            search);
+            search,
+            assignedAgentId);
         return ServiceResult<PagedResultDto<AdminOrderListItemDto>>.Ok(orders);
     }
 
@@ -72,6 +80,36 @@ public class AdminOrderQueryService : IAdminOrderQueryService
         }
 
         return ServiceResult<AdminOrderDetailDto>.Ok(order);
+    }
+
+    public async Task<ServiceResult<AdminOrderCredentialsDto>>
+        RevealOrderCredentialsAsync(Guid adminId, Guid orderId)
+    {
+        var credentials = await _repository.GetOrderCredentialsAsync(
+            orderId,
+            adminId);
+        if (credentials == null)
+        {
+            return ServiceResult<AdminOrderCredentialsDto>.Fail(
+                AppMessages.OrderNotFound,
+                AppConstants.ErrorCodes.NotFound,
+                404);
+        }
+
+        if (credentials.Credentials.Count > 0)
+        {
+            await _auditLogWriter.WriteAsync(new AuditLogEntry
+            {
+                ActorId = adminId,
+                ActorRole = nameof(UserRole.Admin),
+                ActionType = AuditActionType.CredentialViewed,
+                EntityName = nameof(Order),
+                EntityId = orderId,
+                Description = $"Admin viewed protected fields for order {credentials.OrderNumber}."
+            });
+        }
+
+        return ServiceResult<AdminOrderCredentialsDto>.Ok(credentials);
     }
 
     public async Task<ServiceResult<PagedResultDto<AdminPaymentListItemDto>>>

@@ -31,6 +31,7 @@ public sealed class AdminOrdersClient
             int pageSize,
             OrderStatus? status,
             string? search,
+            Guid? assignedAgentId = null,
             CancellationToken cancellationToken = default)
     {
         var query = $"api/admin/orders?page={Math.Max(page, 1)}&pageSize={pageSize}";
@@ -42,6 +43,11 @@ public sealed class AdminOrdersClient
         if (!string.IsNullOrWhiteSpace(search))
         {
             query += $"&search={Uri.EscapeDataString(search.Trim())}";
+        }
+
+        if (assignedAgentId.HasValue)
+        {
+            query += $"&assignedAgentId={assignedAgentId.Value}";
         }
 
         return SendAsync<PagedResultDto<AdminOrderListItemDto>>(
@@ -80,6 +86,20 @@ public sealed class AdminOrdersClient
         return SendAsync<AdminOrderDetailDto>(
             client => client.GetAsync($"api/admin/orders/{orderId}", cancellationToken),
             "Unable to load this order right now.",
+            cancellationToken);
+    }
+
+    public Task<AdminOrdersApiResult<AdminOrderCredentialsDto>>
+        RevealCredentialsAsync(
+            Guid orderId,
+            CancellationToken cancellationToken = default)
+    {
+        return SendAsync<AdminOrderCredentialsDto>(
+            client => client.PostAsync(
+                $"api/admin/orders/{orderId}/credentials/reveal",
+                content: null,
+                cancellationToken),
+            "Unable to reveal credentials right now.",
             cancellationToken);
     }
 

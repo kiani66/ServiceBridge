@@ -100,7 +100,9 @@ public static class RoleNavigation
                 new("Pricing", "/ui/admin/pricing", "Admin operations", Icons.Material.Outlined.PriceChange),
                 new("Users", "/ui/admin/users", "Admin operations", Icons.Material.Outlined.Group),
                 new("Financial Reports", "/ui/admin/reports/financial", "Admin operations", Icons.Material.Outlined.Assessment),
+                new("Refunds", "/ui/admin/refunds", "Admin operations", Icons.Material.Outlined.AssignmentReturn),
                 new("Audit", "/ui/admin/audit", "Admin operations", Icons.Material.Outlined.ManageSearch),
+                new("Audit Logs", "/ui/admin/audit-logs", "Admin operations", Icons.Material.Outlined.FactCheck),
                 new("Notifications", "/ui/notifications", "Account", Icons.Material.Outlined.Notifications),
                 new("Profile", "/ui/profile", "Account", Icons.Material.Outlined.Person)
             ];

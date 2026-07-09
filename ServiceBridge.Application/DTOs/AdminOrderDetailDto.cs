@@ -27,6 +27,8 @@ public class AdminOrderDetailDto
         Array.Empty<AgentOrderFieldDto>();
     public IReadOnlyCollection<PaymentHistoryDto> Payments { get; set; } =
         Array.Empty<PaymentHistoryDto>();
+    public IReadOnlyCollection<RefundRequestDto> RefundRequests { get; set; } =
+        Array.Empty<RefundRequestDto>();
     public IReadOnlyCollection<OrderStatusHistoryDto> StatusHistory { get; set; } =
         Array.Empty<OrderStatusHistoryDto>();
     public IReadOnlyCollection<AgentOrderNoteDto> Notes { get; set; } =
