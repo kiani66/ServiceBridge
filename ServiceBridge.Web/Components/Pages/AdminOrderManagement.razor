@@ -47,9 +47,25 @@ else
 
                 <CredentialCard Title="Credential information"
                                 Eyebrow="Credentials"
-                                Description="Values shown here come from the existing admin order detail endpoint."
-                                RevealValues="true"
-                                Items="@CredentialItems" />
+                                Description="Values are hidden until an admin explicitly reveals them."
+                                RevealValues="@_credentialsRevealed"
+                                Items="@DisplayedCredentialItems" />
+
+                <div class="sb-grid-toolbar-actions">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               Disabled="@(_revealBusy || _credentialsRevealed || CredentialItems.Count == 0)"
+                               StartIcon="@Icons.Material.Outlined.Visibility"
+                               OnClick="RevealCredentialsAsync">
+                        Reveal credentials
+                    </MudButton>
+                    @if (!string.IsNullOrWhiteSpace(_revealError))
+                    {
+                        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true">
+                            @_revealError
+                        </MudAlert>
+                    }
+                </div>
 
                 <section class="sb-detail-panel sb-order-detail-card">
                     <div class="sb-card-heading">
@@ -98,34 +114,63 @@ else
                         <div>
                             <span class="sb-eyebrow">Operations</span>
                             <h2>Admin operations</h2>
-                            <p>These controls are placeholders until matching admin endpoints are available.</p>
+                            <p>Open existing operational views for this order.</p>
                         </div>
                     </div>
 
                     <div class="sb-order-action-stack">
-                        <MudButton Variant="Variant.Outlined"
+                        <MudButton Href="/ui/admin/orders"
+                                   Variant="Variant.Outlined"
                                    Color="Color.Primary"
-                                   Disabled="true"
                                    StartIcon="@Icons.Material.Outlined.AssignmentInd">
-                            Reassign order
+                            Assignment queue
                         </MudButton>
-                        <MudButton Variant="Variant.Outlined"
+                        <MudButton Href="/ui/admin/audit"
+                                   Variant="Variant.Outlined"
                                    Color="Color.Primary"
-                                   Disabled="true"
                                    StartIcon="@Icons.Material.Outlined.ManageHistory">
-                            Override status
+                            Order events
                         </MudButton>
-                        <MudButton Variant="Variant.Outlined"
+                        <MudButton Href="/ui/admin/audit-logs"
+                                   Variant="Variant.Outlined"
                                    Color="Color.Primary"
-                                   Disabled="true"
-                                   StartIcon="@Icons.Material.Outlined.ReceiptLong">
-                            Export order packet
+                                   StartIcon="@Icons.Material.Outlined.FactCheck">
+                            Audit logs
                         </MudButton>
                     </div>
                 </section>
 
                 <PaymentCard Title="Payment information"
                              Payments="@_order.Payments" />
+
+                <section class="sb-detail-panel sb-order-detail-card">
+                    <div class="sb-card-heading">
+                        <div>
+                            <span class="sb-eyebrow">Refund</span>
+                            <h2>Refund status</h2>
+                        </div>
+                        @if (LatestRefund is not null)
+                        {
+                            <StatusBadge Text="@UserOrderDisplay.RefundStatusLabel(LatestRefund.Status)"
+                                         Tone="@UserOrderDisplay.RefundTone(LatestRefund.Status)" />
+                        }
+                    </div>
+
+                    @if (_order.RefundRequests.Count == 0)
+                    {
+                        <p>No refund requests are recorded for this order.</p>
+                    }
+                    else
+                    {
+                        <dl class="sb-fact-list">
+                            <div><dt>Latest amount</dt><dd>@LatestRefund!.Amount.ToString("N0") IRR</dd></div>
+                            <div><dt>Requested</dt><dd>@UserOrderDisplay.FormatDateTime(LatestRefund.CreatedAtUtc)</dd></div>
+                            <div><dt>Reviewed</dt><dd>@FormatNullable(LatestRefund.ReviewedAtUtc)</dd></div>
+                            <div><dt>Completed</dt><dd>@FormatNullable(LatestRefund.CompletedAtUtc)</dd></div>
+                            <div><dt>Reason</dt><dd>@LatestRefund.Reason</dd></div>
+                        </dl>
+                    }
+                </section>
 
                 <PricingSnapshotCard BasePriceUsd="@_order.BasePriceUsdSnapshot"
                                      ExchangeRateIrr="@_order.ExchangeRateSnapshot"
@@ -143,8 +188,13 @@ else
     [Parameter] public Guid OrderId { get; set; }
 
     private bool _loading = true;
+    private bool _revealBusy;
+    private bool _credentialsRevealed;
     private string? _errorMessage;
+    private string? _revealError;
     private AdminOrderDetailDto? _order;
+    private IReadOnlyList<CredentialDisplayItem> _revealedCredentialItems =
+        Array.Empty<CredentialDisplayItem>();
 
     private IReadOnlyList<OrderFact> SummaryFacts => _order is null
         ? Array.Empty<OrderFact>()
@@ -174,6 +224,9 @@ else
                 field.IsVisibleToCustomerAfterCompletion))
             .ToArray();
 
+    private IReadOnlyList<CredentialDisplayItem> DisplayedCredentialItems =>
+        _credentialsRevealed ? _revealedCredentialItems : CredentialItems;
+
     private IReadOnlyList<NoteDisplayItem> NoteItems => _order is null
         ? Array.Empty<NoteDisplayItem>()
         : _order.Notes
@@ -188,6 +241,12 @@ else
     private IReadOnlyList<TimelineItem> TimelineItems => _order is null
         ? Array.Empty<TimelineItem>()
         : UserOrderDisplay.TimelineItems(_order.StatusHistory);
+
+    private RefundRequestDto? LatestRefund =>
+        _order?.RefundRequests
+            .OrderByDescending(refund => refund.CreatedAtUtc)
+            .ThenByDescending(refund => refund.RefundRequestId)
+            .FirstOrDefault();
 
     protected override void OnInitialized()
     {
@@ -205,6 +264,9 @@ else
     {
         _loading = true;
         _errorMessage = null;
+        _revealError = null;
+        _credentialsRevealed = false;
+        _revealedCredentialItems = Array.Empty<CredentialDisplayItem>();
 
         var result = await AdminOrdersClient.GetOrderAsync(OrderId);
         if (result.RequiresAuthentication)
@@ -216,6 +278,37 @@ else
         _order = result.Success ? result.Data : null;
         _errorMessage = result.ErrorMessage;
         _loading = false;
+    }
+
+    private async Task RevealCredentialsAsync()
+    {
+        _revealBusy = true;
+        _revealError = null;
+
+        var result = await AdminOrdersClient.RevealCredentialsAsync(OrderId);
+        if (result.RequiresAuthentication)
+        {
+            Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (!result.Success || result.Data is null)
+        {
+            _revealError = result.ErrorMessage ?? "Unable to reveal credentials.";
+            _revealBusy = false;
+            return;
+        }
+
+        _revealedCredentialItems = result.Data.Credentials
+            .OrderBy(field => field.DisplayOrder)
+            .Select(field => new CredentialDisplayItem(
+                field.FieldLabel,
+                field.Value,
+                field.IsSensitive,
+                field.IsVisibleToCustomerAfterCompletion))
+            .ToArray();
+        _credentialsRevealed = true;
+        _revealBusy = false;
     }
 
     private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)

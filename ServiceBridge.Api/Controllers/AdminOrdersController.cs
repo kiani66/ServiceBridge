@@ -27,13 +27,15 @@ public class AdminOrdersController : BaseApiController
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = IAdminOrderQueryService.DefaultPageSize,
         [FromQuery] OrderStatus? status = null,
-        [FromQuery] string? search = null)
+        [FromQuery] string? search = null,
+        [FromQuery] Guid? assignedAgentId = null)
     {
         return ToActionResult(await _queryService.GetOrdersAsync(
             page,
             pageSize,
             status,
-            search));
+            search,
+            assignedAgentId));
     }
 
     [HttpGet("paid-unassigned")]
@@ -93,6 +95,19 @@ public class AdminOrdersController : BaseApiController
         }
 
         return ToActionResult(await _queryService.GetOrderDetailAsync(
+            adminId,
+            orderId));
+    }
+
+    [HttpPost("{orderId:guid}/credentials/reveal")]
+    public async Task<IActionResult> RevealOrderCredentials(Guid orderId)
+    {
+        if (!TryGetUserId(out var adminId))
+        {
+            return UnauthorizedServiceResult();
+        }
+
+        return ToActionResult(await _queryService.RevealOrderCredentialsAsync(
             adminId,
             orderId));
     }

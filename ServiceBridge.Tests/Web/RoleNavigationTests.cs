@@ -52,6 +52,27 @@ public class RoleNavigationTests
     }
 
     [Fact]
+    public void GetConsoleItems_AdminSeesAuditLogsLink()
+    {
+        var items = RoleNavigation.GetConsoleItems(CreateUser(AppConstants.Roles.Admin));
+
+        Assert.Contains(items, item =>
+            item.Text == "Audit Logs" &&
+            item.Page == "/ui/admin/audit-logs");
+    }
+
+    [Theory]
+    [InlineData(AppConstants.Roles.User)]
+    [InlineData(AppConstants.Roles.Agent)]
+    public void GetConsoleItems_NonAdminsDoNotSeeAuditLogsLink(string role)
+    {
+        var items = RoleNavigation.GetConsoleItems(CreateUser(role));
+
+        Assert.DoesNotContain(items, item => item.Page == "/ui/admin/audit-logs");
+        Assert.DoesNotContain(items, item => item.Page == "/ui/admin/refunds");
+    }
+
+    [Fact]
     public void UnknownRole_HasNoNavigationOrLandingPage()
     {
         Assert.Empty(RoleNavigation.GetItems(CreateUser("Unknown")));

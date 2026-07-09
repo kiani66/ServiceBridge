@@ -1,4 +1,3 @@
-using ServiceBridge.Application.Audit;
 using Microsoft.EntityFrameworkCore;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
@@ -12,29 +11,32 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
 {
     private readonly ServiceBridgeDbContext _context;
     private readonly IOrderFieldProtector _fieldProtector;
-    private readonly IAuditLogWriter _auditLogWriter;
 
     public AdminOrderQueryRepository(
         ServiceBridgeDbContext context,
-        IOrderFieldProtector fieldProtector,
-        IAuditLogWriter auditLogWriter)
+        IOrderFieldProtector fieldProtector)
     {
         _context = context;
         _fieldProtector = fieldProtector;
-        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<PagedResultDto<AdminOrderListItemDto>> GetOrdersAsync(
         int page,
         int pageSize,
         OrderStatus? status,
-        string? search)
+        string? search,
+        Guid? assignedAgentId)
     {
         var query = _context.Orders.AsNoTracking();
 
         if (status.HasValue)
         {
             query = query.Where(x => x.Status == status.Value);
+        }
+
+        if (assignedAgentId.HasValue)
+        {
+            query = query.Where(x => x.AssignedAgentId == assignedAgentId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -69,6 +71,7 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
                 PlanDurationDays = x.VariantDurationDaysSnapshot,
                 PlanRegionCode = x.VariantRegionCodeSnapshot,
                 OrderStatus = x.Status.ToString(),
+                x.AssignedAgentId,
                 AssignedAgentName = x.AssignedAgent == null
                     ? null
                     : x.AssignedAgent.FullName,
@@ -77,7 +80,7 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
             .ToListAsync();
 
         var orderIds = rows.Select(x => x.OrderId).ToArray();
-        var paymentStatuses = await _context.Payments
+        var payments = await _context.Payments
             .AsNoTracking()
             .Where(payment => orderIds.Contains(payment.OrderId))
             .OrderByDescending(payment => payment.CreatedAt)
@@ -85,11 +88,29 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
             .Select(payment => new
             {
                 payment.OrderId,
-                payment.Status
+                payment.Status,
+                payment.AmountIRR,
+                payment.ConfirmedAt,
+                payment.GatewayReference
             })
             .ToListAsync();
-        var latestPaymentStatuses = paymentStatuses
+        var latestPayments = payments
             .GroupBy(payment => payment.OrderId)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var refundStatuses = await _context.RefundRequests
+            .AsNoTracking()
+            .Where(refund => orderIds.Contains(refund.OrderId))
+            .OrderByDescending(refund => refund.CreatedAt)
+            .ThenByDescending(refund => refund.Id)
+            .Select(refund => new
+            {
+                refund.OrderId,
+                refund.Status
+            })
+            .ToListAsync();
+        var latestRefundStatuses = refundStatuses
+            .GroupBy(refund => refund.OrderId)
             .ToDictionary(group => group.Key, group => group.First().Status);
 
         var items = rows
@@ -104,12 +125,19 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
                 PlanName = x.PlanName,
                 PlanDurationDays = x.PlanDurationDays,
                 PlanRegionCode = x.PlanRegionCode,
-                PaymentStatus = latestPaymentStatuses.TryGetValue(
-                    x.OrderId,
-                    out var paymentStatus)
-                    ? paymentStatus.ToString()
+                PaymentStatus = latestPayments.TryGetValue(x.OrderId, out var payment)
+                    ? payment.Status.ToString()
                     : "Not started",
+                PaymentAmountIrr = payment?.AmountIRR,
+                PaidAt = payment?.ConfirmedAt,
+                GatewayReference = payment?.GatewayReference,
+                RefundStatus = latestRefundStatuses.TryGetValue(
+                    x.OrderId,
+                    out var refundStatus)
+                    ? refundStatus.ToString()
+                    : null,
                 OrderStatus = x.OrderStatus,
+                AssignedAgentId = x.AssignedAgentId,
                 AssignedAgentName = x.AssignedAgentName,
                 CreatedAt = x.CreatedAt
             })
@@ -271,9 +299,9 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
             {
                 x.FieldKey,
                 x.FieldLabel,
-                ProtectedValue = x.EncryptedValue,
                 FieldType = x.Actor.ToString(),
                 x.IsSensitive,
+                x.IsVisibleToCustomerAfterCompletion,
                 x.DisplayOrder
             })
             .ToListAsync();
@@ -283,34 +311,14 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
             {
                 FieldKey = x.FieldKey,
                 FieldLabel = x.FieldLabel,
-                Value = _fieldProtector.Unprotect(x.ProtectedValue),
+                Value = string.Empty,
                 FieldType = x.FieldType,
                 IsSensitive = x.IsSensitive,
+                IsVisibleToCustomerAfterCompletion =
+                    x.IsVisibleToCustomerAfterCompletion,
                 DisplayOrder = x.DisplayOrder
             })
             .ToList();
-
-        if (protectedFields.Count > 0)
-        {
-            await _context.OrderCredentialAccessLogs.AddAsync(
-                new OrderCredentialAccessLog
-                {
-                    OrderId = orderId,
-                    AccessedByUserId = adminId,
-                    AccessType = "AdminCredentialView",
-                    CreatedAt = DateTime.UtcNow
-                });
-            await _context.SaveChangesAsync();
-            await _auditLogWriter.WriteAsync(new AuditLogEntry
-            {
-                ActorId = adminId,
-                ActorRole = nameof(UserRole.Admin),
-                ActionType = AuditActionType.CredentialViewed,
-                EntityName = nameof(Order),
-                EntityId = orderId,
-                Description = $"Admin viewed protected fields for order {order.OrderNumber}."
-            });
-        }
 
         order.Payments = await _context.Payments
             .AsNoTracking()
@@ -325,6 +333,27 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
                 GatewayReference = x.GatewayReference,
                 CreatedAt = x.CreatedAt,
                 CompletedAt = x.ConfirmedAt
+            })
+            .ToListAsync();
+
+        order.RefundRequests = await _context.RefundRequests
+            .AsNoTracking()
+            .Where(x => x.OrderId == orderId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.Id)
+            .Select(x => new RefundRequestDto
+            {
+                RefundRequestId = x.Id,
+                OrderId = x.OrderId,
+                OrderNumber = x.Order.OrderNumber,
+                PaymentId = x.PaymentId,
+                Amount = x.Amount,
+                Reason = x.Reason,
+                Status = x.Status.ToString(),
+                CreatedAtUtc = x.CreatedAt,
+                ReviewedAtUtc = x.ReviewedAtUtc,
+                CompletedAtUtc = x.CompletedAtUtc,
+                AdminNote = x.AdminNote
             })
             .ToListAsync();
 
@@ -371,6 +400,76 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
             .ToListAsync();
 
         return order;
+    }
+
+    public async Task<AdminOrderCredentialsDto?> GetOrderCredentialsAsync(
+        Guid orderId,
+        Guid accessedByUserId)
+    {
+        var order = await _context.Orders
+            .AsNoTracking()
+            .Where(x => x.Id == orderId)
+            .Select(x => new
+            {
+                x.Id,
+                x.OrderNumber
+            })
+            .FirstOrDefaultAsync();
+
+        if (order == null)
+        {
+            return null;
+        }
+
+        var protectedFields = await _context.OrderFieldValues
+            .AsNoTracking()
+            .Where(x => x.OrderId == orderId)
+            .OrderBy(x => x.Actor)
+            .ThenBy(x => x.DisplayOrder)
+            .ThenBy(x => x.FieldLabel)
+            .Select(x => new
+            {
+                x.FieldKey,
+                x.FieldLabel,
+                ProtectedValue = x.EncryptedValue,
+                FieldType = x.Actor.ToString(),
+                x.IsSensitive,
+                x.IsVisibleToCustomerAfterCompletion,
+                x.DisplayOrder
+            })
+            .ToListAsync();
+
+        if (protectedFields.Count > 0)
+        {
+            await _context.OrderCredentialAccessLogs.AddAsync(
+                new OrderCredentialAccessLog
+                {
+                    OrderId = orderId,
+                    AccessedByUserId = accessedByUserId,
+                    AccessType = "AdminCredentialView",
+                    CreatedAt = DateTime.UtcNow
+                });
+            await _context.SaveChangesAsync();
+        }
+
+        return new AdminOrderCredentialsDto
+        {
+            OrderId = order.Id,
+            OrderNumber = order.OrderNumber,
+            Credentials = protectedFields
+                .Select(x => new AgentOrderFieldDto
+                {
+                    FieldKey = x.FieldKey,
+                    FieldLabel = x.FieldLabel,
+                    Value = _fieldProtector.Unprotect(x.ProtectedValue),
+                    FieldType = x.FieldType,
+                    IsSensitive = x.IsSensitive,
+                    IsVisibleToCustomerAfterCompletion =
+                        x.IsVisibleToCustomerAfterCompletion,
+                    DisplayOrder = x.DisplayOrder
+                })
+                .ToList()
+        };
     }
 
     public async Task<PagedResultDto<AdminPaymentListItemDto>> GetPaymentsAsync(
