@@ -31,21 +31,6 @@
                     </MudSelectItem>
                 }
             </MudSelect>
-            <MudSelect T="TicketPriority?"
-                       Label="Priority"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       Value="_priority"
-                       ValueChanged="OnPriorityChanged"
-                       Class="sb-search-compact">
-                <MudSelectItem T="TicketPriority?" Value="null">All priorities</MudSelectItem>
-                @foreach (var priority in Enum.GetValues<TicketPriority>())
-                {
-                    <MudSelectItem T="TicketPriority?" Value="@priority">
-                        @TicketDisplay.PriorityLabel(priority.ToString())
-                    </MudSelectItem>
-                }
-            </MudSelect>
         </Actions>
     </DataGridToolbar>
 
@@ -75,7 +60,6 @@
                 <MudTh>Linked order</MudTh>
                 <MudTh>Status</MudTh>
                 <MudTh>Priority</MudTh>
-                <MudTh>Assigned agent</MudTh>
                 <MudTh>Last activity</MudTh>
                 <MudTh>Actions</MudTh>
             </HeaderContent>
@@ -86,7 +70,6 @@
                 <MudTd DataLabel="Linked order">@(context.OrderNumber ?? "-")</MudTd>
                 <MudTd DataLabel="Status"><StatusBadge Text="@TicketDisplay.StatusLabel(context.Status)" Tone="@TicketDisplay.StatusTone(context.Status)" /></MudTd>
                 <MudTd DataLabel="Priority"><StatusBadge Text="@TicketDisplay.PriorityLabel(context.Priority)" Tone="@TicketDisplay.PriorityTone(context.Priority)" /></MudTd>
-                <MudTd DataLabel="Assigned agent">@(context.AssignedAgentName ?? "-")</MudTd>
                 <MudTd DataLabel="Last activity">@TicketDisplay.FormatDateTime(context.LastActivityAt)</MudTd>
                 <MudTd DataLabel="Actions">
                     <MudButton Href="@($"/ui/admin/tickets/{context.TicketId}")"
@@ -130,7 +113,6 @@
     private string? _error;
     private string? _search;
     private TicketStatus? _status;
-    private TicketPriority? _priority;
     private PagedResultDto<TicketListItemDto> _tickets = new();
 
     protected override async Task OnInitializedAsync()
@@ -147,12 +129,6 @@
     private async Task OnStatusChanged(TicketStatus? status)
     {
         _status = status;
-        await LoadTicketsAsync();
-    }
-
-    private async Task OnPriorityChanged(TicketPriority? priority)
-    {
-        _priority = priority;
         await LoadTicketsAsync();
     }
 
@@ -175,7 +151,8 @@
             page,
             PageSize,
             _status,
-            _priority,
+            null,
+            null,
             _search);
         if (result.RequiresAuthentication)
         {

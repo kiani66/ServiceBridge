@@ -23,7 +23,7 @@ public sealed class TicketsClient
             TicketStatus? status,
             CancellationToken cancellationToken = default)
     {
-        var query = $"api/tickets/my?page={Math.Max(page, 1)}&pageSize={pageSize}";
+        var query = $"api/tickets?page={Math.Max(page, 1)}&pageSize={pageSize}";
         if (status.HasValue)
         {
             query += $"&status={Uri.EscapeDataString(status.Value.ToString())}";
@@ -40,7 +40,7 @@ public sealed class TicketsClient
         CancellationToken cancellationToken = default)
     {
         return SendAsync<TicketDetailDto>(
-            client => client.GetAsync($"api/tickets/my/{ticketId}", cancellationToken),
+            client => client.GetAsync($"api/tickets/{ticketId}", cancellationToken),
             "Unable to load this support ticket right now.",
             cancellationToken);
     }
@@ -62,7 +62,7 @@ public sealed class TicketsClient
     {
         return SendCommandAsync(
             client => client.PostAsJsonAsync(
-                $"api/tickets/{ticketId}/messages",
+                $"api/tickets/{ticketId}/reply",
                 request,
                 cancellationToken),
             "Unable to submit this reply right now.",
@@ -74,7 +74,8 @@ public sealed class TicketsClient
             int page,
             int pageSize,
             TicketStatus? status,
-            TicketPriority? priority,
+            Guid? userId,
+            Guid? orderId,
             string? search,
             CancellationToken cancellationToken = default)
     {
@@ -84,9 +85,14 @@ public sealed class TicketsClient
             query += $"&status={Uri.EscapeDataString(status.Value.ToString())}";
         }
 
-        if (priority.HasValue)
+        if (userId.HasValue)
         {
-            query += $"&priority={Uri.EscapeDataString(priority.Value.ToString())}";
+            query += $"&userId={Uri.EscapeDataString(userId.Value.ToString())}";
+        }
+
+        if (orderId.HasValue)
+        {
+            query += $"&orderId={Uri.EscapeDataString(orderId.Value.ToString())}";
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -117,7 +123,7 @@ public sealed class TicketsClient
     {
         return SendCommandAsync(
             client => client.PostAsJsonAsync(
-                $"api/admin/tickets/{ticketId}/messages",
+                $"api/admin/tickets/{ticketId}/reply",
                 request,
                 cancellationToken),
             "Unable to submit this message right now.",
@@ -134,20 +140,6 @@ public sealed class TicketsClient
                 null,
                 cancellationToken),
             "Unable to close this ticket right now.",
-            cancellationToken);
-    }
-
-    public Task<TicketsApiResult<bool>> UpdatePriorityAsync(
-        Guid ticketId,
-        TicketPriority priority,
-        CancellationToken cancellationToken = default)
-    {
-        return SendCommandAsync(
-            client => client.PostAsJsonAsync(
-                $"api/admin/tickets/{ticketId}/priority",
-                new UpdateTicketPriorityRequest { Priority = priority },
-                cancellationToken),
-            "Unable to update ticket priority right now.",
             cancellationToken);
     }
 

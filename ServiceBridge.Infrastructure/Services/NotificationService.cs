@@ -273,6 +273,23 @@ public class NotificationService : INotificationService
         await _repository.AddRangeAsync(notifications);
     }
 
+    public async Task QueueTicketUserReplyForAdminsAsync(
+        Guid ticketId,
+        string ticketNumber)
+    {
+        var adminIds = await _repository.GetActiveAdminUserIdsAsync();
+        var notifications = adminIds.Select(adminId => Create(
+            adminId,
+            NotificationType.TicketReplied,
+            "Customer replied",
+            $"Customer replied to ticket {ticketNumber}.",
+            TicketEntityType,
+            ticketId)).ToArray();
+        _queuedRealtimeNotifications.AddRange(notifications);
+
+        await _repository.AddRangeAsync(notifications);
+    }
+
     public Task QueueTicketPublicReplyForUserAsync(
         Guid userId,
         Guid ticketId,

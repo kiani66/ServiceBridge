@@ -8,6 +8,16 @@ public class TicketConfiguration : IEntityTypeConfiguration<Ticket>
 {
     public void Configure(EntityTypeBuilder<Ticket> entity)
     {
+        entity.ToTable(table =>
+        {
+            table.HasCheckConstraint(
+                "CK_Tickets_Status_Valid",
+                "[Status] IN (1, 2, 3, 5)");
+            table.HasCheckConstraint(
+                "CK_Tickets_Priority_Valid",
+                "[Priority] IN (1, 2, 3)");
+        });
+
         entity.HasKey(x => x.Id);
 
         entity.Property(x => x.Id)

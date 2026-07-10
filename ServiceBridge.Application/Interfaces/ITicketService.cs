@@ -32,7 +32,8 @@ public interface ITicketService
         int page,
         int pageSize,
         TicketStatus? status,
-        TicketPriority? priority,
+        Guid? userId,
+        Guid? orderId,
         string? search);
 
     Task<ServiceResult<TicketDetailDto>> GetAdminTicketAsync(Guid ticketId);
@@ -43,9 +44,4 @@ public interface ITicketService
         CreateTicketMessageRequest request);
 
     Task<ServiceResult> CloseTicketAsync(Guid adminId, Guid ticketId);
-
-    Task<ServiceResult> UpdatePriorityAsync(
-        Guid adminId,
-        Guid ticketId,
-        UpdateTicketPriorityRequest request);
 }

@@ -64,6 +64,24 @@ public class TicketServiceTests
     }
 
     [Fact]
+    public void CreateTicketRequest_DoesNotExposeCategoryInput()
+    {
+        Assert.Null(typeof(CreateTicketRequest).GetProperty("CategoryId"));
+    }
+
+    [Theory]
+    [InlineData("CategoryId")]
+    [InlineData("CategoryName")]
+    [InlineData("AssignedAgentId")]
+    [InlineData("AssignedAgentName")]
+    [InlineData("ResolvedAt")]
+    public void TicketDetailDto_DoesNotExposeOutOfScopeTicketFields(
+        string propertyName)
+    {
+        Assert.Null(typeof(TicketDetailDto).GetProperty(propertyName));
+    }
+
+    [Fact]
     public async Task GetMyTicketAsync_DoesNotExposeInternalMessages()
     {
         var userId = Guid.NewGuid();
@@ -110,7 +128,7 @@ public class TicketServiceTests
     }
 
     [Fact]
-    public async Task AddAdminMessageAsync_PublicReply_ChangesStatusToWaitingForCustomer()
+    public async Task AddAdminMessageAsync_PublicReply_ChangesStatusToWaitingForUser()
     {
         var userId = Guid.NewGuid();
         var ticket = CreateTicket(userId);
@@ -127,8 +145,38 @@ public class TicketServiceTests
             new CreateTicketMessageRequest { Body = "Support reply" });
 
         Assert.True(result.Success);
-        Assert.Equal(TicketStatus.WaitingForCustomer, ticket.Status);
+        Assert.Equal(TicketStatus.WaitingForUser, ticket.Status);
         Assert.NotNull(ticket.FirstResponseAt);
+    }
+
+    [Fact]
+    public async Task AddUserMessageAsync_QueuesAdminNotification()
+    {
+        var userId = Guid.NewGuid();
+        var ticket = CreateTicket(userId);
+        var repository = new FakeTicketRepository
+        {
+            ExistingUserIds = { userId },
+            Tickets = { ticket }
+        };
+        var notificationService = new FakeNotificationService();
+        var service = CreateService(
+            repository,
+            new FakeTicketNumberGenerator("TKT-2"),
+            notificationService);
+
+        var result = await service.AddUserMessageAsync(
+            userId,
+            ticket.Id,
+            new CreateTicketMessageRequest { Body = "Customer reply" });
+
+        Assert.True(result.Success);
+        Assert.Contains(
+            nameof(FakeNotificationService.QueueTicketUserReplyForAdminsAsync),
+            notificationService.QueuedTypes);
+        Assert.Contains(
+            nameof(FakeNotificationService.PublishQueuedRealtimeAsync),
+            notificationService.QueuedTypes);
     }
 
     [Fact]
@@ -188,18 +236,28 @@ public class TicketServiceTests
     {
         var userId = Guid.NewGuid();
         var ticket = CreateTicket(userId);
+        var adminId = Guid.NewGuid();
+        var auditLogWriter = new FakeAuditLogWriter();
         var repository = new FakeTicketRepository
         {
             ExistingUserIds = { userId },
             Tickets = { ticket }
         };
-        var service = CreateService(repository, new FakeTicketNumberGenerator("TKT-2"));
+        var service = CreateService(
+            repository,
+            new FakeTicketNumberGenerator("TKT-2"),
+            auditLogWriter: auditLogWriter);
 
-        var result = await service.CloseTicketAsync(Guid.NewGuid(), ticket.Id);
+        var result = await service.CloseTicketAsync(adminId, ticket.Id);
 
         Assert.True(result.Success);
         Assert.Equal(TicketStatus.Closed, ticket.Status);
         Assert.NotNull(ticket.ClosedAt);
+        var auditEntry = Assert.Single(auditLogWriter.Entries);
+        Assert.Equal(AuditActionType.TicketClosed, auditEntry.ActionType);
+        Assert.Equal(nameof(Ticket), auditEntry.EntityName);
+        Assert.Equal(ticket.Id, auditEntry.EntityId);
+        Assert.DoesNotContain("Initial body", auditEntry.Description ?? string.Empty);
     }
 
     [Fact]
@@ -230,12 +288,15 @@ public class TicketServiceTests
 
     private static TicketService CreateService(
         FakeTicketRepository repository,
-        ITicketNumberGenerator ticketNumberGenerator)
+        ITicketNumberGenerator ticketNumberGenerator,
+        FakeNotificationService? notificationService = null,
+        FakeAuditLogWriter? auditLogWriter = null)
     {
         return new TicketService(
             repository,
             ticketNumberGenerator,
-            new FakeNotificationService());
+            notificationService ?? new FakeNotificationService(),
+            auditLogWriter ?? new FakeAuditLogWriter());
     }
 
     private static Ticket CreateTicket(Guid userId)
@@ -268,7 +329,6 @@ public class TicketServiceTests
     private sealed class FakeTicketRepository : ITicketRepository
     {
         public HashSet<Guid> ExistingUserIds { get; } = new();
-        public HashSet<Guid> ExistingCategoryIds { get; } = new();
         public HashSet<string> ExistingTicketNumbers { get; } = new();
         public Dictionary<Guid, Guid> OrderOwners { get; } = new();
         public List<Ticket> Tickets { get; } = new();
@@ -284,11 +344,6 @@ public class TicketServiceTests
             return Task.FromResult(
                 OrderOwners.TryGetValue(orderId, out var ownerId) &&
                 ownerId == userId);
-        }
-
-        public Task<bool> CategoryExistsAsync(Guid categoryId)
-        {
-            return Task.FromResult(ExistingCategoryIds.Contains(categoryId));
         }
 
         public Task<bool> TicketNumberExistsAsync(string ticketNumber)
@@ -323,13 +378,15 @@ public class TicketServiceTests
             int page,
             int pageSize,
             TicketStatus? status,
-            TicketPriority? priority,
+            Guid? userId,
+            Guid? orderId,
             string? search)
         {
             var items = Tickets
                 .Where(ticket =>
                     (!status.HasValue || ticket.Status == status.Value) &&
-                    (!priority.HasValue || ticket.Priority == priority.Value))
+                    (!userId.HasValue || ticket.UserId == userId.Value) &&
+                    (!orderId.HasValue || ticket.OrderId == orderId.Value))
                 .Select(ToListItem)
                 .ToList();
 
@@ -366,7 +423,6 @@ public class TicketServiceTests
                 CreatedAt = ticket.CreatedAt,
                 LastActivityAt = ticket.LastActivityAt,
                 FirstResponseAt = ticket.FirstResponseAt,
-                ResolvedAt = ticket.ResolvedAt,
                 ClosedAt = ticket.ClosedAt,
                 CustomerName = "Customer",
                 CustomerEmail = "customer@example.com",

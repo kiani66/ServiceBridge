@@ -1,3 +1,4 @@
+using ServiceBridge.Application.Audit;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Results;
@@ -15,15 +16,18 @@ public class TicketService : ITicketService
     private readonly ITicketRepository _repository;
     private readonly ITicketNumberGenerator _ticketNumberGenerator;
     private readonly INotificationService _notificationService;
+    private readonly IAuditLogWriter _auditLogWriter;
 
     public TicketService(
         ITicketRepository repository,
         ITicketNumberGenerator ticketNumberGenerator,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IAuditLogWriter auditLogWriter)
     {
         _repository = repository;
         _ticketNumberGenerator = ticketNumberGenerator;
         _notificationService = notificationService;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<ServiceResult<PagedResultDto<TicketListItemDto>>>
@@ -80,7 +84,7 @@ public class TicketService : ITicketService
             request.Subject,
             request.Body,
             EmptyToNull(request.OrderId),
-            EmptyToNull(request.CategoryId),
+            categoryId: null,
             now);
 
         await _repository.AddTicketAsync(ticket);
@@ -95,6 +99,8 @@ public class TicketService : ITicketService
                 AppConstants.ErrorCodes.Conflict,
                 409);
         }
+
+        await _notificationService.PublishQueuedRealtimeAsync();
 
         var created = await _repository.GetTicketDetailAsync(
             ticket.Id,
@@ -143,6 +149,10 @@ public class TicketService : ITicketService
                 409);
         }
 
+        await _notificationService.QueueTicketUserReplyForAdminsAsync(
+            ticket.Id,
+            ticket.TicketNumber);
+
         return await SaveOrConflictAsync("Ticket reply submitted successfully.");
     }
 
@@ -151,7 +161,8 @@ public class TicketService : ITicketService
             int page,
             int pageSize,
             TicketStatus? status,
-            TicketPriority? priority,
+            Guid? userId,
+            Guid? orderId,
             string? search)
     {
         page = Math.Max(page, 1);
@@ -162,7 +173,8 @@ public class TicketService : ITicketService
                 page,
                 pageSize,
                 status,
-                priority,
+                userId,
+                orderId,
                 search));
     }
 
@@ -231,37 +243,40 @@ public class TicketService : ITicketService
             return TicketNotFound();
         }
 
+        if (ticket.Status == TicketStatus.Closed)
+        {
+            return ServiceResult.Ok("Ticket closed successfully.");
+        }
+
+        var beforeStatus = ticket.Status;
         ticket.Close(adminId, DateTime.UtcNow);
         await _notificationService.QueueTicketClosedForUserAsync(
             ticket.UserId,
             ticket.Id,
             ticket.TicketNumber);
 
-        return await SaveOrConflictAsync("Ticket closed successfully.");
-    }
-
-    public async Task<ServiceResult> UpdatePriorityAsync(
-        Guid adminId,
-        Guid ticketId,
-        UpdateTicketPriorityRequest request)
-    {
-        _ = adminId;
-        if (!Enum.IsDefined(request.Priority))
+        if (!await _repository.SaveChangesAsync())
         {
-            return ValidationFailed(new Dictionary<string, string[]>
-            {
-                [nameof(request.Priority)] = ["Invalid ticket priority."]
-            });
+            return ServiceResult.Fail(
+                "The ticket changed while it was being updated. Please refresh and try again.",
+                AppConstants.ErrorCodes.Conflict,
+                409);
         }
 
-        var ticket = await _repository.GetTicketForUpdateAsync(ticketId, userId: null);
-        if (ticket == null)
+        await _auditLogWriter.WriteAsync(new AuditLogEntry
         {
-            return TicketNotFound();
-        }
+            ActorId = adminId,
+            ActorRole = nameof(UserRole.Admin),
+            ActionType = AuditActionType.TicketClosed,
+            EntityName = nameof(Ticket),
+            EntityId = ticket.Id,
+            Before = new { Status = beforeStatus.ToString() },
+            After = new { Status = TicketStatus.Closed.ToString() },
+            Description = $"Support ticket {ticket.TicketNumber} was closed by admin."
+        });
+        await _notificationService.PublishQueuedRealtimeAsync();
 
-        ticket.UpdatePriority(request.Priority, DateTime.UtcNow);
-        return await SaveOrConflictAsync("Ticket priority updated successfully.");
+        return ServiceResult.Ok("Ticket closed successfully.");
     }
 
     private async Task<ServiceResult<TicketDetailDto>?> ValidateCreateAsync(
@@ -312,16 +327,6 @@ public class TicketService : ITicketService
             });
         }
 
-        var categoryId = EmptyToNull(request.CategoryId);
-        if (categoryId.HasValue &&
-            !await _repository.CategoryExistsAsync(categoryId.Value))
-        {
-            return ValidationFailed<TicketDetailDto>(new Dictionary<string, string[]>
-            {
-                [nameof(request.CategoryId)] = ["Ticket category was not found."]
-            });
-        }
-
         return null;
     }
 
@@ -360,12 +365,16 @@ public class TicketService : ITicketService
 
     private async Task<ServiceResult> SaveOrConflictAsync(string successMessage)
     {
-        return await _repository.SaveChangesAsync()
-            ? ServiceResult.Ok(successMessage)
-            : ServiceResult.Fail(
+        if (!await _repository.SaveChangesAsync())
+        {
+            return ServiceResult.Fail(
                 "The ticket changed while it was being updated. Please refresh and try again.",
                 AppConstants.ErrorCodes.Conflict,
                 409);
+        }
+
+        await _notificationService.PublishQueuedRealtimeAsync();
+        return ServiceResult.Ok(successMessage);
     }
 
     private static int NormalizePageSize(int pageSize)
