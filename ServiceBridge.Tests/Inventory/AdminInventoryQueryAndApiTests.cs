@@ -47,6 +47,33 @@ public class AdminInventoryQueryAndApiTests
     }
 
     [Fact]
+    public async Task VariantOptionsAsync_NormalizesSearchAndPassesBoundedPageSize()
+    {
+        var repository = new FakeAdminInventoryQueryRepository();
+        var service = new AdminInventoryQueryService(repository);
+
+        var result = await service.GetVariantOptionsAsync("  regional code  ", 100);
+
+        Assert.True(result.Success);
+        var request = Assert.NotNull(repository.LastVariantOptionsRequest);
+        Assert.Equal("regional code", request.Search);
+        Assert.Equal(100, request.PageSize);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(201)]
+    public async Task VariantOptionsAsync_RejectsPageSizeOutsideSelectorBounds(int pageSize)
+    {
+        var service = new AdminInventoryQueryService(new FakeAdminInventoryQueryRepository());
+
+        var result = await service.GetVariantOptionsAsync(null, pageSize);
+
+        Assert.False(result.Success);
+        Assert.Equal(400, result.StatusCode);
+    }
+
+    [Fact]
     public async Task SummaryAsync_ReturnsEveryInventoryStatusCount()
     {
         var variantId = Guid.NewGuid();
@@ -86,6 +113,19 @@ public class AdminInventoryQueryAndApiTests
     }
 
     [Fact]
+    public void VariantOptionDto_ContainsOnlyApprovedSafeProperties()
+    {
+        var names = typeof(AdminInventoryVariantOptionDto).GetProperties()
+            .Select(x => x.Name)
+            .OrderBy(x => x)
+            .ToArray();
+
+        Assert.Equal(
+            new[] { "RegionCode", "ServiceId", "ServiceName", "ServiceVariantId", "VariantName" },
+            names);
+    }
+
+    [Fact]
     public void QueryRepository_UsesProjectionWithoutIncludeChains()
     {
         var path = Path.Combine(FindRepositoryRoot(), "ServiceBridge.Infrastructure", "Repositories", "AdminInventoryQueryRepository.cs");
@@ -93,6 +133,30 @@ public class AdminInventoryQueryAndApiTests
 
         Assert.Contains(".Select(x => new AdminInventoryItemDto", source, StringComparison.Ordinal);
         Assert.DoesNotContain(".Include(", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void VariantOptionsQuery_UsesBoundedSafeServerSideProjection()
+    {
+        var path = Path.Combine(FindRepositoryRoot(), "ServiceBridge.Infrastructure", "Repositories", "AdminInventoryQueryRepository.cs");
+        var source = File.ReadAllText(path);
+
+        Assert.Contains("x.Service.IsActive", source, StringComparison.Ordinal);
+        Assert.Contains("x.IsActive", source, StringComparison.Ordinal);
+        Assert.Contains("x.FulfillmentMode == FulfillmentMode.InventoryCode", source, StringComparison.Ordinal);
+        Assert.Contains("x.Service.Name.Contains(search)", source, StringComparison.Ordinal);
+        Assert.Contains("x.Name.Contains(search)", source, StringComparison.Ordinal);
+        Assert.Contains("x.RegionCode.Contains(search)", source, StringComparison.Ordinal);
+        Assert.Contains(".OrderBy(x => x.Service.Category.DisplayOrder)", source, StringComparison.Ordinal);
+        Assert.Contains(".ThenBy(x => x.Service.Category.Name)", source, StringComparison.Ordinal);
+        Assert.Contains(".ThenBy(x => x.Service.Name)", source, StringComparison.Ordinal);
+        Assert.Contains(".ThenBy(x => x.DisplayOrder)", source, StringComparison.Ordinal);
+        Assert.Contains(".ThenBy(x => x.Name)", source, StringComparison.Ordinal);
+        Assert.Contains(".ThenBy(x => x.Id)", source, StringComparison.Ordinal);
+        Assert.Contains(".Take(pageSize)", source, StringComparison.Ordinal);
+        Assert.Contains(".Select(x => new AdminInventoryVariantOptionDto", source, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Include(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("InventoryItems", source[(source.IndexOf("GetVariantOptionsAsync", StringComparison.Ordinal))..], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -114,10 +178,22 @@ public class AdminInventoryQueryAndApiTests
         Assert.Equal(AppConstants.Roles.Admin, authorization.Roles);
         Assert.Equal("api/admin/inventory", route.Template);
         Assert.Contains("batch", methodRoutes);
+        Assert.Contains("variants", methodRoutes);
         Assert.Contains("summary/{serviceVariantId:guid}", methodRoutes);
         Assert.Contains("{inventoryItemId:guid}/disable", methodRoutes);
         Assert.DoesNotContain(methodRoutes, routeTemplate =>
             routeTemplate?.Contains("reveal", StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    [Fact]
+    public void VariantOptionsEndpoint_IsAdminGetRoute()
+    {
+        var method = typeof(AdminInventoryController).GetMethod(
+            nameof(AdminInventoryController.GetVariantOptions));
+        var route = Assert.IsType<HttpGetAttribute>(
+            method?.GetCustomAttributes(typeof(HttpGetAttribute), true).Single());
+
+        Assert.Equal("variants", route.Template);
     }
 
     [Theory]

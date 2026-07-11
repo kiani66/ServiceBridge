@@ -8,7 +8,10 @@ internal sealed class FakeAdminInventoryQueryRepository : IAdminInventoryQueryRe
 {
     public PagedResultDto<AdminInventoryItemDto> Page { get; set; } = new();
     public InventoryAvailabilitySummaryDto? Summary { get; set; }
+    public IReadOnlyList<AdminInventoryVariantOptionDto> VariantOptions { get; set; } =
+        Array.Empty<AdminInventoryVariantOptionDto>();
     public (int Page, int PageSize, Guid? VariantId, InventoryItemStatus? Status)? LastListRequest { get; private set; }
+    public (string? Search, int PageSize)? LastVariantOptionsRequest { get; private set; }
 
     public Task<PagedResultDto<AdminInventoryItemDto>> GetItemsAsync(
         int pageNumber,
@@ -26,5 +29,14 @@ internal sealed class FakeAdminInventoryQueryRepository : IAdminInventoryQueryRe
         CancellationToken cancellationToken = default)
     {
         return Task.FromResult(Summary);
+    }
+
+    public Task<IReadOnlyList<AdminInventoryVariantOptionDto>> GetVariantOptionsAsync(
+        string? search,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        LastVariantOptionsRequest = (search, pageSize);
+        return Task.FromResult(VariantOptions);
     }
 }

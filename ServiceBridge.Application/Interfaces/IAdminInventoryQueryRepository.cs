@@ -14,4 +14,8 @@ public interface IAdminInventoryQueryRepository
     Task<InventoryAvailabilitySummaryDto?> GetSummaryAsync(
         Guid serviceVariantId,
         CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AdminInventoryVariantOptionDto>> GetVariantOptionsAsync(
+        string? search,
+        int pageSize,
+        CancellationToken cancellationToken = default);
 }

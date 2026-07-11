@@ -109,4 +109,43 @@ public sealed class AdminInventoryQueryRepository : IAdminInventoryQueryReposito
         int GetCount(InventoryItemStatus status) =>
             counts.TryGetValue(status, out var count) ? count : 0;
     }
+
+    public async Task<IReadOnlyList<AdminInventoryVariantOptionDto>> GetVariantOptionsAsync(
+        string? search,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.ServiceVariants
+            .AsNoTracking()
+            .Where(x =>
+                x.Service.IsActive &&
+                x.IsActive &&
+                x.FulfillmentMode == FulfillmentMode.InventoryCode);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(x =>
+                x.Service.Name.Contains(search) ||
+                x.Name.Contains(search) ||
+                x.RegionCode.Contains(search));
+        }
+
+        return await query
+            .OrderBy(x => x.Service.Category.DisplayOrder)
+            .ThenBy(x => x.Service.Category.Name)
+            .ThenBy(x => x.Service.Name)
+            .ThenBy(x => x.DisplayOrder)
+            .ThenBy(x => x.Name)
+            .ThenBy(x => x.Id)
+            .Take(pageSize)
+            .Select(x => new AdminInventoryVariantOptionDto
+            {
+                ServiceVariantId = x.Id,
+                ServiceId = x.ServiceId,
+                ServiceName = x.Service.Name,
+                VariantName = x.Name,
+                RegionCode = x.RegionCode
+            })
+            .ToListAsync(cancellationToken);
+    }
 }

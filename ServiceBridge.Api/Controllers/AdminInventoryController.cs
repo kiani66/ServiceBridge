@@ -68,6 +68,18 @@ public sealed class AdminInventoryController : BaseApiController
             cancellationToken));
     }
 
+    [HttpGet("variants")]
+    public async Task<IActionResult> GetVariantOptions(
+        [FromQuery] string? search,
+        [FromQuery] int pageSize = IAdminInventoryQueryService.DefaultVariantOptionsPageSize,
+        CancellationToken cancellationToken = default)
+    {
+        return ToActionResult(await _queryService.GetVariantOptionsAsync(
+            search,
+            pageSize,
+            cancellationToken));
+    }
+
     [HttpPost("{inventoryItemId:guid}/disable")]
     public async Task<IActionResult> Disable(
         Guid inventoryItemId,
