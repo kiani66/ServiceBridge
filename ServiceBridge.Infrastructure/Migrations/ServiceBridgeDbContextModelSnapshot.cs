@@ -273,6 +273,81 @@ namespace ServiceBridge.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.InventoryItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CodeFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nchar(64)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeliveredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DisabledAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DisabledByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ProtectedCode")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<DateTime?>("ReservedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReservedForOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("ServiceVariantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAdminId");
+
+                    b.HasIndex("DisabledByAdminId");
+
+                    b.HasIndex(new[] { "ServiceVariantId", "Status", "CreatedAt", "Id" }, "IX_InventoryItems_Allocation");
+
+                    b.HasIndex(new[] { "CodeFingerprint" }, "UX_InventoryItems_CodeFingerprint")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "ReservedForOrderId" }, "UX_InventoryItems_ReservedForOrderId")
+                        .IsUnique()
+                        .HasFilter("[ReservedForOrderId] IS NOT NULL");
+
+                    b.ToTable("InventoryItems", t =>
+                        {
+                            t.HasCheckConstraint("CK_InventoryItems_StateShape", "([Status] = 1 AND [ReservedForOrderId] IS NULL AND [ReservedAtUtc] IS NULL AND [DeliveredAtUtc] IS NULL AND [DisabledByAdminId] IS NULL AND [DisabledAtUtc] IS NULL) OR ([Status] = 2 AND [ReservedForOrderId] IS NOT NULL AND [ReservedAtUtc] IS NOT NULL AND [DeliveredAtUtc] IS NULL AND [DisabledByAdminId] IS NULL AND [DisabledAtUtc] IS NULL) OR ([Status] = 3 AND [ReservedForOrderId] IS NOT NULL AND [ReservedAtUtc] IS NOT NULL AND [DeliveredAtUtc] IS NOT NULL AND [DisabledByAdminId] IS NULL AND [DisabledAtUtc] IS NULL) OR ([Status] = 4 AND [ReservedForOrderId] IS NULL AND [ReservedAtUtc] IS NULL AND [DeliveredAtUtc] IS NULL AND [DisabledByAdminId] IS NOT NULL AND [DisabledAtUtc] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_InventoryItems_Status_Valid", "[Status] IN (1, 2, 3, 4)");
+                        });
+                });
+
             modelBuilder.Entity("ServiceBridge.Domain.Entities.MessageOutbox", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1411,6 +1486,39 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("Provider");
+                });
+
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.InventoryItem", b =>
+                {
+                    b.HasOne("ServiceBridge.Domain.Entities.User", "CreatedByAdmin")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAdminId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceBridge.Domain.Entities.User", "DisabledByAdmin")
+                        .WithMany()
+                        .HasForeignKey("DisabledByAdminId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ServiceBridge.Domain.Entities.Order", "ReservedForOrder")
+                        .WithMany()
+                        .HasForeignKey("ReservedForOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ServiceBridge.Domain.Entities.ServiceVariant", "ServiceVariant")
+                        .WithMany()
+                        .HasForeignKey("ServiceVariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAdmin");
+
+                    b.Navigation("DisabledByAdmin");
+
+                    b.Navigation("ReservedForOrder");
+
+                    b.Navigation("ServiceVariant");
                 });
 
             modelBuilder.Entity("ServiceBridge.Domain.Entities.MessageOutbox", b =>
