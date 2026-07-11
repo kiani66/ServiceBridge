@@ -124,4 +124,26 @@ public static class AppMessages
     public const string UserStatusUpdated = "User status updated successfully.";
     public const string AdminStatusCannotBeChanged =
         "Admin account status cannot be changed from this endpoint.";
+    public const string InvalidInventoryImportRequest =
+        "Inventory import request is invalid.";
+    public const string InventoryRequiresInventoryCodeFulfillment =
+        "The selected service variant does not support inventory.";
+    public const string InventoryVariantInactive =
+        "Inventory cannot be added to an inactive service variant.";
+    public const string InventoryProtectionUnavailable =
+        "Inventory protection is currently unavailable.";
+    public const string InventoryDuplicateValue =
+        "An inventory item with a supplied value already exists.";
+    public const string InventoryOperationUnavailable =
+        "The inventory operation could not be completed.";
+    public const string InventoryItemsCreated = "Inventory items created successfully.";
+    public const string InvalidInventoryDisableRequest =
+        "Inventory disable request is invalid.";
+    public const string InventoryItemNotFound = "Inventory item not found.";
+    public const string InventoryItemCannotBeDisabled =
+        "This inventory item cannot be disabled in its current state.";
+    public const string InventoryItemChangedDuringUpdate =
+        "The inventory item changed while it was being updated. Please refresh and try again.";
+    public const string InventoryItemDisabled = "Inventory item disabled successfully.";
+    public const string InvalidInventoryPage = "Inventory paging parameters are invalid.";
 }

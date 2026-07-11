@@ -157,17 +157,6 @@ public class InventoryItem : BaseEntity
 
         EnsureTimestamp(disabledAtUtc, nameof(disabledAtUtc));
 
-        if (Status == InventoryItemStatus.Disabled)
-        {
-            if (DisabledByAdminId == adminId)
-            {
-                return;
-            }
-
-            throw new InvalidOperationException(
-                "Inventory item was disabled by another Admin.");
-        }
-
         if (Status != InventoryItemStatus.Available)
         {
             throw new InvalidInventoryItemTransitionException(
