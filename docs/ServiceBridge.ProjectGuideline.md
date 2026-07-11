@@ -25,7 +25,7 @@ The solution is `ServiceBridge.sln` with these projects:
 - `ServiceBridge.Shared` — cross-layer constants and messages.
 - `ServiceBridge.Tests` — focused domain, data, service, and UI-related tests.
 
-PayBridge is migration history only; it is not a current project, namespace, product name, or roadmap.
+ServiceBridge evolved from an earlier internal MVP and repository structure.
 
 ## Product Roles and Core Flows
 
