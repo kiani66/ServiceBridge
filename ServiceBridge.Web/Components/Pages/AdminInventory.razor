@@ -1,0 +1,715 @@
+@page "/ui/admin/inventory"
+@attribute [Authorize(Roles = AppConstants.Roles.Admin)]
+@implements IAsyncDisposable
+@inject AdminInventoryClient InventoryClient
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Inventory", null) })" />
+
+<PageHeader Eyebrow="Admin operations"
+            Title="Inventory management"
+            Description="Import and manage service inventory without exposing fulfillment codes." />
+
+<PageSection MaxWidth="wide">
+    @if (_variantsLoading)
+    {
+        <LoadingState Text="Loading inventory variants" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_variantsError))
+    {
+        <ErrorState Title="Unable to load inventory variants"
+                    Message="@_variantsError"
+                    OnRetry="LoadVariantOptionsAsync" />
+    }
+    else if (_variantOptions.Count == 0)
+    {
+        <EmptyState Title="No inventory-enabled variants"
+                    Description="Configure an active service variant that uses InventoryCode fulfillment before managing inventory."
+                    Icon="@Icons.Material.Outlined.Inventory2" />
+    }
+    else
+    {
+        <DataGridToolbar Title="Inventory"
+                         Description="Select a service variant to view availability and manage its inventory."
+                         ShowSearch="false">
+            <Actions>
+                <MudSelect T="Guid?"
+                           Label="Service variant"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Value="_selectedVariantId"
+                           ValueChanged="OnVariantChangedAsync"
+                           Disabled="@MutationBusy"
+                           Class="sb-search-compact">
+                    <MudSelectItem T="Guid?" Value="null">Select service variant</MudSelectItem>
+                    @foreach (var option in _variantOptions)
+                    {
+                        <MudSelectItem T="Guid?" Value="@option.ServiceVariantId">
+                            @VariantOptionLabel(option)
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="InventoryItemStatus?"
+                           Label="Status"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Value="_status"
+                           ValueChanged="OnStatusChangedAsync"
+                           Disabled="@(!_selectedVariantId.HasValue || MutationBusy)"
+                           Class="sb-search-compact">
+                    <MudSelectItem T="InventoryItemStatus?" Value="null">All statuses</MudSelectItem>
+                    @foreach (var status in Enum.GetValues<InventoryItemStatus>())
+                    {
+                        <MudSelectItem T="InventoryItemStatus?" Value="@status">@InventoryStatusLabel(status)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Disabled="@(!_selectedVariantId.HasValue || _inventoryLoading || MutationBusy)"
+                           StartIcon="@Icons.Material.Outlined.Refresh"
+                           OnClick="RefreshAsync">
+                    Refresh
+                </MudButton>
+            </Actions>
+        </DataGridToolbar>
+
+        @if (!_selectedVariantId.HasValue)
+        {
+            <div class="sb-info-banner" role="status">
+                <MudIcon Icon="@Icons.Material.Outlined.Info" Color="Color.Info" />
+                <div>
+                    <strong>Select a service variant</strong>
+                    <span>Availability and batch import are shown only after a variant is selected.</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            @if (!string.IsNullOrWhiteSpace(_actionError))
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_actionError</MudAlert>
+            }
+
+            <div class="sb-stat-grid sb-stat-grid-compact">
+                <StatCard Label="Available" Value="@SummaryCount(summary => summary.Available)" Description="Ready for fulfillment" Tone="success" Icon="@Icons.Material.Outlined.Inventory" />
+                <StatCard Label="Reserved" Value="@SummaryCount(summary => summary.Reserved)" Description="Assigned to an order" Tone="warning" Icon="@Icons.Material.Outlined.Bookmark" />
+                <StatCard Label="Delivered" Value="@SummaryCount(summary => summary.Delivered)" Description="Already fulfilled" Tone="info" Icon="@Icons.Material.Outlined.CheckCircle" />
+                <StatCard Label="Disabled" Value="@SummaryCount(summary => summary.Disabled)" Description="Unavailable for use" Tone="danger" Icon="@Icons.Material.Outlined.Block" />
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_summaryError))
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_summaryError</MudAlert>
+            }
+
+            <div class="sb-dashboard-grid sb-dashboard-grid-two">
+                <section class="sb-dashboard-panel">
+                    <div class="sb-dashboard-panel-header">
+                        <div>
+                            <span>Inventory import</span>
+                            <h2>Batch add codes</h2>
+                            <p>Enter one code per line. Codes are sent only when you submit this form.</p>
+                        </div>
+                    </div>
+                    <MudTextField T="string"
+                                  Label="Codes"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Lines="8"
+                                  Immediate="true"
+                                  Disabled="@MutationBusy"
+                                  @bind-Value="_codesText" />
+                    @if (!string.IsNullOrWhiteSpace(_importError))
+                    {
+                        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_importError</MudAlert>
+                    }
+                    <div class="sb-grid-toolbar-actions">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Disabled="@MutationBusy"
+                                   StartIcon="@Icons.Material.Outlined.Upload"
+                                   OnClick="ImportAsync">
+                            Import codes
+                        </MudButton>
+                    </div>
+                </section>
+
+                <section class="sb-dashboard-panel">
+                    <div class="sb-dashboard-panel-header">
+                        <div>
+                            <span>Selected variant</span>
+                            <h2>@SelectedVariantLabel</h2>
+                            <p>All availability totals are supplied by the inventory backend.</p>
+                        </div>
+                    </div>
+                    @if (_inventoryLoading && _summary is null)
+                    {
+                        <LoadingState Inline="true" Text="Loading availability" />
+                    }
+                    else if (_summary is not null)
+                    {
+                        <dl class="sb-card-facts">
+                            <div><dt>Total items</dt><dd>@_summary.Total.ToString("N0")</dd></div>
+                            <div><dt>Service</dt><dd>@_summary.ServiceName</dd></div>
+                            <div><dt>Variant</dt><dd>@_summary.VariantName</dd></div>
+                        </dl>
+                    }
+                </section>
+            </div>
+
+            <PageSection MaxWidth="wide" Title="Inventory items" Description="Operational inventory metadata only; codes are never displayed.">
+                @if (_inventoryLoading)
+                {
+                    <LoadingState Text="Loading inventory items" />
+                }
+                else if (!string.IsNullOrWhiteSpace(_inventoryError))
+                {
+                    <ErrorState Title="Unable to load inventory items"
+                                Message="@_inventoryError"
+                                OnRetry="RefreshAsync" />
+                }
+                else if (_inventory.Items.Count == 0)
+                {
+                    <EmptyState Title="No inventory items found"
+                                Description="@(_status.HasValue ? "No items match the selected status." : "Import codes for this variant to create inventory items.")"
+                                Icon="@Icons.Material.Outlined.Inventory2" />
+                }
+                else
+                {
+                    <MudTable Items="@_inventory.Items" Hover="true" Dense="true" Class="sb-data-table">
+                        <HeaderContent>
+                            <MudTh>Service</MudTh>
+                            <MudTh>Variant</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Created</MudTh>
+                            <MudTh>Reserved</MudTh>
+                            <MudTh>Delivered</MudTh>
+                            <MudTh>Disabled</MudTh>
+                            <MudTh>Actions</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Service">@context.ServiceName</MudTd>
+                            <MudTd DataLabel="Variant">@context.VariantName</MudTd>
+                            <MudTd DataLabel="Status"><StatusBadge Text="@InventoryStatusLabel(context.Status)" Tone="@InventoryStatusTone(context.Status)" /></MudTd>
+                            <MudTd DataLabel="Created">@FormatDateTime(context.CreatedAt)</MudTd>
+                            <MudTd DataLabel="Reserved">@FormatDateTime(context.ReservedAtUtc)</MudTd>
+                            <MudTd DataLabel="Delivered">@FormatDateTime(context.DeliveredAtUtc)</MudTd>
+                            <MudTd DataLabel="Disabled">@FormatDateTime(context.DisabledAtUtc)</MudTd>
+                            <MudTd DataLabel="Actions">
+                                @if (context.Status == InventoryItemStatus.Available)
+                                {
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               Disabled="@MutationBusy"
+                                               StartIcon="@Icons.Material.Outlined.Block"
+                                               OnClick="@(() => OpenDisableDialog(context.InventoryItemId))">
+                                        Disable
+                                    </MudButton>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+
+                    @if (_inventory.TotalPages > 1)
+                    {
+                        <div class="sb-pagination">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Disabled="@(_inventory.Page <= 1 || _inventoryLoading)"
+                                       StartIcon="@Icons.Material.Outlined.ChevronLeft"
+                                       OnClick="PreviousPageAsync">
+                                Previous
+                            </MudButton>
+                            <span>Page @_inventory.Page of @_inventory.TotalPages</span>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Disabled="@(_inventory.Page >= _inventory.TotalPages || _inventoryLoading)"
+                                       EndIcon="@Icons.Material.Outlined.ChevronRight"
+                                       OnClick="NextPageAsync">
+                                Next
+                            </MudButton>
+                        </div>
+                    }
+                }
+            </PageSection>
+        }
+    }
+</PageSection>
+
+<ConfirmationDialog Open="_disableDialogOpen"
+                    OpenChanged="HandleDisableDialogChangedAsync"
+                    Title="Disable inventory item"
+                    Description="This inventory item will be disabled. Only Available items can be disabled, and it cannot be re-enabled from this screen."
+                    ConfirmText="@(_disableBusy ? "Disabling..." : "Disable item")"
+                    Color="Color.Error"
+                    IsBusy="_disableBusy"
+                    OnConfirmed="DisableSelectedItemAsync" />
+
+@code {
+    private const int PageSize = 25;
+    private const int MaximumImportCodes = 100;
+
+    private readonly CancellationTokenSource _disposeCts = new();
+    private CancellationTokenSource? _inventoryLoadCts;
+    private int _inventoryRequestVersion;
+    private int _variantGeneration;
+    private bool _disposed;
+    private bool _variantsLoading = true;
+    private bool _inventoryLoading;
+    private bool _importBusy;
+    private bool _disableBusy;
+    private bool _disableDialogOpen;
+    private string? _variantsError;
+    private string? _inventoryError;
+    private string? _summaryError;
+    private string? _importError;
+    private string? _actionError;
+    private string _codesText = string.Empty;
+    private Guid? _selectedVariantId;
+    private Guid? _selectedInventoryItemId;
+    private InventoryItemStatus? _status;
+    private IReadOnlyList<AdminInventoryVariantOptionDto> _variantOptions = Array.Empty<AdminInventoryVariantOptionDto>();
+    private PagedResultDto<AdminInventoryItemDto> _inventory = new();
+    private InventoryAvailabilitySummaryDto? _summary;
+
+    private bool MutationBusy => _importBusy || _disableBusy;
+
+    private string SelectedVariantLabel => _variantOptions
+        .FirstOrDefault(option => option.ServiceVariantId == _selectedVariantId) is { } option
+            ? VariantOptionLabel(option)
+            : "Selected service variant";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVariantOptionsAsync();
+    }
+
+    private async Task LoadVariantOptionsAsync()
+    {
+        _variantsLoading = true;
+        _variantsError = null;
+
+        try
+        {
+            var result = await InventoryClient.GetVariantOptionsAsync(
+                search: null,
+                cancellationToken: _disposeCts.Token);
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (RedirectIfAuthRequired(result.RequiresAuthentication))
+            {
+                return;
+            }
+
+            if (result.Success && result.Data is not null)
+            {
+                _variantOptions = result.Data;
+            }
+            else
+            {
+                _variantsError = result.ErrorMessage ?? "Unable to load inventory variants.";
+            }
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
+        catch (OperationCanceledException)
+        {
+            _variantsError = "The request timed out. Please try again.";
+        }
+        finally
+        {
+            if (!_disposed)
+            {
+                _variantsLoading = false;
+            }
+        }
+    }
+
+    private async Task OnVariantChangedAsync(Guid? serviceVariantId)
+    {
+        if (MutationBusy)
+        {
+            return;
+        }
+
+        _variantGeneration++;
+        _selectedVariantId = serviceVariantId;
+        _status = null;
+        _inventory = new PagedResultDto<AdminInventoryItemDto>();
+        _summary = null;
+        _inventoryError = null;
+        _summaryError = null;
+        _actionError = null;
+        _importError = null;
+        _codesText = string.Empty;
+        CancelInventoryLoad();
+
+        if (_selectedVariantId.HasValue)
+        {
+            await LoadInventoryAsync(1);
+        }
+    }
+
+    private async Task OnStatusChangedAsync(InventoryItemStatus? status)
+    {
+        if (MutationBusy)
+        {
+            return;
+        }
+
+        _status = status;
+        if (_selectedVariantId.HasValue)
+        {
+            await LoadInventoryAsync(1, reloadSummary: false);
+        }
+    }
+
+    private Task RefreshAsync()
+    {
+        return _selectedVariantId.HasValue && !MutationBusy
+            ? LoadInventoryAsync(Math.Max(_inventory.Page, 1))
+            : Task.CompletedTask;
+    }
+
+    private Task PreviousPageAsync()
+    {
+        return MutationBusy
+            ? Task.CompletedTask
+            : LoadInventoryAsync(Math.Max(_inventory.Page - 1, 1));
+    }
+
+    private Task NextPageAsync()
+    {
+        return MutationBusy
+            ? Task.CompletedTask
+            : LoadInventoryAsync(_inventory.Page + 1);
+    }
+
+    private async Task LoadInventoryAsync(int page, bool reloadSummary = true)
+    {
+        if (!_selectedVariantId.HasValue)
+        {
+            return;
+        }
+
+        CancelInventoryLoad();
+        _inventoryLoadCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token);
+        var cancellationToken = _inventoryLoadCts.Token;
+        var requestVersion = ++_inventoryRequestVersion;
+        var serviceVariantId = _selectedVariantId.Value;
+
+        _inventoryLoading = true;
+        _inventoryError = null;
+        if (reloadSummary)
+        {
+            _summaryError = null;
+        }
+
+        try
+        {
+            var itemsTask = InventoryClient.GetInventoryItemsAsync(
+                page,
+                PageSize,
+                serviceVariantId,
+                _status,
+                cancellationToken);
+            Task<AdminOrdersApiResult<InventoryAvailabilitySummaryDto>>? summaryTask = reloadSummary
+                ? InventoryClient.GetAvailabilitySummaryAsync(serviceVariantId, cancellationToken)
+                : null;
+            if (summaryTask is null)
+            {
+                await itemsTask;
+            }
+            else
+            {
+                await Task.WhenAll(itemsTask, summaryTask);
+            }
+
+            if (_disposed || requestVersion != _inventoryRequestVersion ||
+                _selectedVariantId != serviceVariantId)
+            {
+                return;
+            }
+
+            var itemsResult = await itemsTask;
+            var summaryResult = summaryTask is null ? null : await summaryTask;
+            if (RedirectIfAuthRequired(itemsResult.RequiresAuthentication || summaryResult?.RequiresAuthentication == true))
+            {
+                return;
+            }
+
+            _inventory = itemsResult.Success && itemsResult.Data is not null
+                ? itemsResult.Data
+                : new PagedResultDto<AdminInventoryItemDto>();
+            if (summaryResult is not null)
+            {
+                _summary = summaryResult.Success && summaryResult.Data is not null
+                    ? summaryResult.Data
+                    : null;
+            }
+            _inventoryError = itemsResult.Success
+                ? null
+                : itemsResult.ErrorMessage ?? "Unable to load inventory items.";
+            if (summaryResult is not null)
+            {
+                _summaryError = summaryResult.Success
+                    ? null
+                    : summaryResult.ErrorMessage ?? "Unable to load inventory availability.";
+            }
+
+            if (_inventory.Items.Count == 0 && _inventory.Page > 1 && _inventory.TotalCount > 0)
+            {
+                await LoadInventoryAsync(_inventory.Page - 1);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (OperationCanceledException)
+        {
+            if (!_disposed && requestVersion == _inventoryRequestVersion)
+            {
+                _inventoryError = "The request timed out. Please try again.";
+                if (reloadSummary)
+                {
+                    _summaryError = "The request timed out. Please try again.";
+                }
+            }
+        }
+        finally
+        {
+            if (!_disposed && requestVersion == _inventoryRequestVersion)
+            {
+                _inventoryLoading = false;
+            }
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (MutationBusy || !_selectedVariantId.HasValue)
+        {
+            return;
+        }
+
+        _importError = null;
+        var codes = _codesText
+            .Split(["\r\n", "\n", "\r"], StringSplitOptions.None)
+            .Select(code => code.Trim())
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .ToArray();
+        if (codes.Length == 0)
+        {
+            _importError = "Enter at least one code before importing.";
+            return;
+        }
+
+        if (codes.Length > MaximumImportCodes)
+        {
+            _importError = "Import no more than 100 codes at a time.";
+            return;
+        }
+
+        var submittedVariantId = _selectedVariantId.Value;
+        var variantGeneration = _variantGeneration;
+        _importBusy = true;
+        try
+        {
+            var result = await InventoryClient.CreateInventoryItemsAsync(
+                new CreateInventoryItemsRequest
+                {
+                    ServiceVariantId = submittedVariantId,
+                    Codes = codes
+                },
+                _disposeCts.Token);
+            if (_disposed || !IsCurrentVariantContext(submittedVariantId, variantGeneration))
+            {
+                return;
+            }
+
+            if (RedirectIfAuthRequired(result.RequiresAuthentication))
+            {
+                return;
+            }
+
+            if (!result.Success || result.Data is null)
+            {
+                _importError = result.ErrorMessage ?? "Unable to import inventory codes.";
+                return;
+            }
+
+            _codesText = string.Empty;
+            Snackbar.Add($"{result.Data.CreatedCount:N0} inventory items created.", Severity.Success);
+            await LoadInventoryAsync(1);
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
+        catch (OperationCanceledException)
+        {
+            _importError = "The request timed out. Please try again.";
+        }
+        finally
+        {
+            if (!_disposed)
+            {
+                _importBusy = false;
+            }
+        }
+    }
+
+    private void OpenDisableDialog(Guid inventoryItemId)
+    {
+        if (MutationBusy || !_selectedVariantId.HasValue)
+        {
+            return;
+        }
+
+        _actionError = null;
+        _selectedInventoryItemId = inventoryItemId;
+        _disableDialogOpen = true;
+    }
+
+    private Task HandleDisableDialogChangedAsync(bool open)
+    {
+        if (!_disableBusy)
+        {
+            _disableDialogOpen = open;
+            if (!open)
+            {
+                _selectedInventoryItemId = null;
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task DisableSelectedItemAsync()
+    {
+        if (_disableBusy || !_selectedInventoryItemId.HasValue || !_selectedVariantId.HasValue)
+        {
+            return;
+        }
+
+        _disableBusy = true;
+        _actionError = null;
+        var inventoryItemId = _selectedInventoryItemId.Value;
+        var originatingVariantId = _selectedVariantId.Value;
+        var variantGeneration = _variantGeneration;
+        try
+        {
+            var result = await InventoryClient.DisableInventoryItemAsync(
+                inventoryItemId,
+                _disposeCts.Token);
+            if (_disposed || !IsCurrentVariantContext(originatingVariantId, variantGeneration))
+            {
+                return;
+            }
+
+            if (RedirectIfAuthRequired(result.RequiresAuthentication))
+            {
+                return;
+            }
+
+            _selectedInventoryItemId = null;
+            _disableDialogOpen = false;
+            if (!result.Success)
+            {
+                _actionError = result.ErrorMessage ?? "Unable to disable this inventory item.";
+                await LoadInventoryAsync(Math.Max(_inventory.Page, 1));
+                return;
+            }
+
+            Snackbar.Add("Inventory item disabled.", Severity.Success);
+            await LoadInventoryAsync(Math.Max(_inventory.Page, 1));
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
+        catch (OperationCanceledException)
+        {
+            _actionError = "The request timed out. Please try again.";
+        }
+        finally
+        {
+            if (!_disposed)
+            {
+                _disableBusy = false;
+            }
+        }
+    }
+
+    private bool RedirectIfAuthRequired(bool requiresAuthentication)
+    {
+        if (!requiresAuthentication)
+        {
+            return false;
+        }
+
+        Navigation.NavigateTo("/Account/Login");
+        return true;
+    }
+
+    private bool IsCurrentVariantContext(Guid serviceVariantId, int variantGeneration)
+    {
+        return _selectedVariantId == serviceVariantId &&
+            _variantGeneration == variantGeneration;
+    }
+
+    private void CancelInventoryLoad()
+    {
+        _inventoryLoadCts?.Cancel();
+        _inventoryLoadCts?.Dispose();
+        _inventoryLoadCts = null;
+    }
+
+    private static string VariantOptionLabel(AdminInventoryVariantOptionDto option)
+    {
+        return $"{option.ServiceName} — {option.VariantName} — {option.RegionCode}";
+    }
+
+    private static string InventoryStatusLabel(InventoryItemStatus status)
+    {
+        return status.ToString();
+    }
+
+    private static string InventoryStatusTone(InventoryItemStatus status)
+    {
+        return status switch
+        {
+            InventoryItemStatus.Available => "success",
+            InventoryItemStatus.Reserved => "warning",
+            InventoryItemStatus.Delivered => "info",
+            InventoryItemStatus.Disabled => "danger",
+            _ => "neutral"
+        };
+    }
+
+    private static string FormatDateTime(DateTime? value)
+    {
+        return value.HasValue ? UserOrderDisplay.FormatDateTime(value.Value) : "-";
+    }
+
+    private string SummaryCount(Func<InventoryAvailabilitySummaryDto, int> selector)
+    {
+        return (_summary is null ? 0 : selector(_summary)).ToString("N0");
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        _variantGeneration++;
+        _selectedInventoryItemId = null;
+        _codesText = string.Empty;
+        CancelInventoryLoad();
+        _disposeCts.Cancel();
+        _disposeCts.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

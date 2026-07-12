@@ -31,6 +31,7 @@ builder.Services.AddScoped<AgentOrdersClient>();
 builder.Services.AddScoped<AdminOrdersClient>();
 builder.Services.AddScoped<AdminAuditLogsClient>();
 builder.Services.AddScoped<AdminCatalogClient>();
+builder.Services.AddScoped<AdminInventoryClient>();
 builder.Services.AddScoped<AdminPricingClient>();
 builder.Services.AddScoped<AdminUsersClient>();
 builder.Services.AddScoped<AdminFinancialReportsClient>();

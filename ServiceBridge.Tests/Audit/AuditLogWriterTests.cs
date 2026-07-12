@@ -12,6 +12,27 @@ namespace ServiceBridge.Tests.Audit;
 public class AuditLogWriterTests
 {
     [Fact]
+    public async Task QueueAsync_StagesAuditWithoutSaving()
+    {
+        var context = new CapturingAuditDbContext();
+        var writer = new AuditLogWriter(context, CreateHttpContextAccessor());
+
+        await writer.QueueAsync(new AuditLogEntry
+        {
+            ActorId = Guid.NewGuid(),
+            ActorRole = nameof(UserRole.Admin),
+            ActionType = AuditActionType.InventoryItemCreated,
+            EntityName = nameof(InventoryItem),
+            EntityId = Guid.NewGuid(),
+            Description = "Inventory item created."
+        });
+
+        Assert.Single(context.ChangeTracker.Entries<AuditLog>());
+        Assert.Empty(context.SavedAuditLogs);
+        Assert.Equal(0, context.SaveChangesCallCount);
+    }
+
+    [Fact]
     public async Task WriteAsync_CreatesAuditRowWithActorActionEntityAndTimestamp()
     {
         var context = new CapturingAuditDbContext();
@@ -30,6 +51,7 @@ public class AuditLogWriterTests
         });
 
         var row = Assert.Single(context.SavedAuditLogs);
+        Assert.Equal(1, context.SaveChangesCallCount);
         Assert.NotEqual(Guid.Empty, row.Id);
         Assert.Equal(actorId, row.ActorId);
         Assert.Equal(nameof(UserRole.Admin), row.ActorRole);
@@ -112,11 +134,13 @@ public class AuditLogWriterTests
         }
 
         public List<AuditLog> SavedAuditLogs { get; } = new();
+        public int SaveChangesCallCount { get; private set; }
 
         public override Task<int> SaveChangesAsync(
             bool acceptAllChangesOnSuccess,
             CancellationToken cancellationToken = default)
         {
+            SaveChangesCallCount++;
             SavedAuditLogs.AddRange(ChangeTracker
                 .Entries<AuditLog>()
                 .Where(x => x.State == EntityState.Added)

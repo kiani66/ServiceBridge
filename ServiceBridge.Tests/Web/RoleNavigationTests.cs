@@ -18,8 +18,8 @@ public class RoleNavigationTests
         "/Agent/Orders?status=Assigned|/Agent/Orders?status=Processing|/Agent/Orders?status=Completed|/ui/profile")]
     [InlineData(
         AppConstants.Roles.Admin,
-        "Dashboard|Catalog|Pricing|Users|Orders|Support|Profile",
-        "/ui/admin|/ui/admin/catalog|/ui/admin/pricing|/ui/admin/users|/ui/admin/orders|/ui/admin/tickets|/ui/profile")]
+        "Dashboard|Catalog|Inventory|Pricing|Users|Orders|Support|Profile",
+        "/ui/admin|/ui/admin/catalog|/ui/admin/inventory|/ui/admin/pricing|/ui/admin/users|/ui/admin/orders|/ui/admin/tickets|/ui/profile")]
     public void GetItems_ReturnsOnlyItemsForRole(
         string role,
         string expectedText,
@@ -61,6 +61,18 @@ public class RoleNavigationTests
             item.Page == "/ui/admin/audit-logs");
     }
 
+    [Fact]
+    public void GetConsoleItems_AdminSeesInventoryImmediatelyAfterCatalog()
+    {
+        var items = RoleNavigation.GetConsoleItems(CreateUser(AppConstants.Roles.Admin));
+        var catalogIndex = Array.FindIndex(items.ToArray(), item => item.Page == "/ui/admin/catalog");
+
+        Assert.True(catalogIndex >= 0);
+        Assert.Equal("Inventory", items[catalogIndex + 1].Text);
+        Assert.Equal("/ui/admin/inventory", items[catalogIndex + 1].Page);
+        Assert.Equal("Commerce", items[catalogIndex + 1].Group);
+    }
+
     [Theory]
     [InlineData(AppConstants.Roles.User)]
     [InlineData(AppConstants.Roles.Agent)]
@@ -70,6 +82,7 @@ public class RoleNavigationTests
 
         Assert.DoesNotContain(items, item => item.Page == "/ui/admin/audit-logs");
         Assert.DoesNotContain(items, item => item.Page == "/ui/admin/refunds");
+        Assert.DoesNotContain(items, item => item.Page == "/ui/admin/inventory");
     }
 
     [Fact]

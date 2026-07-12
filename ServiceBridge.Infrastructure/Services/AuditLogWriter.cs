@@ -23,6 +23,14 @@ public class AuditLogWriter : IAuditLogWriter
         AuditLogEntry entry,
         CancellationToken cancellationToken = default)
     {
+        await QueueAsync(entry, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task QueueAsync(
+        AuditLogEntry entry,
+        CancellationToken cancellationToken = default)
+    {
         var httpContext = _httpContextAccessor.HttpContext;
         var auditLog = new AuditLog
         {
@@ -42,6 +50,5 @@ public class AuditLogWriter : IAuditLogWriter
         };
 
         await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
-        await _context.SaveChangesAsync(cancellationToken);
     }
 }

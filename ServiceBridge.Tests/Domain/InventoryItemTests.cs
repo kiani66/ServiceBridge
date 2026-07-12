@@ -237,17 +237,17 @@ public class InventoryItemTests
     }
 
     [Fact]
-    public void Disable_WhenRepeatedBySameAdmin_IsIdempotent()
+    public void Disable_WhenRepeatedBySameAdmin_ThrowsInvalidTransition()
     {
         var item = CreateItem();
         var adminId = Guid.NewGuid();
-        var firstDisabledAtUtc = UtcNow.AddMinutes(1);
-        item.Disable(adminId, firstDisabledAtUtc);
+        item.Disable(adminId, UtcNow.AddMinutes(1));
 
-        item.Disable(adminId, UtcNow.AddMinutes(2));
+        var exception = Assert.Throws<InvalidInventoryItemTransitionException>(() =>
+            item.Disable(adminId, UtcNow.AddMinutes(2)));
 
-        Assert.Equal(firstDisabledAtUtc, item.DisabledAtUtc);
-        Assert.Equal(firstDisabledAtUtc, item.UpdatedAt);
+        Assert.Equal(InventoryItemStatus.Disabled, exception.CurrentStatus);
+        Assert.Equal(InventoryItemStatus.Disabled, exception.RequestedStatus);
     }
 
     [Fact]
@@ -257,9 +257,11 @@ public class InventoryItemTests
         item.Disable(Guid.NewGuid(), UtcNow.AddMinutes(1));
         var before = Capture(item);
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var exception = Assert.Throws<InvalidInventoryItemTransitionException>(() =>
             item.Disable(Guid.NewGuid(), UtcNow.AddMinutes(2)));
 
+        Assert.Equal(InventoryItemStatus.Disabled, exception.CurrentStatus);
+        Assert.Equal(InventoryItemStatus.Disabled, exception.RequestedStatus);
         AssertUnchanged(item, before);
     }
 

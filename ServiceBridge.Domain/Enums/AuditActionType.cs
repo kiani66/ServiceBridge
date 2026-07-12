@@ -14,5 +14,7 @@ public enum AuditActionType
     RefundRequested = 10,
     RefundConfirmed = 11,
     SettingsChanged = 12,
-    TicketClosed = 13
+    TicketClosed = 13,
+    InventoryItemCreated = 14,
+    InventoryItemDisabled = 15
 }
