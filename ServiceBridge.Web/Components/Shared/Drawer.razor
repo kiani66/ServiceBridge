@@ -1,32 +1,81 @@
+@inject IJSRuntime JS
+
 <MudDrawer Open="@Open"
-           OpenChanged="@OpenChanged"
+           OpenChanged="HandleOpenChangedAsync"
            Anchor="Anchor.End"
            Variant="DrawerVariant.Temporary"
            Elevation="8"
-           Class="sb-context-drawer">
-    <div class="sb-drawer-header">
-        <div>
-            <span>@Eyebrow</span>
-            <h2>@Title</h2>
+           Class="sb-context-drawer"
+           role="dialog"
+           aria-modal="true"
+           aria-labelledby="@_titleId">
+    <MudFocusTrap DefaultFocus="DefaultFocus.FirstChild">
+        <div class="sb-drawer-header">
+            <div>
+                <span>@Eyebrow</span>
+                <h2 id="@_titleId">@Title</h2>
+            </div>
+            <MudIconButton Icon="@Icons.Material.Outlined.Close"
+                           aria-label="Close drawer"
+                           Disabled="@Busy"
+                           OnClick="CloseAsync" />
         </div>
-        <MudIconButton Icon="@Icons.Material.Outlined.Close"
-                       aria-label="Close drawer"
-                       OnClick="CloseAsync" />
-    </div>
-    <div class="sb-drawer-body">
-        @ChildContent
-    </div>
+        <div class="sb-drawer-body">
+            @ChildContent
+        </div>
+    </MudFocusTrap>
 </MudDrawer>
 
 @code {
+    private readonly string _titleId = $"sb-drawer-title-{Guid.NewGuid():N}";
+
     [Parameter] public bool Open { get; set; }
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public EventCallback OnCloseRequested { get; set; }
     [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
     [Parameter] public string Eyebrow { get; set; } = "Details";
     [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? ReturnFocusElementId { get; set; }
 
-    private Task CloseAsync()
+    private async Task HandleOpenChangedAsync(bool open)
     {
-        return OpenChanged.InvokeAsync(false);
+        if (open)
+        {
+            await OpenChanged.InvokeAsync(true);
+            return;
+        }
+
+        await CloseAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        if (Busy)
+        {
+            await OpenChanged.InvokeAsync(true);
+            return;
+        }
+
+        if (OnCloseRequested.HasDelegate)
+        {
+            await OnCloseRequested.InvokeAsync();
+        }
+        else
+        {
+            await OpenChanged.InvokeAsync(false);
+        }
+
+        if (!string.IsNullOrWhiteSpace(ReturnFocusElementId))
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("serviceBridgeFocusById", ReturnFocusElementId);
+            }
+            catch (JSException)
+            {
+                // Navigation or circuit disposal can make focus restoration unavailable.
+            }
+        }
     }
 }

@@ -1,5 +1,5 @@
 @page "/ui/catalog"
-@layout PublicOrDashboardLayout
+@layout PublicLayout
 @inject PublicCatalogClient CatalogClient
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Catalog", null) })" />
@@ -15,15 +15,32 @@
 </PageHeader>
 
 <PageSection MaxWidth="standard">
-    <DataGridToolbar Title="Available services"
-                     Description="Active services backed by the ServiceBridge API."
+    <DataGridToolbar Title="Service catalog"
+                     Description="Search and narrow active services by category or provider."
                      Search="@_search"
                      SearchChanged="OnSearchChanged"
                      SearchPlaceholder="Search by service, provider, or category">
         <Actions>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Refresh" OnClick="LoadAsync">
-                Refresh
-            </MudButton>
+            <MudSelect T="string" Label="Category" Variant="Variant.Outlined" Margin="Margin.Dense" Value="@_categoryFilter" ValueChanged="OnCategoryChanged" Class="sb-filter-control">
+                <MudSelectItem T="string" Value="@string.Empty">All categories</MudSelectItem>
+                @foreach (var category in CategoryOptions)
+                {
+                    <MudSelectItem T="string" Value="@category">@category</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="string" Label="Provider" Variant="Variant.Outlined" Margin="Margin.Dense" Value="@_providerFilter" ValueChanged="OnProviderChanged" Class="sb-filter-control">
+                <MudSelectItem T="string" Value="@string.Empty">All providers</MudSelectItem>
+                @foreach (var provider in ProviderOptions)
+                {
+                    <MudSelectItem T="string" Value="@provider">@provider</MudSelectItem>
+                }
+            </MudSelect>
+            @if (HasFilters)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.FilterAltOff" OnClick="ClearFilters">
+                    Clear
+                </MudButton>
+            }
         </Actions>
     </DataGridToolbar>
 
@@ -44,7 +61,7 @@
                     Description="The public catalog has no active services available."
                     Icon="@Icons.Material.Outlined.Inventory2" />
     }
-    else if (!FilteredServices.Any())
+    else if (FilteredServiceList.Count == 0)
     {
         <EmptyState Title="No matching services"
                     Description="Adjust the search text to find another service or provider."
@@ -52,8 +69,12 @@
     }
     else
     {
+        <div class="sb-result-summary" aria-live="polite">
+            <strong>@FilteredServiceList.Count</strong>
+            <span>@(FilteredServiceList.Count == 1 ? "service" : "services") found</span>
+        </div>
         <div class="sb-service-grid">
-            @foreach (var service in FilteredServices)
+            @foreach (var service in FilteredServiceList)
             {
                 <ServiceCard Service="@service" />
             }
@@ -89,24 +110,47 @@
 
 @code {
     private string? _search;
+    private string _categoryFilter = string.Empty;
+    private string _providerFilter = string.Empty;
     private bool _loading = true;
     private string? _errorMessage;
     private IReadOnlyList<PublicCatalogCategory> _categories = [];
     private IReadOnlyList<PublicCatalogService> _services = [];
 
-    private IEnumerable<PublicCatalogService> FilteredServices
+    private IReadOnlyList<string> CategoryOptions => _services
+        .Select(service => service.CategoryName)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(name => name)
+        .ToArray();
+
+    private IReadOnlyList<string> ProviderOptions => _services
+        .Select(service => service.ProviderName)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(name => name)
+        .ToArray();
+
+    private bool HasFilters =>
+        !string.IsNullOrWhiteSpace(_search) ||
+        !string.IsNullOrWhiteSpace(_categoryFilter) ||
+        !string.IsNullOrWhiteSpace(_providerFilter);
+
+    private IReadOnlyList<PublicCatalogService> FilteredServiceList
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(_search))
-            {
-                return _services;
-            }
-
-            return _services.Where(service =>
-                service.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                service.ProviderName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                service.CategoryName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+            return _services
+                .Where(service =>
+                    string.IsNullOrWhiteSpace(_search) ||
+                    service.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    service.ProviderName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    service.CategoryName.Contains(_search, StringComparison.OrdinalIgnoreCase))
+                .Where(service =>
+                    string.IsNullOrWhiteSpace(_categoryFilter) ||
+                    string.Equals(service.CategoryName, _categoryFilter, StringComparison.OrdinalIgnoreCase))
+                .Where(service =>
+                    string.IsNullOrWhiteSpace(_providerFilter) ||
+                    string.Equals(service.ProviderName, _providerFilter, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
         }
     }
 
@@ -140,5 +184,24 @@
     {
         _search = value;
         return Task.CompletedTask;
+    }
+
+    private Task OnCategoryChanged(string value)
+    {
+        _categoryFilter = value;
+        return Task.CompletedTask;
+    }
+
+    private Task OnProviderChanged(string value)
+    {
+        _providerFilter = value;
+        return Task.CompletedTask;
+    }
+
+    private void ClearFilters()
+    {
+        _search = null;
+        _categoryFilter = string.Empty;
+        _providerFilter = string.Empty;
     }
 }

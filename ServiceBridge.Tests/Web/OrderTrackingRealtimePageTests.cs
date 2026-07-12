@@ -14,14 +14,11 @@ public class OrderTrackingRealtimePageTests
         var source = ReadPage(pageName);
 
         Assert.Contains("@inject RealtimeClient RealtimeClient", source);
-        Assert.Contains("RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;", source);
+        Assert.Contains("RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync)", source);
         Assert.Contains(
-            "RealtimeClient.CustomerActionChanged += HandleCustomerActionChangedAsync;",
+            "RealtimeClient.SubscribeToCustomerActions(HandleCustomerActionChangedAsync)",
             source);
-        Assert.Contains("RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;", source);
-        Assert.Contains(
-            "RealtimeClient.CustomerActionChanged -= HandleCustomerActionChangedAsync;",
-            source);
+        Assert.Contains("_realtimeSubscriptions.Dispose();", source);
         Assert.DoesNotContain("RealtimeClient.StartAsync", source);
         Assert.DoesNotContain("new RealtimeClient", source);
     }

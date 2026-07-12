@@ -138,6 +138,7 @@
                                     Start Processing
                                 </MudButton>
                                 <MudButton Variant="Variant.Outlined"
+                                           id="@($"request-info-trigger-{context.OrderId:N}")"
                                            Color="Color.Primary"
                                            Size="Size.Small"
                                            Disabled="@_actionBusy"
@@ -216,7 +217,9 @@
     </div>
 </PageSection>
 
-<Drawer @bind-Open="_drawerOpen" Title="@(_selectedOrder?.OrderNumber ?? "Order details")" Eyebrow="Assigned order">
+@if (_drawerOpen)
+{
+<Drawer Open="true" OnCloseRequested="CloseRequestInfoDrawer" Busy="@_actionBusy" ReturnFocusElementId="@_drawerTriggerId" Title="@(_selectedOrder?.OrderNumber ?? "Order details")" Eyebrow="Assigned order">
     @if (_detailLoading)
     {
         <LoadingState Text="Loading order details" />
@@ -288,14 +291,17 @@
         </div>
     }
 </Drawer>
+}
 
 @code {
+    private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     private const int PageSize = 20;
 
     private bool _summaryLoading = true;
     private bool _ordersLoading = true;
     private bool _detailLoading;
     private bool _drawerOpen;
+    private string? _drawerTriggerId;
     private bool _actionBusy;
     private string? _summaryError;
     private string? _ordersError;
@@ -327,9 +333,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
-        RealtimeClient.OrderAssigned += HandleOrderAssignedAsync;
-        RealtimeClient.CustomerActionChanged += HandleCustomerActionChangedAsync;
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync));
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderAssignments(HandleOrderAssignedAsync));
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToCustomerActions(HandleCustomerActionChangedAsync));
         await LoadSummaryAsync();
         await LoadOrdersAsync();
     }
@@ -358,6 +364,7 @@
 
     private async Task OpenRequestInfoAsync(Guid orderId)
     {
+        _drawerTriggerId = $"request-info-trigger-{orderId:N}";
         _drawerOpen = true;
         _customerRequestText = string.Empty;
         await LoadOrderDetailAsync(orderId);
@@ -454,32 +461,50 @@
         Guid orderId,
         Func<Guid, Task<AgentOrdersApiResult<bool>>> action)
     {
+        if (_actionBusy)
+        {
+            return;
+        }
+
         _actionBusy = true;
-        _actionError = null;
-        var result = await action(orderId);
-
-        if (result.RequiresAuthentication)
+        try
         {
-            Navigation.NavigateTo("/Account/Login");
-            return;
+            _actionError = null;
+            var result = await action(orderId);
+
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (!result.Success)
+            {
+                _actionError = result.ErrorMessage ?? "Unable to update this order.";
+                return;
+            }
+
+            _customerRequestText = string.Empty;
+            await LoadSummaryAsync();
+            await LoadOrdersAsync(Math.Max(_orders.Page, 1));
+            if (_drawerOpen)
+            {
+                await LoadOrderDetailAsync(orderId);
+            }
         }
-
-        if (!result.Success)
+        finally
         {
-            _actionError = result.ErrorMessage ?? "Unable to update this order.";
             _actionBusy = false;
-            return;
         }
+    }
 
+    private void CloseRequestInfoDrawer()
+    {
+        _drawerOpen = false;
+        _selectedOrder = null;
         _customerRequestText = string.Empty;
-        await LoadSummaryAsync();
-        await LoadOrdersAsync(Math.Max(_orders.Page, 1));
-        if (_drawerOpen)
-        {
-            await LoadOrderDetailAsync(orderId);
-        }
-
-        _actionBusy = false;
+        _actionError = null;
+        _detailError = null;
     }
 
     private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
@@ -530,9 +555,7 @@
 
     public void Dispose()
     {
-        RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
-        RealtimeClient.OrderAssigned -= HandleOrderAssignedAsync;
-        RealtimeClient.CustomerActionChanged -= HandleCustomerActionChangedAsync;
+        _realtimeSubscriptions.Dispose();
     }
 
     private sealed record ActivityFeedItem(string Title, string Description, string Time);

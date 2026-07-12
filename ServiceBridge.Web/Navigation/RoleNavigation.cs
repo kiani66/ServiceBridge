@@ -94,15 +94,16 @@ public static class RoleNavigation
         {
             return
             [
-                new("Dashboard", "/ui/admin", "Admin operations", Icons.Material.Outlined.SpaceDashboard, MatchExact: true),
-                new("Orders", "/ui/admin/orders", "Admin operations", Icons.Material.Outlined.ReceiptLong),
-                new("Catalog", "/ui/admin/catalog", "Admin operations", Icons.Material.Outlined.Inventory2),
-                new("Pricing", "/ui/admin/pricing", "Admin operations", Icons.Material.Outlined.PriceChange),
-                new("Users", "/ui/admin/users", "Admin operations", Icons.Material.Outlined.Group),
-                new("Financial Reports", "/ui/admin/reports/financial", "Admin operations", Icons.Material.Outlined.Assessment),
-                new("Refunds", "/ui/admin/refunds", "Admin operations", Icons.Material.Outlined.AssignmentReturn),
-                new("Audit", "/ui/admin/audit", "Admin operations", Icons.Material.Outlined.ManageSearch),
-                new("Audit Logs", "/ui/admin/audit-logs", "Admin operations", Icons.Material.Outlined.FactCheck),
+                new("Dashboard", "/ui/admin", "Overview", Icons.Material.Outlined.SpaceDashboard, MatchExact: true),
+                new("Orders", "/ui/admin/orders", "Operations", Icons.Material.Outlined.ReceiptLong),
+                new("Users", "/ui/admin/users", "Operations", Icons.Material.Outlined.Group),
+                new("Support", "/ui/admin/tickets", "Operations", Icons.Material.Outlined.ContactSupport),
+                new("Refunds", "/ui/admin/refunds", "Operations", Icons.Material.Outlined.AssignmentReturn),
+                new("Catalog", "/ui/admin/catalog", "Commerce", Icons.Material.Outlined.Inventory2),
+                new("Pricing", "/ui/admin/pricing", "Commerce", Icons.Material.Outlined.PriceChange),
+                new("Financial Reports", "/ui/admin/reports/financial", "Insights", Icons.Material.Outlined.Assessment),
+                new("Order Audit", "/ui/admin/audit", "Insights", Icons.Material.Outlined.ManageSearch),
+                new("Audit Logs", "/ui/admin/audit-logs", "Insights", Icons.Material.Outlined.FactCheck),
                 new("Notifications", "/ui/notifications", "Account", Icons.Material.Outlined.Notifications),
                 new("Profile", "/ui/profile", "Account", Icons.Material.Outlined.Person)
             ];
@@ -112,10 +113,8 @@ public static class RoleNavigation
         {
             return
             [
-                new("Dashboard", "/ui/agent", "Agent operations", Icons.Material.Outlined.SpaceDashboard, MatchExact: true),
-                new("Assigned Orders", "/ui/agent/orders?status=Assigned", "Agent operations", Icons.Material.Outlined.AssignmentInd),
-                new("Processing", "/ui/agent/orders?status=Processing", "Agent operations", Icons.Material.Outlined.ManageHistory),
-                new("Completed", "/ui/agent/orders?status=Completed", "Agent operations", Icons.Material.Outlined.CheckCircle),
+                new("Dashboard", "/ui/agent", "Overview", Icons.Material.Outlined.SpaceDashboard, MatchExact: true),
+                new("Orders", "/ui/agent/orders", "Operations", Icons.Material.Outlined.AssignmentInd),
                 new("Notifications", "/ui/notifications", "Account", Icons.Material.Outlined.Notifications),
                 new("Profile", "/ui/profile", "Account", Icons.Material.Outlined.Person)
             ];
@@ -125,9 +124,10 @@ public static class RoleNavigation
         {
             return
             [
-                new("Services", "/ui/catalog", "Customer", Icons.Material.Outlined.Apps),
-                new("Orders", "/ui/orders", "Customer", Icons.Material.Outlined.ReceiptLong),
-                new("Support", "/ui/tickets", "Customer", Icons.Material.Outlined.ContactSupport),
+                new("Dashboard", "/ui/dashboard", "Workspace", Icons.Material.Outlined.SpaceDashboard, MatchExact: true),
+                new("Services", "/ui/catalog", "Workspace", Icons.Material.Outlined.Apps),
+                new("Orders", "/ui/orders", "Workspace", Icons.Material.Outlined.ReceiptLong),
+                new("Support", "/ui/tickets", "Workspace", Icons.Material.Outlined.ContactSupport),
                 new("Notifications", "/ui/notifications", "Account", Icons.Material.Outlined.Notifications),
                 new("Profile", "/ui/profile", "Account", Icons.Material.Outlined.Person)
             ];
@@ -150,7 +150,7 @@ public static class RoleNavigation
 
         if (user.IsInRole(AppConstants.Roles.User))
         {
-            return "/ui/orders";
+            return "/ui/dashboard";
         }
 
         return null;
@@ -162,7 +162,7 @@ public static class RoleNavigation
         {
             AppConstants.Roles.Admin => "/ui/admin",
             AppConstants.Roles.Agent => "/ui/agent/orders",
-            AppConstants.Roles.User => "/ui/orders",
+            AppConstants.Roles.User => "/ui/dashboard",
             _ => null
         };
     }

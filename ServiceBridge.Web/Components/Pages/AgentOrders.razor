@@ -144,6 +144,7 @@
 </PageSection>
 
 @code {
+    private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     private const int PageSize = 20;
 
     [SupplyParameterFromQuery(Name = "status")]
@@ -168,9 +169,9 @@
 
     protected override void OnInitialized()
     {
-        RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
-        RealtimeClient.OrderAssigned += HandleOrderAssignedAsync;
-        RealtimeClient.CustomerActionChanged += HandleCustomerActionChangedAsync;
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync));
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderAssignments(HandleOrderAssignedAsync));
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToCustomerActions(HandleCustomerActionChangedAsync));
     }
 
     protected override async Task OnParametersSetAsync()
@@ -305,8 +306,6 @@
 
     public void Dispose()
     {
-        RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
-        RealtimeClient.OrderAssigned -= HandleOrderAssignedAsync;
-        RealtimeClient.CustomerActionChanged -= HandleCustomerActionChangedAsync;
+        _realtimeSubscriptions.Dispose();
     }
 }

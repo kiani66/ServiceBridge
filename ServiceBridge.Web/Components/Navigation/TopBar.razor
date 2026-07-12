@@ -1,18 +1,17 @@
-@using Microsoft.AspNetCore.Components.Forms
-
-<MudAppBar Elevation="0" Class="sb-topbar">
+<MudAppBar Fixed="false" Elevation="0" Class="sb-topbar">
     <MudIconButton Icon="@Icons.Material.Outlined.Menu"
+                   id="app-menu-button"
                    Color="Color.Primary"
                    Edge="Edge.Start"
                    OnClick="ToggleAsync"
                    aria-label="Toggle navigation" />
     <MudText Typo="Typo.subtitle1" Class="sb-topbar-title">@Title</MudText>
     <MudSpacer />
-    <SearchBar Placeholder="Search services or orders" Compact="true" />
     <NotificationBell />
     <AuthorizeView Roles="@AppConstants.Roles.User">
         <Authorized>
             <MudButton Href="/ui/catalog"
+                       Class="sb-topbar-primary-action"
                        Variant="Variant.Filled"
                        Color="Color.Primary"
                        Size="Size.Small"
@@ -23,42 +22,7 @@
     </AuthorizeView>
     <AuthorizeView>
         <Authorized Context="profileContext">
-            <MudMenu Dense="true"
-                     AnchorOrigin="Origin.BottomRight"
-                     TransformOrigin="Origin.TopRight"
-                     PopoverClass="sb-profile-menu-popover">
-                <ActivatorContent Context="menuContext">
-                    <MudTooltip Text="Account menu">
-                        <MudButton Variant="Variant.Text"
-                                   Color="Color.Secondary"
-                                   Class="sb-profile-chip"
-                                   StartIcon="@Icons.Material.Outlined.AccountCircle"
-                                   EndIcon="@Icons.Material.Outlined.KeyboardArrowDown">
-                            @GetDisplayName(profileContext.User)
-                        </MudButton>
-                    </MudTooltip>
-                </ActivatorContent>
-                <ChildContent>
-                    <div class="sb-profile-menu">
-                        <div class="sb-profile-menu-header">
-                            <strong>@GetDisplayName(profileContext.User)</strong>
-                            <span>@GetRole(profileContext.User)</span>
-                        </div>
-                        <MudDivider />
-                        <MudMenuItem Href="/ui/profile"
-                                     Icon="@Icons.Material.Outlined.Person">
-                            Profile
-                        </MudMenuItem>
-                        <form method="post" action="/Account/Logout" class="sb-profile-logout-form">
-                            <AntiforgeryToken />
-                            <button type="submit" class="sb-profile-menu-action">
-                                <MudIcon Icon="@Icons.Material.Outlined.Logout" Size="Size.Small" />
-                                <span>Logout</span>
-                            </button>
-                        </form>
-                    </div>
-                </ChildContent>
-            </MudMenu>
+            <AccountMenu User="@profileContext.User" />
         </Authorized>
     </AuthorizeView>
 </MudAppBar>
@@ -70,24 +34,5 @@
     private Task ToggleAsync()
     {
         return OnMenuToggle.InvokeAsync();
-    }
-
-    private static string GetDisplayName(System.Security.Claims.ClaimsPrincipal user)
-    {
-        var fullName = user.FindFirst("FullName")?.Value;
-        if (!string.IsNullOrWhiteSpace(fullName))
-        {
-            return fullName;
-        }
-
-        return user.Identity?.Name ?? "Profile";
-    }
-
-    private static string GetRole(System.Security.Claims.ClaimsPrincipal user)
-    {
-        var role = user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ??
-            user.FindFirst("role")?.Value;
-
-        return string.IsNullOrWhiteSpace(role) ? "Authenticated" : role;
     }
 }

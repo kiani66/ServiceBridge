@@ -2,6 +2,8 @@
 @attribute [Authorize(Roles = AppConstants.Roles.User)]
 @inject TicketsClient TicketsClient
 @inject NavigationManager Navigation
+@inject RealtimeClient RealtimeClient
+@implements IDisposable
 
 @if (_loading)
 {
@@ -112,6 +114,7 @@ else
 }
 
 @code {
+    private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     [Parameter] public Guid TicketId { get; set; }
 
     private bool _loading = true;
@@ -121,6 +124,11 @@ else
     private string? _replyMessage;
     private string _replyBody = string.Empty;
     private TicketDetailDto? _ticket;
+
+    protected override void OnInitialized()
+    {
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToTicketUpdates(HandleTicketUpdatedAsync));
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -170,5 +178,24 @@ else
         _replyMessage = "Reply submitted.";
         await LoadTicketAsync();
         _replying = false;
+    }
+
+    private Task HandleTicketUpdatedAsync(TicketUpdatedRealtimeDto message)
+    {
+        if (message.TicketId != TicketId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(async () =>
+        {
+            await LoadTicketAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        _realtimeSubscriptions.Dispose();
     }
 }

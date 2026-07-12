@@ -2,92 +2,68 @@
 @attribute [Authorize(Roles = AppConstants.Roles.Admin)]
 @inject AdminPricingClient AdminPricingClient
 @inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Pricing", null) })" />
 
 <PageHeader Eyebrow="Admin operations"
             Title="Pricing"
-            Description="Manage exchange rates and scoped profit margins." />
+            Description="Manage exchange rates and scoped profit margins used by backend pricing.">
+    <Actions>
+        @if (_activeTabIndex == 0)
+        {
+            <MudButton Variant="Variant.Filled" id="new-rate-trigger" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.CurrencyExchange" OnClick="OpenRateDrawer">
+                New rate
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" id="new-margin-trigger" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Add" OnClick="OpenMarginDrawer">
+                New margin
+            </MudButton>
+        }
+    </Actions>
+</PageHeader>
 
 <PageSection MaxWidth="wide">
     @if (_loading)
     {
         <LoadingState Text="Loading pricing configuration" />
     }
-    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    else if (!string.IsNullOrWhiteSpace(_loadError))
     {
         <ErrorState Title="Unable to load pricing"
-                    Message="@_errorMessage"
+                    Message="@_loadError"
                     OnRetry="LoadAsync" />
     }
     else
     {
-        <div class="sb-dashboard-grid sb-dashboard-grid-two">
-            <FormSection Title="Add exchange rate" Description="Create a currency conversion rate for pricing calculations.">
-                <EditForm Model="_exchangeRateRequest" OnValidSubmit="CreateExchangeRateAsync">
-                    <DataAnnotationsValidator />
-                    <MudTextField T="string" Label="Currency" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_exchangeRateRequest.CurrencyCode" />
-                    <MudNumericField T="decimal" Label="Rate to IRR" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0.0001m" @bind-Value="_exchangeRateRequest.RateToIrr" />
-                    <MudDatePicker Label="Effective from UTC"
-                                   Variant="Variant.Outlined"
-                                   Margin="Margin.Dense"
-                                   Date="@_exchangeRateEffectiveDate"
-                                   DateChanged="@(value => _exchangeRateEffectiveDate = value)" />
-                    <MudCheckBox T="bool" Label="Active" Color="Color.Primary" @bind-Value="_exchangeRateRequest.IsActive" />
-                    <ValidationSummary />
-                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy" StartIcon="@Icons.Material.Outlined.Add">
-                        Add Rate
-                    </MudButton>
-                </EditForm>
-            </FormSection>
-
-            <FormSection Title="Add profit margin" Description="Create a global, category, or service margin rule.">
-                <EditForm Model="_profitMarginRequest" OnValidSubmit="CreateProfitMarginAsync">
-                    <DataAnnotationsValidator />
-                    <MudSelect T="string" Label="Scope" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_marginScope">
-                        <MudSelectItem T="string" Value="@("Global")">Global</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("Category")">Category</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("Service")">Service</MudSelectItem>
-                    </MudSelect>
-                    @if (_marginScope == "Category")
-                    {
-                        <MudSelect T="Guid?" Label="Category" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_marginTargetId">
-                            <MudSelectItem T="Guid?" Value="null">Select category</MudSelectItem>
-                            @foreach (var category in _categories)
-                            {
-                                <MudSelectItem T="Guid?" Value="@category.Id">@category.Name</MudSelectItem>
-                            }
-                        </MudSelect>
-                    }
-                    else if (_marginScope == "Service")
-                    {
-                        <MudSelect T="Guid?" Label="Service" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_marginTargetId">
-                            <MudSelectItem T="Guid?" Value="null">Select service</MudSelectItem>
-                            @foreach (var service in _services)
-                            {
-                                <MudSelectItem T="Guid?" Value="@service.Id">@service.Name</MudSelectItem>
-                            }
-                        </MudSelect>
-                    }
-                    <MudNumericField T="decimal" Label="Percentage" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0m" Max="100m" @bind-Value="_profitMarginRequest.Percentage" />
-                    <MudDatePicker Label="Effective from UTC"
-                                   Variant="Variant.Outlined"
-                                   Margin="Margin.Dense"
-                                   Date="@_profitMarginEffectiveDate"
-                                   DateChanged="@(value => _profitMarginEffectiveDate = value)" />
-                    <MudCheckBox T="bool" Label="Active" Color="Color.Primary" @bind-Value="_profitMarginRequest.IsActive" />
-                    <ValidationSummary />
-                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy" StartIcon="@Icons.Material.Outlined.Add">
-                        Add Margin
-                    </MudButton>
-                </EditForm>
-            </FormSection>
+        <div class="sb-info-banner">
+            <MudIcon Icon="@Icons.Material.Outlined.Info" />
+            <div>
+                <strong>Existing order prices remain unchanged</strong>
+                <span>New rates and margins affect future pricing resolution only; saved order snapshots stay immutable.</span>
+            </div>
+        </div>
+        <div class="sb-stat-grid sb-stat-grid-compact">
+            <StatCard Label="Active rates" Value="@_exchangeRates.Count(rate => rate.IsActive).ToString("N0")" Description="Current currency rules" Tone="info" Icon="@Icons.Material.Outlined.CurrencyExchange" />
+            <StatCard Label="Active margins" Value="@_profitMargins.Count(margin => margin.IsActive).ToString("N0")" Description="Current pricing rules" Tone="success" Icon="@Icons.Material.Outlined.Percent" />
+            <StatCard Label="Configured services" Value="@_services.Count.ToString("N0")" Description="Available margin targets" Tone="neutral" Icon="@Icons.Material.Outlined.Inventory2" />
         </div>
     }
 </PageSection>
 
+@if (!string.IsNullOrWhiteSpace(_actionError) && !_rateDrawerOpen && !_marginDrawerOpen)
+{
+    <PageSection MaxWidth="wide">
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_actionError</MudAlert>
+    </PageSection>
+}
+
+<MudTabs ActivePanelIndex="@_activeTabIndex" ActivePanelIndexChanged="OnActiveTabChanged" Class="sb-pricing-tabs">
+<MudTabPanel Text="Exchange Rates">
 <PageSection MaxWidth="wide" Title="Exchange Rates" Description="Currency conversion history.">
-    @if (!_loading && string.IsNullOrWhiteSpace(_errorMessage))
+    @if (!_loading && string.IsNullOrWhiteSpace(_loadError))
     {
         <MudTable Items="@_exchangeRates" Hover="true" Dense="true" Class="sb-data-table">
             <HeaderContent>
@@ -115,9 +91,11 @@
         </MudTable>
     }
 </PageSection>
+</MudTabPanel>
 
+<MudTabPanel Text="Profit Margins">
 <PageSection MaxWidth="wide" Title="Profit Margins" Description="Scoped margin history.">
-    @if (!_loading && string.IsNullOrWhiteSpace(_errorMessage))
+    @if (!_loading && string.IsNullOrWhiteSpace(_loadError))
     {
         <MudTable Items="@_profitMargins" Hover="true" Dense="true" Class="sb-data-table">
             <HeaderContent>
@@ -147,11 +125,87 @@
         </MudTable>
     }
 </PageSection>
+</MudTabPanel>
+</MudTabs>
+
+@if (_rateDrawerOpen)
+{
+<Drawer Open="true" OnCloseRequested="CloseRateDrawer" Busy="@_actionBusy" ReturnFocusElementId="new-rate-trigger" Title="Create exchange rate" Eyebrow="Pricing">
+    @if (!string.IsNullOrWhiteSpace(_actionError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_actionError</MudAlert>
+    }
+    <EditForm Model="_exchangeRateRequest" OnValidSubmit="CreateExchangeRateAsync" class="sb-drawer-form">
+        <DataAnnotationsValidator />
+        <MudTextField T="string" Label="Currency" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_exchangeRateRequest.CurrencyCode" />
+        <MudNumericField T="decimal" Label="Rate to IRR" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0.0001m" @bind-Value="_exchangeRateRequest.RateToIrr" />
+        <MudDatePicker Label="Effective from UTC" Variant="Variant.Outlined" Margin="Margin.Dense" Date="@_exchangeRateEffectiveDate" DateChanged="@(value => _exchangeRateEffectiveDate = value)" />
+        <MudCheckBox T="bool" Label="Active" Color="Color.Primary" @bind-Value="_exchangeRateRequest.IsActive" />
+        <ValidationSummary />
+        <div class="sb-drawer-actions">
+            <MudButton Variant="Variant.Text" Disabled="@_actionBusy" OnClick="CloseRateDrawer">Cancel</MudButton>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy">Create rate</MudButton>
+        </div>
+    </EditForm>
+</Drawer>
+}
+
+@if (_marginDrawerOpen)
+{
+<Drawer Open="true" OnCloseRequested="CloseMarginDrawer" Busy="@_actionBusy" ReturnFocusElementId="new-margin-trigger" Title="Create profit margin" Eyebrow="Pricing">
+    @if (!string.IsNullOrWhiteSpace(_actionError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_actionError</MudAlert>
+    }
+    <EditForm Model="_profitMarginRequest" OnValidSubmit="CreateProfitMarginAsync" class="sb-drawer-form">
+        <DataAnnotationsValidator />
+        <MudSelect T="string" Label="Scope" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_marginScope">
+            <MudSelectItem T="string" Value="@("Global")">Global</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Category")">Category</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Service")">Service</MudSelectItem>
+        </MudSelect>
+        @if (_marginScope == "Category")
+        {
+            <MudSelect T="Guid?" Label="Category" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_marginTargetId">
+                <MudSelectItem T="Guid?" Value="null">Select category</MudSelectItem>
+                @foreach (var category in _categories)
+                {
+                    <MudSelectItem T="Guid?" Value="@category.Id">@category.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        else if (_marginScope == "Service")
+        {
+            <MudSelect T="Guid?" Label="Service" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_marginTargetId">
+                <MudSelectItem T="Guid?" Value="null">Select service</MudSelectItem>
+                @foreach (var service in _services)
+                {
+                    <MudSelectItem T="Guid?" Value="@service.Id">@service.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        <MudNumericField T="decimal" Label="Percentage" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0m" Max="100m" @bind-Value="_profitMarginRequest.Percentage" />
+        <MudDatePicker Label="Effective from UTC" Variant="Variant.Outlined" Margin="Margin.Dense" Date="@_profitMarginEffectiveDate" DateChanged="@(value => _profitMarginEffectiveDate = value)" />
+        <MudCheckBox T="bool" Label="Active" Color="Color.Primary" @bind-Value="_profitMarginRequest.IsActive" />
+        <ValidationSummary />
+        <div class="sb-drawer-actions">
+            <MudButton Variant="Variant.Text" Disabled="@_actionBusy" OnClick="CloseMarginDrawer">Cancel</MudButton>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy">Create margin</MudButton>
+        </div>
+    </EditForm>
+</Drawer>
+}
 
 @code {
+    [SupplyParameterFromQuery(Name = "section")]
+    public string? Section { get; set; }
+
     private bool _loading = true;
     private bool _actionBusy;
-    private string? _errorMessage;
+    private bool _rateDrawerOpen;
+    private bool _marginDrawerOpen;
+    private string? _loadError;
+    private string? _actionError;
     private IReadOnlyCollection<ExchangeRateResponse> _exchangeRates = Array.Empty<ExchangeRateResponse>();
     private IReadOnlyCollection<ProfitMarginResponse> _profitMargins = Array.Empty<ProfitMarginResponse>();
     private IReadOnlyCollection<ServiceCategoryResponse> _categories = Array.Empty<ServiceCategoryResponse>();
@@ -162,6 +216,12 @@
     private DateTime? _profitMarginEffectiveDate = DateTime.UtcNow.Date;
     private string _marginScope = "Global";
     private Guid? _marginTargetId;
+    private int _activeTabIndex;
+
+    protected override void OnParametersSet()
+    {
+        _activeTabIndex = string.Equals(Section, "margins", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -171,7 +231,7 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        _errorMessage = null;
+        _loadError = null;
 
         var result = await AdminPricingClient.GetPricingAsync();
         if (RedirectIfAuthRequired(result.RequiresAuthentication))
@@ -188,7 +248,7 @@
         }
         else
         {
-            _errorMessage = result.ErrorMessage;
+            _loadError = result.ErrorMessage;
         }
 
         _loading = false;
@@ -196,6 +256,8 @@
 
     private Task CreateExchangeRateAsync()
     {
+        if (_actionBusy) return Task.CompletedTask;
+
         _exchangeRateRequest.EffectiveFromUtc = DateTime.SpecifyKind(
             _exchangeRateEffectiveDate ?? DateTime.UtcNow.Date,
             DateTimeKind.Utc);
@@ -206,11 +268,15 @@
             {
                 _exchangeRateRequest = new();
                 _exchangeRateEffectiveDate = DateTime.UtcNow.Date;
-            });
+                CloseRateDrawer();
+            },
+            "Exchange rate created.");
     }
 
     private Task CreateProfitMarginAsync()
     {
+        if (_actionBusy) return Task.CompletedTask;
+
         _profitMarginRequest.CategoryId = null;
         _profitMarginRequest.ServiceId = null;
         _profitMarginRequest.ServiceVariantId = null;
@@ -229,7 +295,7 @@
 
         if (_marginScope != "Global" && !_marginTargetId.HasValue)
         {
-            _errorMessage = "Select a valid margin target.";
+            _actionError = "Select a valid margin target.";
             return Task.CompletedTask;
         }
 
@@ -241,46 +307,66 @@
                 _profitMarginEffectiveDate = DateTime.UtcNow.Date;
                 _marginScope = "Global";
                 _marginTargetId = null;
-            });
+                CloseMarginDrawer();
+            },
+            "Profit margin created.");
     }
 
     private Task SetExchangeRateStatusAsync(Guid id, bool isActive)
     {
+        if (_actionBusy) return Task.CompletedTask;
+
         return RunActionAsync(
             () => AdminPricingClient.SetExchangeRateStatusAsync(id, isActive),
-            () => { });
+            () => { },
+            isActive ? "Exchange rate activated." : "Exchange rate deactivated.");
     }
 
     private Task SetProfitMarginStatusAsync(Guid id, bool isActive)
     {
+        if (_actionBusy) return Task.CompletedTask;
+
         return RunActionAsync(
             () => AdminPricingClient.SetProfitMarginStatusAsync(id, isActive),
-            () => { });
+            () => { },
+            isActive ? "Profit margin activated." : "Profit margin deactivated.");
     }
 
     private async Task RunActionAsync(
         Func<Task<AdminOrdersApiResult<bool>>> action,
-        Action onSuccess)
+        Action onSuccess,
+        string successMessage)
     {
-        _actionBusy = true;
-        _errorMessage = null;
-        var result = await action();
-        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        if (_actionBusy)
         {
             return;
         }
 
-        if (result.Success)
+        _actionBusy = true;
+        try
         {
-            onSuccess();
-            await LoadAsync();
-        }
-        else
-        {
-            _errorMessage = result.ErrorMessage ?? "Unable to save pricing changes.";
-        }
+            _actionError = null;
+            var result = await action();
+            if (RedirectIfAuthRequired(result.RequiresAuthentication))
+            {
+                return;
+            }
 
-        _actionBusy = false;
+            if (result.Success)
+            {
+                onSuccess();
+                await LoadAsync();
+                Snackbar.Add(successMessage, Severity.Success);
+            }
+            else
+            {
+                _actionError = result.ErrorMessage ?? "Unable to save pricing changes.";
+            }
+        }
+        finally
+        {
+            _actionBusy = false;
+        }
     }
 
     private string MarginTargetLabel(ProfitMarginResponse margin)
@@ -309,5 +395,48 @@
 
         Navigation.NavigateTo("/Account/Login");
         return true;
+    }
+
+    private void OnActiveTabChanged(int index)
+    {
+        _activeTabIndex = index;
+        Navigation.NavigateTo(
+            Navigation.GetUriWithQueryParameters(
+                "/ui/admin/pricing",
+                new Dictionary<string, object?>
+                {
+                    ["section"] = index == 1 ? "margins" : null
+                }),
+            replace: true);
+    }
+
+    private void OpenRateDrawer()
+    {
+        _actionError = null;
+        _rateDrawerOpen = true;
+    }
+
+    private void CloseRateDrawer()
+    {
+        _exchangeRateRequest = new();
+        _exchangeRateEffectiveDate = DateTime.UtcNow.Date;
+        _actionError = null;
+        _rateDrawerOpen = false;
+    }
+
+    private void OpenMarginDrawer()
+    {
+        _actionError = null;
+        _marginDrawerOpen = true;
+    }
+
+    private void CloseMarginDrawer()
+    {
+        _profitMarginRequest = new();
+        _profitMarginEffectiveDate = DateTime.UtcNow.Date;
+        _marginScope = "Global";
+        _marginTargetId = null;
+        _actionError = null;
+        _marginDrawerOpen = false;
     }
 }

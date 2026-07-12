@@ -1,51 +1,68 @@
-<MudThemeProvider Theme="_theme" />
+@using ServiceBridge.Web.Theme
+@using ServiceBridge.Web.Navigation
+
+<MudThemeProvider Theme="ServiceBridgeTheme.Default" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<main class="sb-public-shell">
+<div class="sb-public-shell">
     <header class="sb-public-topbar">
         <a class="sb-public-brand" href="/ui" aria-label="ServiceBridge home">
             <span class="sb-public-brand-mark">SB</span>
             <span>ServiceBridge</span>
         </a>
-        <nav class="sb-public-nav" aria-label="Public navigation">
+        <nav class="sb-public-nav sb-public-nav-desktop" aria-label="Public navigation">
             <a href="/ui/catalog">Services</a>
             <a href="/ui#about">How it works</a>
             <a href="/ui#faq">FAQ</a>
             <a href="/ui#contact">Contact Us</a>
         </nav>
         <div class="sb-public-actions">
-            <MudButton Href="/Account/Login" Variant="Variant.Text" Color="Color.Primary">
-                Login
-            </MudButton>
-            <MudButton Href="/Account/Register" Variant="Variant.Filled" Color="Color.Primary">
-                Register
-            </MudButton>
+            <AuthorizeView>
+                <Authorized Context="publicAuthContext">
+                    <MudButton Href="@(RoleNavigation.GetConsoleLandingPage(publicAuthContext.User) ?? "/ui/profile")"
+                               Class="sb-public-workspace-action"
+                               Variant="Variant.Text"
+                               Color="Color.Primary">
+                        Open workspace
+                    </MudButton>
+                    <AccountMenu User="@publicAuthContext.User" />
+                </Authorized>
+                <NotAuthorized>
+                    <MudButton Href="/Account/Login" Class="sb-public-login-action" Variant="Variant.Text" Color="Color.Primary">
+                        Sign in
+                    </MudButton>
+                    <MudButton Href="/Account/Register" Variant="Variant.Filled" Color="Color.Primary">
+                        Register
+                    </MudButton>
+                </NotAuthorized>
+            </AuthorizeView>
+            <MudMenu Dense="true"
+                     Class="sb-public-mobile-menu"
+                     AnchorOrigin="Origin.BottomRight"
+                     TransformOrigin="Origin.TopRight">
+                <ActivatorContent Context="menuContext">
+                    <MudIconButton Icon="@Icons.Material.Outlined.Menu"
+                                   OnClick="@menuContext.ToggleAsync"
+                                   aria-label="Open public navigation" />
+                </ActivatorContent>
+                <ChildContent>
+                    <MudMenuItem Href="/ui/catalog">Services</MudMenuItem>
+                    <MudMenuItem Href="/ui#about">How it works</MudMenuItem>
+                    <MudMenuItem Href="/ui#faq">FAQ</MudMenuItem>
+                    <MudMenuItem Href="/ui#contact">Contact Us</MudMenuItem>
+                </ChildContent>
+            </MudMenu>
         </div>
     </header>
 
-    @ChildContent
-</main>
+    <main class="sb-public-content">
+        @ChildContent
+    </main>
+</div>
 
 @code {
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private readonly MudTheme _theme = new()
-    {
-        PaletteLight = new PaletteLight
-        {
-            Primary = "#F97316",
-            Secondary = "#2563EB",
-            Background = "#F6F8FB",
-            Surface = "#FFFFFF",
-            TextPrimary = "#111827",
-            TextSecondary = "#5B6472",
-            LinesDefault = "#E5E7EB"
-        },
-        LayoutProperties = new LayoutProperties
-        {
-            DefaultBorderRadius = "10px"
-        }
-    };
 }

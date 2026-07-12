@@ -120,6 +120,7 @@
 </PageSection>
 
 @code {
+    private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     private const int PageSize = 20;
 
     private bool _loading = true;
@@ -135,7 +136,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        RealtimeClient.NotificationReceived += HandleNotificationReceivedAsync;
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToNotifications(HandleNotificationReceivedAsync));
         await ResolveOrderRouteAsync();
         await LoadAsync(1);
     }
@@ -301,6 +302,6 @@
 
     public void Dispose()
     {
-        RealtimeClient.NotificationReceived -= HandleNotificationReceivedAsync;
+        _realtimeSubscriptions.Dispose();
     }
 }

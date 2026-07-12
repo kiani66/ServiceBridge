@@ -185,6 +185,7 @@ else
 }
 
 @code {
+    private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     [Parameter] public Guid OrderId { get; set; }
 
     private bool _loading = true;
@@ -250,9 +251,9 @@ else
 
     protected override void OnInitialized()
     {
-        RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
-        RealtimeClient.OrderAssigned += HandleOrderAssignedAsync;
-        RealtimeClient.CustomerActionChanged += HandleCustomerActionChangedAsync;
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync));
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderAssignments(HandleOrderAssignedAsync));
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToCustomerActions(HandleCustomerActionChangedAsync));
     }
 
     protected override async Task OnParametersSetAsync()
@@ -358,8 +359,6 @@ else
 
     public void Dispose()
     {
-        RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
-        RealtimeClient.OrderAssigned -= HandleOrderAssignedAsync;
-        RealtimeClient.CustomerActionChanged -= HandleCustomerActionChangedAsync;
+        _realtimeSubscriptions.Dispose();
     }
 }
