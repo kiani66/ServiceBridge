@@ -2,6 +2,8 @@
 @attribute [Authorize(Roles = AppConstants.Roles.Admin)]
 @inject TicketsClient TicketsClient
 @inject NavigationManager Navigation
+@inject RealtimeClient RealtimeClient
+@implements IDisposable
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Support tickets", null) })" />
 
@@ -107,16 +109,21 @@
 </PageSection>
 
 @code {
+    private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     private const int PageSize = 20;
 
     private bool _loading = true;
+    private bool _disposed;
     private string? _error;
     private string? _search;
     private TicketStatus? _status;
     private PagedResultDto<TicketListItemDto> _tickets = new();
+    private CoalescingAsyncAction? _realtimeRefresh;
 
     protected override async Task OnInitializedAsync()
     {
+        _realtimeRefresh = new CoalescingAsyncAction(RefreshFromRealtimeCoreAsync);
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToTicketUpdates(HandleTicketUpdatedAsync));
         await LoadTicketsAsync();
     }
 
@@ -165,5 +172,39 @@
             : new PagedResultDto<TicketListItemDto>();
         _error = result.ErrorMessage;
         _loading = false;
+    }
+
+    private Task HandleTicketUpdatedAsync(TicketUpdatedRealtimeDto message)
+    {
+        return _realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
+    }
+
+    private Task RefreshFromRealtimeCoreAsync()
+    {
+        if (_disposed)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(async () =>
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            await LoadTicketsAsync(Math.Max(_tickets.Page, 1));
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _realtimeRefresh?.Dispose();
+        _realtimeSubscriptions.Dispose();
     }
 }

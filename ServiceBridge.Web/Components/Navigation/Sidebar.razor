@@ -4,7 +4,7 @@
     <div class="sb-brand-mark">SB</div>
     <div>
         <strong>ServiceBridge</strong>
-        <span>Digital service mediation</span>
+        <span>Service operations</span>
     </div>
 </div>
 
@@ -18,30 +18,26 @@
                 {
                     <MudNavLink Href="@item.Page"
                                 Icon="@item.Icon"
+                                @onpointerup="NotifyNavigationAsync"
                                 Match="@GetMatch(item)">
                         @item.Text
                     </MudNavLink>
                 }
             }
         </Authorized>
-        <NotAuthorized>
-            <MudText Typo="Typo.caption" Class="sb-nav-group">Public</MudText>
-            <MudNavLink Href="/ui" Icon="@Icons.Material.Outlined.Home" Match="NavLinkMatch.All">Home</MudNavLink>
-            <MudNavLink Href="/ui/catalog" Icon="@Icons.Material.Outlined.Apps">Services</MudNavLink>
-            <MudNavLink Href="/ui#faq" Icon="@Icons.Material.Outlined.HelpOutline">FAQ</MudNavLink>
-            <MudNavLink Href="/ui#contact" Icon="@Icons.Material.Outlined.MailOutline">Contact Us</MudNavLink>
-            <MudNavLink Href="/ui#about" Icon="@Icons.Material.Outlined.Info">About</MudNavLink>
-            <MudNavLink Href="/Account/Login" Icon="@Icons.Material.Outlined.Login">Sign in</MudNavLink>
-            <MudNavLink Href="/Account/Register" Icon="@Icons.Material.Outlined.PersonAdd">Register</MudNavLink>
-        </NotAuthorized>
     </AuthorizeView>
 </MudNavMenu>
 
 @code {
-    [Parameter] public string CurrentPath { get; set; } = "/";
+    [Parameter] public EventCallback OnNavigate { get; set; }
 
     private static NavLinkMatch GetMatch(NavigationItem item)
     {
         return item.MatchExact ? NavLinkMatch.All : NavLinkMatch.Prefix;
+    }
+
+    private Task NotifyNavigationAsync()
+    {
+        return OnNavigate.InvokeAsync();
     }
 }

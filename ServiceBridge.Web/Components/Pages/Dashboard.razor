@@ -1,8 +1,11 @@
 @page "/ui/dashboard"
+@page "/ui/user"
 @attribute [Authorize(Roles = AppConstants.Roles.User)]
 @inject UserOrdersClient OrdersClient
 @inject TicketsClient TicketsClient
 @inject NavigationManager Navigation
+@inject RealtimeClient RealtimeClient
+@implements IDisposable
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Dashboard", null) })" />
 
@@ -211,11 +214,14 @@
 }
 
 @code {
+    private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     private bool _loading = true;
+    private bool _disposed;
     private string? _errorMessage;
     private string? _ticketError;
     private int _openTicketCount;
     private UserDashboardSummary? _summary;
+    private CoalescingAsyncAction? _realtimeRefresh;
 
     private int ActiveOrderCount =>
         (_summary?.PendingOrders ?? 0) +
@@ -229,6 +235,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _realtimeRefresh = new CoalescingAsyncAction(RefreshFromRealtimeCoreAsync);
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync));
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToCustomerActions(HandleCustomerActionChangedAsync));
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToTicketUpdates(HandleTicketUpdatedAsync));
         await LoadDashboardAsync();
     }
 
@@ -279,5 +289,54 @@
 
             _openTicketCount += result.Data.TotalCount;
         }
+    }
+
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
+    {
+        return RefreshFromRealtimeAsync();
+    }
+
+    private Task HandleCustomerActionChangedAsync(CustomerActionChangedRealtimeDto message)
+    {
+        return RefreshFromRealtimeAsync();
+    }
+
+    private Task HandleTicketUpdatedAsync(TicketUpdatedRealtimeDto message)
+    {
+        return RefreshFromRealtimeAsync();
+    }
+
+    private Task RefreshFromRealtimeAsync()
+    {
+        return _realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
+    }
+
+    private Task RefreshFromRealtimeCoreAsync()
+    {
+        if (_disposed)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(async () =>
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            await LoadDashboardAsync();
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _realtimeRefresh?.Dispose();
+        _realtimeSubscriptions.Dispose();
     }
 }

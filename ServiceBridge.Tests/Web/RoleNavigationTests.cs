@@ -73,6 +73,27 @@ public class RoleNavigationTests
     }
 
     [Fact]
+    public void GetConsoleItems_UserStartsWithDashboardAndUsesSharedWorkspaceGroups()
+    {
+        var items = RoleNavigation.GetConsoleItems(CreateUser(AppConstants.Roles.User));
+
+        Assert.Equal("Dashboard", items[0].Text);
+        Assert.Equal("/ui/dashboard", items[0].Page);
+        Assert.All(items.Take(4), item => Assert.Equal("Workspace", item.Group));
+        Assert.Equal("/ui/dashboard", RoleNavigation.GetConsoleLandingPage(AppConstants.Roles.User));
+    }
+
+    [Fact]
+    public void GetConsoleItems_AgentHasOneOrdersNavigationEntry()
+    {
+        var items = RoleNavigation.GetConsoleItems(CreateUser(AppConstants.Roles.Agent));
+
+        var orders = items.Where(item => item.Page.StartsWith("/ui/agent/orders", StringComparison.Ordinal)).ToArray();
+        Assert.Single(orders);
+        Assert.Equal("Orders", orders[0].Text);
+    }
+
+    [Fact]
     public void UnknownRole_HasNoNavigationOrLandingPage()
     {
         Assert.Empty(RoleNavigation.GetItems(CreateUser("Unknown")));

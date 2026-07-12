@@ -91,6 +91,7 @@ else
 }
 
 @code {
+    private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     [Parameter] public Guid OrderId { get; set; }
 
     [SupplyParameterFromQuery(Name = "paymentId")]
@@ -114,8 +115,8 @@ else
 
     protected override void OnInitialized()
     {
-        RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
-        RealtimeClient.CustomerActionChanged += HandleCustomerActionChangedAsync;
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync));
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToCustomerActions(HandleCustomerActionChangedAsync));
     }
 
     protected override async Task OnParametersSetAsync()
@@ -181,7 +182,6 @@ else
 
     public void Dispose()
     {
-        RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
-        RealtimeClient.CustomerActionChanged -= HandleCustomerActionChangedAsync;
+        _realtimeSubscriptions.Dispose();
     }
 }

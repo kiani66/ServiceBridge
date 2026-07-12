@@ -2,80 +2,55 @@
 @attribute [Authorize(Roles = AppConstants.Roles.Admin)]
 @inject AdminCatalogClient AdminCatalogClient
 @inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 
 <Breadcrumb Items="@(new List<(string Text, string? Href)> { ("Home", "/ui"), ("Admin", "/ui/admin"), ("Catalog", null) })" />
 
 <PageHeader Eyebrow="Admin operations"
             Title="Service Catalog"
-            Description="Create categories and maintain purchasable digital services." />
+            Description="Manage categories and purchasable digital services without leaving the catalog workspace.">
+    <Actions>
+        <MudButton Variant="Variant.Outlined"
+                   id="new-category-trigger"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.CreateNewFolder"
+                   OnClick="OpenCategoryDrawer">
+            New category
+        </MudButton>
+        <MudButton Variant="Variant.Filled"
+                   id="new-service-trigger"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.Add"
+                   Disabled="@(_loading || _categories.Count == 0)"
+                   OnClick="OpenServiceDrawer">
+            New service
+        </MudButton>
+    </Actions>
+</PageHeader>
 
 <PageSection MaxWidth="wide">
     @if (_loading)
     {
         <LoadingState Text="Loading catalog" />
     }
-    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    else if (!string.IsNullOrWhiteSpace(_loadError))
     {
         <ErrorState Title="Unable to load catalog"
-                    Message="@_errorMessage"
+                    Message="@_loadError"
                     OnRetry="LoadAsync" />
     }
     else
     {
-        <div class="sb-dashboard-grid sb-dashboard-grid-two">
-            <FormSection Title="Add category" Description="Create the grouping used for public catalog browsing.">
-                <EditForm Model="_categoryRequest" OnValidSubmit="CreateCategoryAsync">
-                    <DataAnnotationsValidator />
-                    <MudTextField T="string" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_categoryRequest.Name" />
-                    <MudTextField T="string" Label="Slug" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_categoryRequest.Slug" />
-                    <MudNumericField T="int" Label="Display order" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" @bind-Value="_categoryRequest.DisplayOrder" />
-                    <MudCheckBox T="bool" Label="Active" Color="Color.Primary" @bind-Value="_categoryRequest.IsActive" />
-                    <ValidationSummary />
-                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy" StartIcon="@Icons.Material.Outlined.Add">
-                        Add Category
-                    </MudButton>
-                </EditForm>
-            </FormSection>
-
-            <FormSection Title="Add service" Description="Create a purchasable service under an existing category.">
-                @if (_categories.Count == 0)
-                {
-                    <EmptyState Title="No categories" Description="Create a category before adding services." Icon="@Icons.Material.Outlined.Category" />
-                }
-                else
-                {
-                    <EditForm Model="_serviceRequest" OnValidSubmit="CreateServiceAsync">
-                        <DataAnnotationsValidator />
-                        <MudSelect T="Guid" Label="Category" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.CategoryId">
-                            @foreach (var category in _categories)
-                            {
-                                <MudSelectItem T="Guid" Value="@category.Id">@category.Name</MudSelectItem>
-                            }
-                        </MudSelect>
-                        <MudTextField T="string" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.Name" />
-                        <MudTextField T="string" Label="Provider" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.Provider" />
-                        <MudTextField T="string" Label="Slug" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.Slug" />
-                        <MudNumericField T="decimal" Label="Base price" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0.0001m" @bind-Value="_serviceRequest.BasePrice" />
-                        <MudTextField T="string" Label="Currency" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.CurrencyCode" />
-                        <MudTextField T="string" Label="Description" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="3" @bind-Value="_serviceRequest.Description" />
-                        <MudTextField T="string" Label="Processing time" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.ProcessingTimeDescription" />
-                        <MudTextField T="string" Label="Logo URL" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.LogoUrl" />
-                        <MudCheckBox T="bool" Label="Active" Color="Color.Primary" @bind-Value="_serviceRequest.IsActive" />
-                        <MudCheckBox T="bool" Label="Supports existing account" Color="Color.Primary" @bind-Value="_serviceRequest.SupportsUseExistingAccount" />
-                        <MudCheckBox T="bool" Label="Supports creating new account" Color="Color.Primary" @bind-Value="_serviceRequest.SupportsCreateNewAccount" />
-                        <ValidationSummary />
-                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy" StartIcon="@Icons.Material.Outlined.Add">
-                            Add Service
-                        </MudButton>
-                    </EditForm>
-                }
-            </FormSection>
+        <div class="sb-stat-grid sb-stat-grid-compact">
+            <StatCard Label="Categories" Value="@_categories.Count.ToString("N0")" Description="Catalog groupings" Tone="neutral" Icon="@Icons.Material.Outlined.Category" />
+            <StatCard Label="Services" Value="@_services.Count.ToString("N0")" Description="All catalog records" Tone="info" Icon="@Icons.Material.Outlined.Inventory2" />
+            <StatCard Label="Active services" Value="@_services.Count(service => service.IsActive).ToString("N0")" Description="Available for administration" Tone="success" Icon="@Icons.Material.Outlined.CheckCircle" />
         </div>
     }
 </PageSection>
 
 <PageSection MaxWidth="wide" Title="Services" Description="Current service catalog records.">
-    @if (!_loading && string.IsNullOrWhiteSpace(_errorMessage))
+    @if (!_loading && string.IsNullOrWhiteSpace(_loadError))
     {
         @if (_services.Count == 0)
         {
@@ -111,10 +86,70 @@
     }
 </PageSection>
 
+@if (_categoryDrawerOpen)
+{
+<Drawer Open="true" OnCloseRequested="CloseCategoryDrawer" Busy="@_actionBusy" ReturnFocusElementId="new-category-trigger" Title="Create category" Eyebrow="Catalog">
+    @if (!string.IsNullOrWhiteSpace(_actionError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_actionError</MudAlert>
+    }
+    <EditForm Model="_categoryRequest" OnValidSubmit="CreateCategoryAsync" class="sb-drawer-form">
+        <DataAnnotationsValidator />
+        <MudTextField T="string" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_categoryRequest.Name" />
+        <MudTextField T="string" Label="Slug" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_categoryRequest.Slug" />
+        <MudNumericField T="int" Label="Display order" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" @bind-Value="_categoryRequest.DisplayOrder" />
+        <MudCheckBox T="bool" Label="Active" Color="Color.Primary" @bind-Value="_categoryRequest.IsActive" />
+        <ValidationSummary />
+        <div class="sb-drawer-actions">
+            <MudButton Variant="Variant.Text" Disabled="@_actionBusy" OnClick="CloseCategoryDrawer">Cancel</MudButton>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy">Create category</MudButton>
+        </div>
+    </EditForm>
+</Drawer>
+}
+
+@if (_serviceDrawerOpen)
+{
+<Drawer Open="true" OnCloseRequested="CloseServiceDrawer" Busy="@_actionBusy" ReturnFocusElementId="new-service-trigger" Title="Create service" Eyebrow="Catalog">
+    @if (!string.IsNullOrWhiteSpace(_actionError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_actionError</MudAlert>
+    }
+    <EditForm Model="_serviceRequest" OnValidSubmit="CreateServiceAsync" class="sb-drawer-form">
+        <DataAnnotationsValidator />
+        <MudSelect T="Guid" Label="Category" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.CategoryId">
+            @foreach (var category in _categories)
+            {
+                <MudSelectItem T="Guid" Value="@category.Id">@category.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField T="string" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.Name" />
+        <MudTextField T="string" Label="Provider" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.Provider" />
+        <MudTextField T="string" Label="Slug" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.Slug" />
+        <MudNumericField T="decimal" Label="Base price" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0.0001m" @bind-Value="_serviceRequest.BasePrice" />
+        <MudTextField T="string" Label="Currency" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.CurrencyCode" />
+        <MudTextField T="string" Label="Description" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="3" @bind-Value="_serviceRequest.Description" />
+        <MudTextField T="string" Label="Processing time" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.ProcessingTimeDescription" />
+        <MudTextField T="string" Label="Logo URL" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_serviceRequest.LogoUrl" />
+        <MudCheckBox T="bool" Label="Active" Color="Color.Primary" @bind-Value="_serviceRequest.IsActive" />
+        <MudCheckBox T="bool" Label="Supports existing account" Color="Color.Primary" @bind-Value="_serviceRequest.SupportsUseExistingAccount" />
+        <MudCheckBox T="bool" Label="Supports creating new account" Color="Color.Primary" @bind-Value="_serviceRequest.SupportsCreateNewAccount" />
+        <ValidationSummary />
+        <div class="sb-drawer-actions">
+            <MudButton Variant="Variant.Text" Disabled="@_actionBusy" OnClick="CloseServiceDrawer">Cancel</MudButton>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_actionBusy">Create service</MudButton>
+        </div>
+    </EditForm>
+</Drawer>
+}
+
 @code {
     private bool _loading = true;
     private bool _actionBusy;
-    private string? _errorMessage;
+    private bool _categoryDrawerOpen;
+    private bool _serviceDrawerOpen;
+    private string? _loadError;
+    private string? _actionError;
     private IReadOnlyCollection<ServiceCategoryResponse> _categories = Array.Empty<ServiceCategoryResponse>();
     private IReadOnlyCollection<AdminServiceSummaryResponse> _services = Array.Empty<AdminServiceSummaryResponse>();
     private CreateServiceCategoryRequest _categoryRequest = new();
@@ -128,7 +163,7 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        _errorMessage = null;
+        _loadError = null;
 
         var result = await AdminCatalogClient.GetCatalogAsync();
         if (RedirectIfAuthRequired(result.RequiresAuthentication))
@@ -147,7 +182,7 @@
         }
         else
         {
-            _errorMessage = result.ErrorMessage;
+            _loadError = result.ErrorMessage;
         }
 
         _loading = false;
@@ -155,44 +190,70 @@
 
     private Task CreateCategoryAsync()
     {
+        if (_actionBusy) return Task.CompletedTask;
+
         return RunActionAsync(
             () => AdminCatalogClient.CreateCategoryAsync(_categoryRequest),
-            () => _categoryRequest = new());
+            () =>
+            {
+                _categoryRequest = new();
+                CloseCategoryDrawer();
+            },
+            "Category created.");
     }
 
     private Task CreateServiceAsync()
     {
+        if (_actionBusy) return Task.CompletedTask;
+
         return RunActionAsync(
             () => AdminCatalogClient.CreateServiceAsync(_serviceRequest),
-            () => _serviceRequest = new CreateDigitalServiceRequest
+            () =>
             {
-                CategoryId = _categories.FirstOrDefault()?.Id ?? Guid.Empty
-            });
+                _serviceRequest = new CreateDigitalServiceRequest
+                {
+                    CategoryId = _categories.FirstOrDefault()?.Id ?? Guid.Empty
+                };
+                CloseServiceDrawer();
+            },
+            "Service created.");
     }
 
     private async Task RunActionAsync(
         Func<Task<AdminOrdersApiResult<bool>>> action,
-        Action onSuccess)
+        Action onSuccess,
+        string successMessage)
     {
-        _actionBusy = true;
-        _errorMessage = null;
-        var result = await action();
-        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+        if (_actionBusy)
         {
             return;
         }
 
-        if (result.Success)
+        _actionBusy = true;
+        try
         {
-            onSuccess();
-            await LoadAsync();
-        }
-        else
-        {
-            _errorMessage = result.ErrorMessage ?? "Unable to save catalog changes.";
-        }
+            _actionError = null;
+            var result = await action();
+            if (RedirectIfAuthRequired(result.RequiresAuthentication))
+            {
+                return;
+            }
 
-        _actionBusy = false;
+            if (result.Success)
+            {
+                onSuccess();
+                await LoadAsync();
+                Snackbar.Add(successMessage, Severity.Success);
+            }
+            else
+            {
+                _actionError = result.ErrorMessage ?? "Unable to save catalog changes.";
+            }
+        }
+        finally
+        {
+            _actionBusy = false;
+        }
     }
 
     private bool RedirectIfAuthRequired(bool requiresAuthentication)
@@ -204,5 +265,29 @@
 
         Navigation.NavigateTo("/Account/Login");
         return true;
+    }
+
+    private void OpenCategoryDrawer()
+    {
+        _actionError = null;
+        _categoryDrawerOpen = true;
+    }
+
+    private void CloseCategoryDrawer()
+    {
+        _actionError = null;
+        _categoryDrawerOpen = false;
+    }
+
+    private void OpenServiceDrawer()
+    {
+        _actionError = null;
+        _serviceDrawerOpen = true;
+    }
+
+    private void CloseServiceDrawer()
+    {
+        _actionError = null;
+        _serviceDrawerOpen = false;
     }
 }

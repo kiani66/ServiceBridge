@@ -1,77 +1,157 @@
 @inject NavigationManager Navigation
 @inject RealtimeClient RealtimeClient
+@inject IBrowserViewportService BrowserViewportService
+@inject IJSRuntime JS
+@using ServiceBridge.Web.Theme
+@implements IBrowserViewportObserver
 @implements IAsyncDisposable
 
-<MudThemeProvider Theme="_theme" />
+<MudThemeProvider Theme="ServiceBridgeTheme.Default" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<MudLayout Class="sb-app-shell sb-console-shell">
-    <TopBar Title="ServiceBridge" OnMenuToggle="ToggleDrawer" />
+<MudLayout Class="@ShellClass">
+    <aside class="sb-desktop-sidebar" aria-label="Primary navigation">
+        <Sidebar OnNavigate="HandleNavigationSelectedAsync" />
+    </aside>
 
-    <MudDrawer @bind-Open="_drawerOpen"
+    <section class="sb-shell-workspace">
+        <TopBar Title="ServiceBridge" OnMenuToggle="ToggleDrawerAsync" />
+
+        <main class="sb-main-content sb-console-main">
+            <div class="sb-content-frame sb-console-content">
+                @ChildContent
+            </div>
+        </main>
+    </section>
+
+    <MudDrawer Open="@_mobileDrawerOpen"
+               OpenChanged="HandleDrawerOpenChangedAsync"
                Anchor="Anchor.Start"
-               Variant="DrawerVariant.Responsive"
-               Elevation="0"
-               Width="280px"
-               Class="sb-sidebar">
-        <Sidebar CurrentPath="@CurrentPath" />
+               Variant="DrawerVariant.Temporary"
+               Elevation="2"
+               Width="256px"
+               Class="sb-mobile-sidebar">
+        <Sidebar OnNavigate="HandleNavigationSelectedAsync" />
     </MudDrawer>
-
-    <MudMainContent Class="sb-main-content sb-console-main">
-        <div class="sb-content-frame sb-console-content">
-            @ChildContent
-        </div>
-    </MudMainContent>
 </MudLayout>
 
 @code {
-    private bool _drawerOpen = true;
+    private bool _isMobile = true;
+    private bool _mobileDrawerOpen;
+    private bool _desktopDrawerOpen = true;
+    private bool _viewportSubscribed;
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath;
-
-    private readonly MudTheme _theme = new()
+    public Guid Id { get; } = Guid.NewGuid();
+    public MudBlazor.Services.ResizeOptions ResizeOptions { get; } = new()
     {
-        PaletteLight = new PaletteLight
-        {
-            Primary = "#F97316",
-            Secondary = "#2563EB",
-            Tertiary = "#0EA5E9",
-            Success = "#16A34A",
-            Warning = "#F59E0B",
-            Error = "#DC2626",
-            Info = "#2563EB",
-            Background = "#F6F8FB",
-            Surface = "#FFFFFF",
-            AppbarBackground = "#FFFFFF",
-            AppbarText = "#111827",
-            DrawerBackground = "#FFFFFF",
-            DrawerText = "#374151",
-            TextPrimary = "#111827",
-            TextSecondary = "#5B6472",
-            LinesDefault = "#E5E7EB"
-        },
-        LayoutProperties = new LayoutProperties
-        {
-            DefaultBorderRadius = "10px"
-        }
+        ReportRate = 100,
+        NotifyOnBreakpointOnly = false
     };
+
+    private string ShellClass => _desktopDrawerOpen
+        ? "sb-app-shell sb-console-shell"
+        : "sb-app-shell sb-console-shell sb-desktop-nav-collapsed";
 
     protected override async Task OnInitializedAsync()
     {
+        Navigation.LocationChanged += HandleLocationChanged;
         await RealtimeClient.StartAsync();
     }
 
-    private void ToggleDrawer()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        _drawerOpen = !_drawerOpen;
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
+        _viewportSubscribed = true;
     }
 
-    public ValueTask DisposeAsync()
+    private Task ToggleDrawerAsync()
     {
-        return RealtimeClient.DisposeAsync();
+        if (_isMobile)
+        {
+            _mobileDrawerOpen = !_mobileDrawerOpen;
+        }
+        else
+        {
+            _desktopDrawerOpen = !_desktopDrawerOpen;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleDrawerOpenChangedAsync(bool open)
+    {
+        _mobileDrawerOpen = open;
+        if (!open)
+        {
+            await RestoreMenuFocusAsync();
+        }
+    }
+
+    private async Task HandleNavigationSelectedAsync()
+    {
+        if (_isMobile && _mobileDrawerOpen)
+        {
+            _mobileDrawerOpen = false;
+            await RestoreMenuFocusAsync();
+        }
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (_isMobile && _mobileDrawerOpen)
+            {
+                _mobileDrawerOpen = false;
+                await RestoreMenuFocusAsync();
+                StateHasChanged();
+            }
+        });
+    }
+
+    public Task NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs browserViewportEventArgs)
+    {
+        return InvokeAsync(() =>
+        {
+            var isMobile = browserViewportEventArgs.BrowserWindowSize.Width < 1200;
+            if (_isMobile == isMobile)
+            {
+                return;
+            }
+
+            _isMobile = isMobile;
+            _mobileDrawerOpen = false;
+            StateHasChanged();
+        });
+    }
+
+    private async Task RestoreMenuFocusAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("serviceBridgeFocusById", "app-menu-button");
+        }
+        catch (JSException)
+        {
+            // Navigation or circuit disposal can make focus restoration unavailable.
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Navigation.LocationChanged -= HandleLocationChanged;
+        if (_viewportSubscribed)
+        {
+            await BrowserViewportService.UnsubscribeAsync(this);
+        }
     }
 }

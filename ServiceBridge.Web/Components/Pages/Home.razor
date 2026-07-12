@@ -1,5 +1,6 @@
 @page "/ui"
-@layout PublicOrDashboardLayout
+@layout PublicLayout
+@using ServiceBridge.Web.Navigation
 @inject PublicCatalogClient CatalogClient
 
 @if (_loading)
@@ -30,9 +31,21 @@ else
             <MudButton Href="/ui/catalog" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Apps">
                 Browse services
             </MudButton>
-            <MudButton Href="/Account/Login" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Login">
-                Sign in
-            </MudButton>
+            <AuthorizeView>
+                <Authorized Context="homeAuthContext">
+                    <MudButton Href="@(RoleNavigation.GetConsoleLandingPage(homeAuthContext.User) ?? "/ui/profile")"
+                               Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.SpaceDashboard">
+                        Open workspace
+                    </MudButton>
+                </Authorized>
+                <NotAuthorized>
+                    <MudButton Href="/Account/Login" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Login">
+                        Sign in
+                    </MudButton>
+                </NotAuthorized>
+            </AuthorizeView>
         </Actions>
     </PageHeader>
 

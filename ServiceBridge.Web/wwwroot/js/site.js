@@ -13,6 +13,14 @@
         URL.revokeObjectURL(url);
     };
 
+    window.serviceBridgeSubmitForm = (form) => {
+        form?.requestSubmit();
+    };
+
+    window.serviceBridgeFocusById = (elementId) => {
+        window.requestAnimationFrame(() => document.getElementById(elementId)?.focus());
+    };
+
     const ready = (callback) => {
         if (document.readyState === "loading") {
             document.addEventListener("DOMContentLoaded", callback);
@@ -28,13 +36,6 @@
         document.querySelectorAll("[data-sb-toast]").forEach((element) => {
             bootstrap.Toast.getOrCreateInstance(element, { delay: 4500 }).show();
         });
-
-        const sidebarToggle = document.querySelector("[data-sidebar-toggle]");
-        if (sidebarToggle) {
-            sidebarToggle.addEventListener("click", () => {
-                document.body.classList.toggle("sb-sidebar-collapsed");
-            });
-        }
 
         const modalElement = document.getElementById("sb-confirmation-modal");
         const messageElement = document.getElementById("sb-confirmation-message");

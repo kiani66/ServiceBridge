@@ -399,6 +399,7 @@
 </PageSection>
 
 @code {
+    private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     private const int PageSize = 12;
 
     private bool _summaryLoading = true;
@@ -485,8 +486,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        RealtimeClient.OrderUpdated += HandleOrderUpdatedAsync;
-        RealtimeClient.OrderAssigned += HandleOrderAssignedAsync;
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync));
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderAssignments(HandleOrderAssignedAsync));
         await LoadDashboardAsync();
     }
 
@@ -629,8 +630,7 @@
 
     public void Dispose()
     {
-        RealtimeClient.OrderUpdated -= HandleOrderUpdatedAsync;
-        RealtimeClient.OrderAssigned -= HandleOrderAssignedAsync;
+        _realtimeSubscriptions.Dispose();
     }
 
     private sealed record ChartPoint(

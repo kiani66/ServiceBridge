@@ -18,6 +18,7 @@
                               Class="sb-notification-badge">
                         <MudIconButton Icon="@Icons.Material.Outlined.Notifications"
                                        Color="Color.Primary"
+                                       OnClick="@menuContext.ToggleAsync"
                                        aria-label="Notifications" />
                     </MudBadge>
                 </MudTooltip>
@@ -79,6 +80,7 @@
 </AuthorizeView>
 
 @code {
+    private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     private bool _loading = true;
     private int _unreadCount;
     private string? _errorMessage;
@@ -87,7 +89,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        RealtimeClient.NotificationReceived += HandleNotificationReceivedAsync;
+        _realtimeSubscriptions.Add(RealtimeClient.SubscribeToNotifications(HandleNotificationReceivedAsync));
         await RefreshAsync();
     }
 
@@ -173,6 +175,6 @@
 
     public void Dispose()
     {
-        RealtimeClient.NotificationReceived -= HandleNotificationReceivedAsync;
+        _realtimeSubscriptions.Dispose();
     }
 }
