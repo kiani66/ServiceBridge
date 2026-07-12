@@ -5,8 +5,8 @@
             <h2 id="confirmation-title">@Title</h2>
             <p>@Description</p>
             <div class="sb-dialog-actions">
-                <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="CancelAsync">Cancel</MudButton>
-                <MudButton Variant="Variant.Filled" Color="@Color" OnClick="ConfirmAsync">@ConfirmText</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Default" Disabled="@IsBusy" OnClick="CancelAsync">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="@Color" Disabled="@IsBusy" OnClick="ConfirmAsync">@ConfirmText</MudButton>
             </div>
         </section>
     </div>
@@ -20,15 +20,29 @@
     [Parameter] public string Description { get; set; } = "Confirm that you want to continue.";
     [Parameter] public string ConfirmText { get; set; } = "Confirm";
     [Parameter] public Color Color { get; set; } = Color.Primary;
+    [Parameter] public bool IsBusy { get; set; }
 
     private Task CancelAsync()
     {
+        if (IsBusy)
+        {
+            return Task.CompletedTask;
+        }
+
         return OpenChanged.InvokeAsync(false);
     }
 
     private async Task ConfirmAsync()
     {
+        if (IsBusy)
+        {
+            return;
+        }
+
         await OnConfirmed.InvokeAsync();
-        await OpenChanged.InvokeAsync(false);
+        if (!IsBusy)
+        {
+            await OpenChanged.InvokeAsync(false);
+        }
     }
 }

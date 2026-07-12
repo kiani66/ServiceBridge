@@ -19,6 +19,7 @@ public static class RoleNavigation
             [
                 new("Dashboard", "/ui/admin"),
                 new("Catalog", "/ui/admin/catalog"),
+                new("Inventory", "/ui/admin/inventory"),
                 new("Pricing", "/ui/admin/pricing"),
                 new("Users", "/ui/admin/users"),
                 new("Orders", "/ui/admin/orders"),
@@ -100,6 +101,7 @@ public static class RoleNavigation
                 new("Support", "/ui/admin/tickets", "Operations", Icons.Material.Outlined.ContactSupport),
                 new("Refunds", "/ui/admin/refunds", "Operations", Icons.Material.Outlined.AssignmentReturn),
                 new("Catalog", "/ui/admin/catalog", "Commerce", Icons.Material.Outlined.Inventory2),
+                new("Inventory", "/ui/admin/inventory", "Commerce", Icons.Material.Outlined.Inventory),
                 new("Pricing", "/ui/admin/pricing", "Commerce", Icons.Material.Outlined.PriceChange),
                 new("Financial Reports", "/ui/admin/reports/financial", "Insights", Icons.Material.Outlined.Assessment),
                 new("Order Audit", "/ui/admin/audit", "Insights", Icons.Material.Outlined.ManageSearch),
