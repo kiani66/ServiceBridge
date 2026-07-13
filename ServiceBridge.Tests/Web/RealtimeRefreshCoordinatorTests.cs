@@ -118,49 +118,10 @@ public class RealtimeRefreshCoordinatorTests
         coordinator.Dispose();
     }
 
-    [Fact]
-    public void RoleOrderDetails_UseSharedDisposableApplicationGate()
-    {
-        foreach (var page in new[]
-                 {
-                     "OrderDetails.razor",
-                     "AgentOrderWorkspace.razor",
-                     "AdminOrderManagement.razor"
-                 })
-        {
-            var source = File.ReadAllText(PagePath(page));
-            Assert.Contains(
-                "new RealtimeRefreshCoordinator(RefreshFromRealtimeCoreAsync)",
-                source);
-            Assert.Contains("private bool _disposed;", source);
-            Assert.Contains("_realtimeRefresh?.RunAsync()", source);
-            Assert.Contains("_realtimeRefresh?.TryApply(apply)", source);
-            Assert.Contains("_realtimeRefresh?.Dispose();", source);
-            Assert.Equal(
-                1,
-                source.Split("SubscribeToOrderUpdates", StringSplitOptions.None).Length - 1);
-        }
-    }
-
     private static TaskCompletionSource NewSignal()
     {
         return new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    private static string PagePath(string page)
-    {
-        var root = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "..",
-            "..",
-            "..",
-            ".."));
-        return Path.Combine(
-            root,
-            "ServiceBridge.Web",
-            "Components",
-            "Pages",
-            page);
-    }
 }

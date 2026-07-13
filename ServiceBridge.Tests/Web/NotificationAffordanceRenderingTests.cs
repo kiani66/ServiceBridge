@@ -23,6 +23,12 @@ public class NotificationAffordanceRenderingTests : BunitContext
         list.Find("button[data-notification-action='open']").Click();
 
         Assert.Equal(2, opened);
+        Assert.Equal(
+            "Open notification: Order update",
+            list.Find("button[data-notification-action='open']").GetAttribute("aria-label"));
+        Assert.Equal(
+            "Mark notification as read: Order update",
+            list.Find("button[data-notification-action='mark-read']").GetAttribute("aria-label"));
         Assert.Empty(bell.FindAll("button button"));
         Assert.Empty(list.FindAll("button button"));
     }

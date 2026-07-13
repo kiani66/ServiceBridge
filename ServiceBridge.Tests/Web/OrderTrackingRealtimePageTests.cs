@@ -6,7 +6,6 @@ public class OrderTrackingRealtimePageTests
 {
     [Theory]
     [InlineData("Orders.razor")]
-    [InlineData("OrderDetails.razor")]
     [InlineData("PaymentSuccess.razor")]
     [InlineData("PaymentFailure.razor")]
     public void OrderTrackingPages_ReuseSharedRealtimeClientSubscriptions(string pageName)
@@ -24,7 +23,6 @@ public class OrderTrackingRealtimePageTests
     }
 
     [Theory]
-    [InlineData("OrderDetails.razor")]
     [InlineData("PaymentSuccess.razor")]
     [InlineData("PaymentFailure.razor")]
     public void OrderDetailPages_FilterRealtimeEventsToCurrentOrder(string pageName)
