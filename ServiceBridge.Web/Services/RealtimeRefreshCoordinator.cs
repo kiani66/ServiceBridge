@@ -1,49 +1,75 @@
 namespace ServiceBridge.Web.Services;
 
-public sealed class RealtimeRefreshCoordinator
+public sealed class RealtimeRefreshCoordinator : IDisposable
 {
     private readonly object _sync = new();
-    private Task? _activeRefresh;
-    private bool _refreshRequested;
+    private readonly Func<Task> _refresh;
+    private readonly CoalescingAsyncAction _coalescingAction;
+    private bool _disposed;
 
-    public Task RunAsync(Func<Task> refresh)
+    public RealtimeRefreshCoordinator(Func<Task> refresh)
     {
-        ArgumentNullException.ThrowIfNull(refresh);
+        _refresh = refresh ?? throw new ArgumentNullException(nameof(refresh));
+        _coalescingAction = new CoalescingAsyncAction(RunIfAliveAsync);
+    }
 
-        lock (_sync)
+    public bool IsDisposed
+    {
+        get
         {
-            _refreshRequested = true;
-            if (_activeRefresh is { IsCompleted: false })
+            lock (_sync)
             {
-                return _activeRefresh;
+                return _disposed;
             }
-
-            _activeRefresh = RunPendingRefreshesAsync(refresh);
-            return _activeRefresh;
         }
     }
 
-    private async Task RunPendingRefreshesAsync(Func<Task> refresh)
+    public Task RunAsync()
     {
-        while (true)
+        return _coalescingAction.RequestAsync();
+    }
+
+    public bool TryApply(Action apply)
+    {
+        ArgumentNullException.ThrowIfNull(apply);
+
+        lock (_sync)
         {
-            lock (_sync)
+            if (_disposed)
             {
-                _refreshRequested = false;
+                return false;
             }
 
-            await refresh();
+            apply();
+            return true;
+        }
+    }
 
-            lock (_sync)
+    public void Dispose()
+    {
+        lock (_sync)
+        {
+            if (_disposed)
             {
-                if (_refreshRequested)
-                {
-                    continue;
-                }
-
-                _activeRefresh = null;
                 return;
             }
+
+            _disposed = true;
+        }
+
+        _coalescingAction.Dispose();
+    }
+
+    private Task RunIfAliveAsync()
+    {
+        lock (_sync)
+        {
+            if (_disposed)
+            {
+                return Task.CompletedTask;
+            }
+
+            return _refresh();
         }
     }
 }

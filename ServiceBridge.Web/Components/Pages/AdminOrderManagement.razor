@@ -186,9 +186,10 @@ else
 
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
-    private readonly RealtimeRefreshCoordinator _realtimeRefresh = new();
+    private RealtimeRefreshCoordinator? _realtimeRefresh;
     [Parameter] public Guid OrderId { get; set; }
 
+    private bool _disposed;
     private bool _loading = true;
     private bool _revealBusy;
     private bool _credentialsRevealed;
@@ -252,6 +253,7 @@ else
 
     protected override void OnInitialized()
     {
+        _realtimeRefresh = new RealtimeRefreshCoordinator(RefreshFromRealtimeCoreAsync);
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync));
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderAssignments(HandleOrderAssignedAsync));
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToCustomerActions(HandleCustomerActionChangedAsync));
@@ -264,22 +266,31 @@ else
 
     private async Task LoadOrderAsync()
     {
-        _loading = true;
-        _errorMessage = null;
-        _revealError = null;
-        _credentialsRevealed = false;
-        _revealedCredentialItems = Array.Empty<CredentialDisplayItem>();
+        if (!TryApplyRealtimeState(() =>
+            {
+                _loading = true;
+                _errorMessage = null;
+                _revealError = null;
+                _credentialsRevealed = false;
+                _revealedCredentialItems = Array.Empty<CredentialDisplayItem>();
+            }))
+        {
+            return;
+        }
 
         var result = await AdminOrdersClient.GetOrderAsync(OrderId);
         if (result.RequiresAuthentication)
         {
-            Navigation.NavigateTo("/Account/Login");
+            TryApplyRealtimeState(() => Navigation.NavigateTo("/Account/Login"));
             return;
         }
 
-        _order = result.Success ? result.Data : null;
-        _errorMessage = result.ErrorMessage;
-        _loading = false;
+        TryApplyRealtimeState(() =>
+        {
+            _order = result.Success ? result.Data : null;
+            _errorMessage = result.ErrorMessage;
+            _loading = false;
+        });
     }
 
     private async Task RevealCredentialsAsync()
@@ -346,11 +357,33 @@ else
 
     private Task ReloadFromRealtimeAsync()
     {
-        return _realtimeRefresh.RunAsync(() => InvokeAsync(async () =>
+        return _realtimeRefresh?.RunAsync() ?? Task.CompletedTask;
+    }
+
+    private Task RefreshFromRealtimeCoreAsync()
+    {
+        Task? refreshTask = null;
+        if (!TryApplyRealtimeState(() => refreshTask = InvokeAsync(async () =>
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                await LoadOrderAsync();
+                TryApplyRealtimeState(StateHasChanged);
+            })))
         {
-            await LoadOrderAsync();
-            StateHasChanged();
-        }));
+            return Task.CompletedTask;
+        }
+
+        return refreshTask!;
+    }
+
+    private bool TryApplyRealtimeState(Action apply)
+    {
+        return !_disposed &&
+               _realtimeRefresh?.TryApply(apply) == true;
     }
 
     private static string FormatNullable(DateTime? value)
@@ -360,6 +393,13 @@ else
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _realtimeRefresh?.Dispose();
         _realtimeSubscriptions.Dispose();
     }
 }
