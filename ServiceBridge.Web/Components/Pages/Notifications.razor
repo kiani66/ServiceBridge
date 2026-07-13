@@ -108,11 +108,19 @@
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     private readonly HashSet<Guid> _busyNotifications = new();
+    private readonly CancellationTokenSource _lifetimeCts = new();
     private const int PageSize = 20;
 
+    private CoalescingAsyncAction? _refreshAction;
+    private bool _disposed;
     private bool _loading = true;
+    private bool _markAllBusy;
     private bool _unreadOnly;
     private int _unreadCount;
+    private int _requestedPage = 1;
+    private bool _requestedUnreadOnly;
+    private long _mutationVersion;
+    private long _requestVersion;
     private string? _errorMessage;
     private PagedResultDto<NotificationDto> _notifications = new()
     {
@@ -122,25 +130,65 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _refreshAction = new CoalescingAsyncAction(LoadCoreAsync);
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToNotifications(HandleNotificationReceivedAsync));
-        await LoadAsync(1);
+        await RequestLoadAsync(1);
     }
 
-    private async Task LoadAsync(int page)
+    private Task RequestLoadAsync(int page)
     {
+        if (_disposed)
+        {
+            return Task.CompletedTask;
+        }
+
+        _requestedPage = Math.Max(page, 1);
+        _requestedUnreadOnly = _unreadOnly;
+        _requestVersion++;
+        return _refreshAction?.RequestAsync() ?? Task.CompletedTask;
+    }
+
+    private async Task LoadCoreAsync()
+    {
+        var page = _requestedPage;
+        var unreadOnly = _requestedUnreadOnly;
+        var requestVersion = _requestVersion;
+        var mutationVersion = _mutationVersion;
         _loading = true;
         _errorMessage = null;
 
-        var notificationsResult = await NotificationsClient.GetNotificationsAsync(
-            page,
-            PageSize,
-            _unreadOnly);
-        var countResult = await NotificationsClient.GetUnreadCountAsync();
+        NotificationsApiResult<PagedResultDto<NotificationDto>> notificationsResult;
+        NotificationsApiResult<UnreadNotificationCountDto> countResult;
+        try
+        {
+            notificationsResult = await NotificationsClient.GetNotificationsAsync(
+                page,
+                PageSize,
+                unreadOnly,
+                _lifetimeCts.Token);
+            countResult = await NotificationsClient.GetUnreadCountAsync(_lifetimeCts.Token);
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+            return;
+        }
+
+        if (_disposed)
+        {
+            return;
+        }
 
         if (notificationsResult.RequiresAuthentication ||
             countResult.RequiresAuthentication)
         {
             Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (requestVersion != _requestVersion ||
+            mutationVersion != _mutationVersion)
+        {
+            _ = _refreshAction?.RequestAsync();
             return;
         }
 
@@ -167,80 +215,149 @@
 
     private Task ReloadAsync()
     {
-        return LoadAsync(_notifications.Page <= 0 ? 1 : _notifications.Page);
+        return RequestLoadAsync(_notifications.Page <= 0 ? 1 : _notifications.Page);
     }
 
     private async Task OnUnreadOnlyChanged(bool value)
     {
         _unreadOnly = value;
-        await LoadAsync(1);
+        await RequestLoadAsync(1);
     }
 
     private async Task MarkAsReadAsync(NotificationDto notification)
     {
-        if (!_busyNotifications.Add(notification.Id))
+        if (_disposed || !_busyNotifications.Add(notification.Id))
         {
             return;
         }
 
         try
         {
-            var result = await NotificationsClient.MarkAsReadAsync(notification.Id);
+            var result = await NotificationsClient.MarkAsReadAsync(
+                notification.Id,
+                _lifetimeCts.Token);
+            if (_disposed)
+            {
+                return;
+            }
+
             if (result.RequiresAuthentication)
             {
                 Navigation.NavigateTo("/Account/Login");
                 return;
             }
 
-            await ReloadAsync();
+            if (result.Success)
+            {
+                ApplyReadMutation(notification.Id);
+            }
+
+            QueueAuthoritativeRefresh();
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
         }
         finally
         {
-            _busyNotifications.Remove(notification.Id);
+            if (!_disposed)
+            {
+                _busyNotifications.Remove(notification.Id);
+            }
         }
     }
 
     private async Task MarkAllAsReadAsync()
     {
-        var result = await NotificationsClient.MarkAllAsReadAsync();
-        if (result.RequiresAuthentication)
+        if (_disposed || _markAllBusy)
         {
-            Navigation.NavigateTo("/Account/Login");
             return;
         }
 
-        await LoadAsync(1);
+        _markAllBusy = true;
+        try
+        {
+            var result = await NotificationsClient.MarkAllAsReadAsync(_lifetimeCts.Token);
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (result.Success)
+            {
+                ApplyMarkAllMutation();
+            }
+
+            QueueAuthoritativeRefresh(page: 1);
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
+        finally
+        {
+            if (!_disposed)
+            {
+                _markAllBusy = false;
+            }
+        }
     }
 
     private Task PreviousPageAsync()
     {
-        return LoadAsync(Math.Max(_notifications.Page - 1, 1));
+        return RequestLoadAsync(Math.Max(_notifications.Page - 1, 1));
     }
 
     private Task NextPageAsync()
     {
-        return LoadAsync(_notifications.Page + 1);
+        return RequestLoadAsync(_notifications.Page + 1);
     }
 
     private async Task OpenRelatedAsync(NotificationDto notification)
     {
-        if (!_busyNotifications.Add(notification.Id))
+        if (_disposed || !_busyNotifications.Add(notification.Id))
         {
             return;
         }
 
         try
         {
-            _unreadCount = await NotificationNavigation.OpenAsync(
+            var wasUnread = !notification.IsRead;
+            var preparation = await NotificationNavigation.PrepareOpenAsync(
                 notification,
-                _unreadCount,
                 () => Task.CompletedTask,
-                id => NotificationsClient.MarkAsReadAsync(id),
-                route => Navigation.NavigateTo(route));
+                id => NotificationsClient.MarkAsReadAsync(id, _lifetimeCts.Token),
+                () => !_disposed);
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (wasUnread && preparation.MarkedAsRead)
+            {
+                ApplyReadMutation(notification.Id);
+            }
+
+            if (wasUnread)
+            {
+                QueueAuthoritativeRefresh();
+            }
+
+            if (preparation.Route is not null)
+            {
+                Navigation.NavigateTo(preparation.Route);
+            }
         }
         finally
         {
-            _busyNotifications.Remove(notification.Id);
+            if (!_disposed)
+            {
+                _busyNotifications.Remove(notification.Id);
+            }
         }
     }
 
@@ -253,13 +370,89 @@
     {
         return InvokeAsync(async () =>
         {
-            await LoadAsync(_unreadOnly ? 1 : Math.Max(_notifications.Page, 1));
-            StateHasChanged();
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (notification.UnreadCount.HasValue)
+            {
+                _mutationVersion++;
+                _unreadCount = Math.Max(0, notification.UnreadCount.Value);
+            }
+
+            await RequestLoadAsync(_unreadOnly ? 1 : Math.Max(_notifications.Page, 1));
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void ApplyReadMutation(Guid notificationId)
+    {
+        var current = _notifications.Items.FirstOrDefault(item => item.Id == notificationId);
+        if (current is null || current.IsRead)
+        {
+            return;
+        }
+
+        _mutationVersion++;
+        current.IsRead = true;
+        _unreadCount = Math.Max(0, _unreadCount - 1);
+        if (_unreadOnly)
+        {
+            _notifications.Items = _notifications.Items
+                .Where(item => item.Id != notificationId)
+                .ToArray();
+            _notifications.TotalCount = Math.Max(0, _notifications.TotalCount - 1);
+        }
+    }
+
+    private void ApplyMarkAllMutation()
+    {
+        _mutationVersion++;
+        foreach (var notification in _notifications.Items)
+        {
+            notification.IsRead = true;
+        }
+
+        _unreadCount = 0;
+        if (_unreadOnly)
+        {
+            _notifications.Items = Array.Empty<NotificationDto>();
+            _notifications.TotalCount = 0;
+        }
+    }
+
+    private void QueueAuthoritativeRefresh(int? page = null)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            await RequestLoadAsync(page ?? Math.Max(_notifications.Page, 1));
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
         });
     }
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _lifetimeCts.Cancel();
+        _refreshAction?.Dispose();
         _realtimeSubscriptions.Dispose();
+        _lifetimeCts.Dispose();
     }
 }

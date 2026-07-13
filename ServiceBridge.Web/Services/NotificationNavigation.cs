@@ -21,6 +21,36 @@ public static class NotificationNavigation
         ArgumentNullException.ThrowIfNull(markAsReadAsync);
         ArgumentNullException.ThrowIfNull(navigate);
 
+        var preparation = await PrepareOpenAsync(
+            notification,
+            closeAsync,
+            markAsReadAsync,
+            static () => true);
+        if (preparation.MarkedAsRead)
+        {
+            notification.IsRead = true;
+            unreadCount = Math.Max(0, unreadCount - 1);
+        }
+
+        if (preparation.Route is not null)
+        {
+            navigate(preparation.Route);
+        }
+
+        return unreadCount;
+    }
+
+    internal static async Task<NotificationOpenPreparation> PrepareOpenAsync(
+        NotificationDto notification,
+        Func<Task> closeAsync,
+        Func<Guid, Task<NotificationsApiResult<bool>>> markAsReadAsync,
+        Func<bool> canContinue)
+    {
+        ArgumentNullException.ThrowIfNull(notification);
+        ArgumentNullException.ThrowIfNull(closeAsync);
+        ArgumentNullException.ThrowIfNull(markAsReadAsync);
+        ArgumentNullException.ThrowIfNull(canContinue);
+
         try
         {
             await closeAsync();
@@ -30,16 +60,17 @@ public static class NotificationNavigation
             // A popover close failure must not prevent the notification action.
         }
 
+        var route = TryGetSafeInternalRoute(notification.LinkUrl, out var safeRoute)
+            ? safeRoute
+            : null;
+        var markedAsRead = false;
+
         if (!notification.IsRead)
         {
             try
             {
                 var result = await markAsReadAsync(notification.Id);
-                if (result.Success)
-                {
-                    notification.IsRead = true;
-                    unreadCount = Math.Max(0, unreadCount - 1);
-                }
+                markedAsRead = result.Success;
             }
             catch
             {
@@ -47,12 +78,12 @@ public static class NotificationNavigation
             }
         }
 
-        if (TryGetSafeInternalRoute(notification.LinkUrl, out var route))
+        if (!canContinue())
         {
-            navigate(route);
+            return default;
         }
 
-        return unreadCount;
+        return new NotificationOpenPreparation(markedAsRead, route);
     }
 
     public static bool TryGetSafeInternalRoute(
@@ -187,3 +218,7 @@ public static class NotificationNavigation
                value.Any(char.IsControl);
     }
 }
+
+internal readonly record struct NotificationOpenPreparation(
+    bool MarkedAsRead,
+    string? Route);
