@@ -21,7 +21,7 @@ else if (_order is null)
     <ErrorState Title="Order unavailable"
                 Message="@(_errorMessage ?? "The requested order could not be loaded.")"
                 Icon="@Icons.Material.Outlined.SearchOff"
-                OnRetry="LoadOrderAsync">
+                OnRetry="RequestOrderReloadAsync">
         <Actions>
             <MudButton Href="/ui/orders" Variant="Variant.Outlined" Color="Color.Primary">Back to orders</MudButton>
         </Actions>
@@ -262,7 +262,10 @@ else
 
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
+    private readonly CancellationTokenSource _lifetimeCts = new();
     private RealtimeRefreshCoordinator? _realtimeRefresh;
+    private long _loadGeneration;
+    private Guid _requestedOrderId;
     [Parameter] public Guid OrderId { get; set; }
 
     private bool _disposed;
@@ -352,84 +355,114 @@ else
 
     protected override void OnInitialized()
     {
-        _realtimeRefresh = new RealtimeRefreshCoordinator(RefreshFromRealtimeCoreAsync);
+        _realtimeRefresh = new RealtimeRefreshCoordinator(RunOrderReloadCoreAsync);
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync));
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToCustomerActions(HandleCustomerActionChangedAsync));
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        await LoadOrderAsync();
+        await RequestOrderReloadAsync();
     }
 
-    private async Task LoadOrderAsync()
+    private Task RequestOrderReloadAsync()
     {
+        if (_disposed)
+        {
+            return Task.CompletedTask;
+        }
+
+        _requestedOrderId = OrderId;
+        _loadGeneration++;
         if (!TryApplyRealtimeState(() =>
             {
                 _loading = true;
                 _errorMessage = null;
+                _order = null;
+                _refunds = Array.Empty<RefundRequestDto>();
+                _refundsLoading = true;
             }))
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        var result = await OrdersClient.GetOrderAsync(OrderId);
-        if (result.RequiresAuthentication)
+        return _realtimeRefresh?.RunAsync() ?? Task.CompletedTask;
+    }
+
+    private Task RunOrderReloadCoreAsync()
+    {
+        return InvokeAsync(async () =>
         {
-            TryApplyRealtimeState(() => Navigation.NavigateTo("/Account/Login"));
-            return;
-        }
-
-        if (!TryApplyRealtimeState(() =>
+            await LoadOrderCoreAsync();
+            if (!_disposed)
             {
-                _order = result.Success ? result.Data : null;
-                _errorMessage = result.ErrorMessage;
+                StateHasChanged();
+            }
+        });
+    }
+
+    private async Task LoadOrderCoreAsync()
+    {
+        var generation = _loadGeneration;
+        var orderId = _requestedOrderId;
+        try
+        {
+            var orderResult = await OrdersClient.GetOrderAsync(orderId, _lifetimeCts.Token);
+            if (!IsCurrentLoad(generation, orderId))
+            {
+                return;
+            }
+
+            if (orderResult.RequiresAuthentication)
+            {
+                TryApplyCurrentLoad(generation, orderId, () => Navigation.NavigateTo("/Account/Login"));
+                return;
+            }
+
+            RefundsApiResult<PagedResultDto<RefundRequestDto>>? refundsResult = null;
+            if (orderResult.Success && orderResult.Data is not null)
+            {
+                refundsResult = await RefundsClient.GetOrderRefundsAsync(orderId, _lifetimeCts.Token);
+                if (!IsCurrentLoad(generation, orderId))
+                {
+                    return;
+                }
+
+                if (refundsResult.RequiresAuthentication)
+                {
+                    TryApplyCurrentLoad(generation, orderId, () => Navigation.NavigateTo("/Account/Login"));
+                    return;
+                }
+            }
+
+            TryApplyCurrentLoad(generation, orderId, () =>
+            {
+                _order = orderResult.Success ? orderResult.Data : null;
+                _errorMessage = orderResult.ErrorMessage;
+                _refunds = refundsResult?.Success == true && refundsResult.Data is not null
+                    ? refundsResult.Data.Items
+                    : Array.Empty<RefundRequestDto>();
+                _refundsLoading = false;
+                _loading = false;
                 if (PendingCustomerAction is null)
                 {
                     _showCustomerActionForm = false;
                     _customerActionResponse = string.Empty;
                 }
-            }))
-        {
-            return;
+            });
         }
-
-        await LoadRefundsAsync();
-        TryApplyRealtimeState(() => _loading = false);
-    }
-
-    private async Task LoadRefundsAsync()
-    {
-        if (_order is null)
+        catch (OperationCanceledException) when (_disposed)
         {
-            TryApplyRealtimeState(() => _refunds = Array.Empty<RefundRequestDto>());
-            return;
         }
-
-        var orderId = _order.OrderId;
-        if (!TryApplyRealtimeState(() => _refundsLoading = true))
-        {
-            return;
-        }
-
-        var result = await RefundsClient.GetOrderRefundsAsync(orderId);
-        if (result.RequiresAuthentication)
-        {
-            TryApplyRealtimeState(() => Navigation.NavigateTo("/Account/Login"));
-            return;
-        }
-
-        TryApplyRealtimeState(() =>
-        {
-            _refunds = result.Success && result.Data is not null
-                ? result.Data.Items
-                : Array.Empty<RefundRequestDto>();
-            _refundsLoading = false;
-        });
     }
 
     private async Task RequestRefundAsync()
     {
+        if (_disposed || _refundBusy)
+        {
+            return;
+        }
+
         _refundError = null;
         _refundMessage = null;
 
@@ -440,96 +473,165 @@ else
         }
 
         _refundBusy = true;
-        var result = await RefundsClient.CreateAsync(OrderId, _refundReason);
-        if (result.RequiresAuthentication)
+        var orderId = OrderId;
+        try
         {
-            Navigation.NavigateTo("/Account/Login");
-            return;
-        }
+            var result = await RefundsClient.CreateAsync(
+                orderId,
+                _refundReason,
+                _lifetimeCts.Token);
+            if (!CanContinueAction(orderId))
+            {
+                return;
+            }
 
-        if (!result.Success)
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (!result.Success)
+            {
+                _refundError = result.ErrorMessage ?? "Unable to submit this refund request.";
+                _refundBusy = false;
+                return;
+            }
+
+            _refundReason = null;
+            _refundMessage = "Refund request submitted.";
+            await RequestOrderReloadAsync();
+            if (CanContinueAction(orderId))
+            {
+                _refundBusy = false;
+            }
+        }
+        catch (OperationCanceledException) when (_disposed)
         {
-            _refundError = result.ErrorMessage ?? "Unable to submit this refund request.";
-            _refundBusy = false;
-            return;
         }
-
-        _refundReason = null;
-        _refundMessage = "Refund request submitted.";
-        await LoadRefundsAsync();
-        _refundBusy = false;
     }
 
     private async Task InitiatePaymentAsync()
     {
+        if (_disposed || _paymentBusy)
+        {
+            return;
+        }
+
         _paymentError = null;
         _paymentBusy = true;
+        var orderId = OrderId;
 
-        var initiateResult = await PaymentClient.InitiatePaymentAsync(OrderId, Guid.NewGuid());
-        if (initiateResult.RequiresAuthentication)
+        try
         {
-            Navigation.NavigateTo("/Account/Login");
-            return;
-        }
+            var initiateResult = await PaymentClient.InitiatePaymentAsync(
+                orderId,
+                Guid.NewGuid(),
+                _lifetimeCts.Token);
+            if (!CanContinueAction(orderId))
+            {
+                return;
+            }
 
-        if (!initiateResult.Success || initiateResult.Data is null)
+            if (initiateResult.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (!initiateResult.Success || initiateResult.Data is null)
+            {
+                _paymentError = initiateResult.ErrorMessage ?? "Unable to start payment for this order.";
+                _paymentBusy = false;
+                return;
+            }
+
+            var mockResult = await PaymentClient.ProcessMockPaymentAsync(
+                initiateResult.Data.PaymentId,
+                succeed: true,
+                _lifetimeCts.Token);
+            if (!CanContinueAction(orderId))
+            {
+                return;
+            }
+
+            if (mockResult.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (!mockResult.Success || mockResult.Data is null)
+            {
+                _paymentError = mockResult.ErrorMessage ?? "Unable to process the mock payment.";
+                _paymentBusy = false;
+                return;
+            }
+
+            var route = mockResult.Data.Status == PaymentStatus.Completed
+                ? "success"
+                : "failure";
+
+            Navigation.NavigateTo(
+                $"/ui/payments/{route}/{mockResult.Data.OrderId}?paymentId={mockResult.Data.PaymentId}");
+        }
+        catch (OperationCanceledException) when (_disposed)
         {
-            _paymentError = initiateResult.ErrorMessage ?? "Unable to start payment for this order.";
-            _paymentBusy = false;
-            return;
         }
-
-        var mockResult = await PaymentClient.ProcessMockPaymentAsync(
-            initiateResult.Data.PaymentId,
-            succeed: true);
-        if (mockResult.RequiresAuthentication)
-        {
-            Navigation.NavigateTo("/Account/Login");
-            return;
-        }
-
-        if (!mockResult.Success || mockResult.Data is null)
-        {
-            _paymentError = mockResult.ErrorMessage ?? "Unable to process the mock payment.";
-            _paymentBusy = false;
-            return;
-        }
-
-        var route = mockResult.Data.Status == PaymentStatus.Completed
-            ? "success"
-            : "failure";
-
-        Navigation.NavigateTo(
-            $"/ui/payments/{route}/{mockResult.Data.OrderId}?paymentId={mockResult.Data.PaymentId}");
     }
 
     private async Task CancelOrderAsync()
     {
+        if (_disposed || _cancelBusy)
+        {
+            return;
+        }
+
         _cancelError = null;
         _cancelMessage = null;
         _cancelBusy = true;
+        var orderId = OrderId;
 
-        var result = await OrdersClient.CancelOrderAsync(OrderId);
-        if (result.RequiresAuthentication)
+        try
         {
-            Navigation.NavigateTo("/Account/Login");
-            return;
-        }
+            var result = await OrdersClient.CancelOrderAsync(orderId, _lifetimeCts.Token);
+            if (!CanContinueAction(orderId))
+            {
+                return;
+            }
 
-        if (!result.Success)
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (!result.Success)
+            {
+                _cancelError = result.ErrorMessage ?? "Unable to cancel this order.";
+                _cancelBusy = false;
+                return;
+            }
+
+            _cancelMessage = "Order cancelled successfully.";
+            await RequestOrderReloadAsync();
+            if (CanContinueAction(orderId))
+            {
+                _cancelBusy = false;
+            }
+        }
+        catch (OperationCanceledException) when (_disposed)
         {
-            _cancelError = result.ErrorMessage ?? "Unable to cancel this order.";
-            _cancelBusy = false;
-            return;
         }
-
-        _cancelMessage = "Order cancelled successfully.";
-        await LoadOrderAsync();
-        _cancelBusy = false;
     }
 
     private async Task SubmitCustomerActionResponseAsync()
     {
+        if (_disposed || _customerActionBusy)
+        {
+            return;
+        }
+
         _customerActionError = null;
         _customerActionMessage = null;
         var pendingRequest = PendingCustomerAction;
@@ -546,28 +648,44 @@ else
         }
 
         _customerActionBusy = true;
-        var result = await OrdersClient.RespondToCustomerActionAsync(
-            OrderId,
-            pendingRequest.Id,
-            _customerActionResponse);
-        if (result.RequiresAuthentication)
+        var orderId = OrderId;
+        try
         {
-            Navigation.NavigateTo("/Account/Login");
-            return;
-        }
+            var result = await OrdersClient.RespondToCustomerActionAsync(
+                orderId,
+                pendingRequest.Id,
+                _customerActionResponse,
+                _lifetimeCts.Token);
+            if (!CanContinueAction(orderId))
+            {
+                return;
+            }
 
-        if (!result.Success)
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (!result.Success)
+            {
+                _customerActionError = result.ErrorMessage ?? "Unable to submit your response.";
+                _customerActionBusy = false;
+                return;
+            }
+
+            _customerActionResponse = string.Empty;
+            _showCustomerActionForm = false;
+            _customerActionMessage = "Information submitted.";
+            await RequestOrderReloadAsync();
+            if (CanContinueAction(orderId))
+            {
+                _customerActionBusy = false;
+            }
+        }
+        catch (OperationCanceledException) when (_disposed)
         {
-            _customerActionError = result.ErrorMessage ?? "Unable to submit your response.";
-            _customerActionBusy = false;
-            return;
         }
-
-        _customerActionResponse = string.Empty;
-        _showCustomerActionForm = false;
-        _customerActionMessage = "Information submitted.";
-        await LoadOrderAsync();
-        _customerActionBusy = false;
     }
 
     private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
@@ -577,7 +695,7 @@ else
             return Task.CompletedTask;
         }
 
-        return ReloadFromRealtimeAsync();
+        return RequestOrderReloadAsync();
     }
 
     private Task HandleCustomerActionChangedAsync(
@@ -588,32 +706,25 @@ else
             return Task.CompletedTask;
         }
 
-        return ReloadFromRealtimeAsync();
+        return RequestOrderReloadAsync();
     }
 
-    private Task ReloadFromRealtimeAsync()
+    private bool IsCurrentLoad(long generation, Guid orderId)
     {
-        return _realtimeRefresh?.RunAsync() ?? Task.CompletedTask;
+        return !_disposed &&
+               generation == _loadGeneration &&
+               orderId == _requestedOrderId &&
+               orderId == OrderId;
     }
 
-    private Task RefreshFromRealtimeCoreAsync()
+    private bool TryApplyCurrentLoad(long generation, Guid orderId, Action apply)
     {
-        Task? refreshTask = null;
-        if (!TryApplyRealtimeState(() => refreshTask = InvokeAsync(async () =>
-            {
-                if (_disposed)
-                {
-                    return;
-                }
+        return IsCurrentLoad(generation, orderId) && TryApplyRealtimeState(apply);
+    }
 
-                await LoadOrderAsync();
-                TryApplyRealtimeState(StateHasChanged);
-            })))
-        {
-            return Task.CompletedTask;
-        }
-
-        return refreshTask!;
+    private bool CanContinueAction(Guid orderId)
+    {
+        return !_disposed && orderId == OrderId;
     }
 
     private bool TryApplyRealtimeState(Action apply)
@@ -635,7 +746,11 @@ else
         }
 
         _disposed = true;
+        _lifetimeCts.Cancel();
         _realtimeRefresh?.Dispose();
         _realtimeSubscriptions.Dispose();
+        _order = null;
+        _refunds = Array.Empty<RefundRequestDto>();
+        _lifetimeCts.Dispose();
     }
 }

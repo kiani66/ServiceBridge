@@ -19,7 +19,7 @@ else if (_order is null)
     <ErrorState Title="Order unavailable"
                 Message="@(_errorMessage ?? "The requested order could not be loaded.")"
                 Icon="@Icons.Material.Outlined.SearchOff"
-                OnRetry="LoadOrderAsync">
+                OnRetry="RequestOrderReloadAsync">
         <Actions>
             <MudButton Href="/ui/admin" Variant="Variant.Outlined" Color="Color.Primary">Back to admin</MudButton>
         </Actions>
@@ -186,7 +186,10 @@ else
 
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
+    private readonly CancellationTokenSource _lifetimeCts = new();
     private RealtimeRefreshCoordinator? _realtimeRefresh;
+    private long _loadGeneration;
+    private Guid _requestedOrderId;
     [Parameter] public Guid OrderId { get; set; }
 
     private bool _disposed;
@@ -253,7 +256,7 @@ else
 
     protected override void OnInitialized()
     {
-        _realtimeRefresh = new RealtimeRefreshCoordinator(RefreshFromRealtimeCoreAsync);
+        _realtimeRefresh = new RealtimeRefreshCoordinator(RunOrderReloadCoreAsync);
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync));
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderAssignments(HandleOrderAssignedAsync));
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToCustomerActions(HandleCustomerActionChangedAsync));
@@ -261,11 +264,18 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        await LoadOrderAsync();
+        await RequestOrderReloadAsync();
     }
 
-    private async Task LoadOrderAsync()
+    private Task RequestOrderReloadAsync()
     {
+        if (_disposed)
+        {
+            return Task.CompletedTask;
+        }
+
+        _requestedOrderId = OrderId;
+        _loadGeneration++;
         if (!TryApplyRealtimeState(() =>
             {
                 _loading = true;
@@ -273,55 +283,106 @@ else
                 _revealError = null;
                 _credentialsRevealed = false;
                 _revealedCredentialItems = Array.Empty<CredentialDisplayItem>();
+                _order = null;
             }))
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        var result = await AdminOrdersClient.GetOrderAsync(OrderId);
-        if (result.RequiresAuthentication)
-        {
-            TryApplyRealtimeState(() => Navigation.NavigateTo("/Account/Login"));
-            return;
-        }
+        return _realtimeRefresh?.RunAsync() ?? Task.CompletedTask;
+    }
 
-        TryApplyRealtimeState(() =>
+    private Task RunOrderReloadCoreAsync()
+    {
+        return InvokeAsync(async () =>
         {
-            _order = result.Success ? result.Data : null;
-            _errorMessage = result.ErrorMessage;
-            _loading = false;
+            await LoadOrderCoreAsync();
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
         });
+    }
+
+    private async Task LoadOrderCoreAsync()
+    {
+        var generation = _loadGeneration;
+        var orderId = _requestedOrderId;
+        try
+        {
+            var result = await AdminOrdersClient.GetOrderAsync(orderId, _lifetimeCts.Token);
+            if (!IsCurrentLoad(generation, orderId))
+            {
+                return;
+            }
+
+            if (result.RequiresAuthentication)
+            {
+                TryApplyCurrentLoad(generation, orderId, () => Navigation.NavigateTo("/Account/Login"));
+                return;
+            }
+
+            TryApplyCurrentLoad(generation, orderId, () =>
+            {
+                _order = result.Success ? result.Data : null;
+                _errorMessage = result.ErrorMessage;
+                _loading = false;
+            });
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
     }
 
     private async Task RevealCredentialsAsync()
     {
+        if (_disposed || _revealBusy)
+        {
+            return;
+        }
+
         _revealBusy = true;
         _revealError = null;
+        var generation = _loadGeneration;
+        var orderId = OrderId;
 
-        var result = await AdminOrdersClient.RevealCredentialsAsync(OrderId);
-        if (result.RequiresAuthentication)
+        try
         {
-            Navigation.NavigateTo("/Account/Login");
-            return;
-        }
+            var result = await AdminOrdersClient.RevealCredentialsAsync(
+                orderId,
+                _lifetimeCts.Token);
+            if (!IsCurrentLoad(generation, orderId))
+            {
+                return;
+            }
 
-        if (!result.Success || result.Data is null)
-        {
-            _revealError = result.ErrorMessage ?? "Unable to reveal credentials.";
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (!result.Success || result.Data is null)
+            {
+                _revealError = result.ErrorMessage ?? "Unable to reveal credentials.";
+                _revealBusy = false;
+                return;
+            }
+
+            _revealedCredentialItems = result.Data.Credentials
+                .OrderBy(field => field.DisplayOrder)
+                .Select(field => new CredentialDisplayItem(
+                    field.FieldLabel,
+                    field.Value,
+                    field.IsSensitive,
+                    field.IsVisibleToCustomerAfterCompletion))
+                .ToArray();
+            _credentialsRevealed = true;
             _revealBusy = false;
-            return;
         }
-
-        _revealedCredentialItems = result.Data.Credentials
-            .OrderBy(field => field.DisplayOrder)
-            .Select(field => new CredentialDisplayItem(
-                field.FieldLabel,
-                field.Value,
-                field.IsSensitive,
-                field.IsVisibleToCustomerAfterCompletion))
-            .ToArray();
-        _credentialsRevealed = true;
-        _revealBusy = false;
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
     }
 
     private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
@@ -331,7 +392,7 @@ else
             return Task.CompletedTask;
         }
 
-        return ReloadFromRealtimeAsync();
+        return RequestOrderReloadAsync();
     }
 
     private Task HandleOrderAssignedAsync(OrderAssignedRealtimeDto message)
@@ -341,7 +402,7 @@ else
             return Task.CompletedTask;
         }
 
-        return ReloadFromRealtimeAsync();
+        return RequestOrderReloadAsync();
     }
 
     private Task HandleCustomerActionChangedAsync(
@@ -352,32 +413,20 @@ else
             return Task.CompletedTask;
         }
 
-        return ReloadFromRealtimeAsync();
+        return RequestOrderReloadAsync();
     }
 
-    private Task ReloadFromRealtimeAsync()
+    private bool IsCurrentLoad(long generation, Guid orderId)
     {
-        return _realtimeRefresh?.RunAsync() ?? Task.CompletedTask;
+        return !_disposed &&
+               generation == _loadGeneration &&
+               orderId == _requestedOrderId &&
+               orderId == OrderId;
     }
 
-    private Task RefreshFromRealtimeCoreAsync()
+    private bool TryApplyCurrentLoad(long generation, Guid orderId, Action apply)
     {
-        Task? refreshTask = null;
-        if (!TryApplyRealtimeState(() => refreshTask = InvokeAsync(async () =>
-            {
-                if (_disposed)
-                {
-                    return;
-                }
-
-                await LoadOrderAsync();
-                TryApplyRealtimeState(StateHasChanged);
-            })))
-        {
-            return Task.CompletedTask;
-        }
-
-        return refreshTask!;
+        return IsCurrentLoad(generation, orderId) && TryApplyRealtimeState(apply);
     }
 
     private bool TryApplyRealtimeState(Action apply)
@@ -399,7 +448,12 @@ else
         }
 
         _disposed = true;
+        _lifetimeCts.Cancel();
         _realtimeRefresh?.Dispose();
         _realtimeSubscriptions.Dispose();
+        _order = null;
+        _credentialsRevealed = false;
+        _revealedCredentialItems = Array.Empty<CredentialDisplayItem>();
+        _lifetimeCts.Dispose();
     }
 }
