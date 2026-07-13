@@ -111,6 +111,20 @@ public class NotificationNavigationTests
     [InlineData("/ui/orders/42%00")]
     [InlineData("/ui/orders/42%1f")]
     [InlineData("/ui/orders/42%7f")]
+    [InlineData("/ui/../admin")]
+    [InlineData("/ui/./orders")]
+    [InlineData("/ui/%2e%2e/admin")]
+    [InlineData("/ui/%2E%2E/admin")]
+    [InlineData("/ui/%252e%252e/admin")]
+    [InlineData("/ui/%25252e%25252e/admin")]
+    [InlineData("/ui/%2525252e%2525252e/admin")]
+    [InlineData("/ui/%252525252e%252525252e/admin")]
+    [InlineData("/ui/%2e%2e/%2fadmin")]
+    [InlineData("/ui/orders/%2Fadmin")]
+    [InlineData("/ui/orders/%252Fadmin")]
+    [InlineData("/ui/orders/%00")]
+    [InlineData("/ui/orders/%EF%BC%8E%EF%BC%8E")]
+    [InlineData("/ui/orders/%EF%BC%8Fadmin")]
     public async Task OpenAsync_MissingMalformedOrExternalLink_MarksSafelyWithoutNavigation(
         string? linkUrl)
     {
@@ -140,6 +154,11 @@ public class NotificationNavigationTests
     [InlineData("/ui/orders/42?tab=timeline#activity")]
     [InlineData("/ui/search?q=%E2%9C%93")]
     [InlineData("/ui/search?q=100%25")]
+    [InlineData("/ui/orders/42?tab=timeline")]
+    [InlineData("/ui/search/safe%20text")]
+    [InlineData("/ui/search/100%25")]
+    [InlineData("/ui/search/\u0633\u0641\u0627\u0631\u0634")]
+    [InlineData("/ui/search?q=%ZZ#fragment%")]
     public void TryGetSafeInternalRoute_AcceptsOnlyUiRelativeRoutes(string linkUrl)
     {
         Assert.True(NotificationNavigation.TryGetSafeInternalRoute(linkUrl, out var route));
