@@ -25,20 +25,8 @@
                 </MudTooltip>
             </ActivatorContent>
             <ChildContent>
-                <div class="sb-notification-dropdown">
-                    <div class="sb-notification-dropdown-header">
-                        <strong>Notifications</strong>
-                        @if (_unreadCount > 0)
-                        {
-                            <MudButton Variant="Variant.Text"
-                                       Color="Color.Primary"
-                                       Size="Size.Small"
-                                       OnClick="MarkAllAsReadAsync">
-                                Mark all read
-                            </MudButton>
-                        }
-                    </div>
-
+                <NotificationBellMenu UnreadCount="@_unreadCount"
+                                      OnMarkAllAsRead="MarkAllAsReadAsync">
                     @if (_loading)
                     {
                         <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
@@ -56,26 +44,14 @@
                         <div class="sb-notification-list">
                             @foreach (var notification in _notifications)
                             {
-                                <button class="sb-notification-item @(notification.IsRead ? "sb-notification-read" : null)"
-                                        type="button"
-                                        disabled="@_openingNotifications.Contains(notification.Id)"
-                                        @onclick="() => OpenNotificationAsync(notification)">
-                                    <span>@notification.Title</span>
-                                    <strong>@notification.Body</strong>
-                                    <time>@FormatDateTime(notification.CreatedAtUtc)</time>
-                                </button>
+                                <NotificationBellItem Notification="@notification"
+                                                      Busy="@_busyNotifications.Contains(notification.Id)"
+                                                      OnOpen="OpenNotificationAsync"
+                                                      OnMarkAsRead="MarkNotificationAsReadAsync" />
                             }
                         </div>
                     }
-
-                    <MudButton Href="/ui/notifications"
-                               Variant="Variant.Text"
-                               Color="Color.Primary"
-                               FullWidth="true"
-                               StartIcon="@Icons.Material.Outlined.Inbox">
-                        View all
-                    </MudButton>
-                </div>
+                </NotificationBellMenu>
             </ChildContent>
         </MudMenu>
     </Authorized>
@@ -83,9 +59,10 @@
 
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
-    private readonly HashSet<Guid> _openingNotifications = new();
+    private readonly HashSet<Guid> _busyNotifications = new();
     private MudMenu? _menu;
-    private Task? _refreshTask;
+    private CoalescingAsyncAction? _refreshAction;
+    private bool _disposed;
     private bool _loading = true;
     private int _unreadCount;
     private string? _errorMessage;
@@ -94,30 +71,39 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _refreshAction = new CoalescingAsyncAction(RefreshCoreAsync);
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToNotifications(HandleNotificationReceivedAsync));
         await RefreshAsync();
     }
 
     private Task RefreshAsync()
     {
-        if (_refreshTask is { IsCompleted: false })
-        {
-            return _refreshTask;
-        }
-
-        _refreshTask = RefreshCoreAsync();
-        return _refreshTask;
+        return _refreshAction?.RequestAsync() ?? Task.CompletedTask;
     }
 
     private async Task RefreshCoreAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         _loading = true;
         _errorMessage = null;
 
         var countResult = await NotificationsClient.GetUnreadCountAsync();
+        if (_disposed)
+        {
+            return;
+        }
+
         var notificationsResult = await NotificationsClient.GetNotificationsAsync(
             page: 1,
             pageSize: 5);
+        if (_disposed)
+        {
+            return;
+        }
 
         if (countResult.RequiresAuthentication ||
             notificationsResult.RequiresAuthentication)
@@ -152,7 +138,7 @@
 
     private async Task OpenNotificationAsync(NotificationDto notification)
     {
-        if (!_openingNotifications.Add(notification.Id))
+        if (!_busyNotifications.Add(notification.Id))
         {
             return;
         }
@@ -168,7 +154,31 @@
         }
         finally
         {
-            _openingNotifications.Remove(notification.Id);
+            _busyNotifications.Remove(notification.Id);
+        }
+    }
+
+    private async Task MarkNotificationAsReadAsync(NotificationDto notification)
+    {
+        if (!_busyNotifications.Add(notification.Id))
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await NotificationsClient.MarkAsReadAsync(notification.Id);
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            await RefreshAsync();
+        }
+        finally
+        {
+            _busyNotifications.Remove(notification.Id);
         }
     }
 
@@ -189,27 +199,32 @@
         await RefreshAsync();
     }
 
-    private static string FormatDateTime(DateTime value)
-    {
-        return value.ToString("yyyy-MM-dd HH:mm") + " UTC";
-    }
-
     private Task HandleNotificationReceivedAsync(RealtimeEventDto notification)
     {
         return InvokeAsync(async () =>
         {
+            if (_disposed)
+            {
+                return;
+            }
+
             if (notification.UnreadCount.HasValue)
             {
-                _unreadCount = notification.UnreadCount.Value;
+                _unreadCount = Math.Max(0, notification.UnreadCount.Value);
             }
 
             await RefreshAsync();
-            StateHasChanged();
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
         });
     }
 
     public void Dispose()
     {
+        _disposed = true;
+        _refreshAction?.Dispose();
         _realtimeSubscriptions.Dispose();
     }
 }

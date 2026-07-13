@@ -1,0 +1,28 @@
+<div class="sb-notification-dropdown">
+    <div class="sb-notification-dropdown-header">
+        <strong>Notifications</strong>
+        @if (UnreadCount > 0)
+        {
+            <button class="sb-notification-menu-action"
+                    type="button"
+                    data-notification-action="mark-all"
+                    @onclick="OnMarkAllAsRead">
+                Mark all read
+            </button>
+        }
+    </div>
+
+    @ChildContent
+
+    <a class="sb-notification-view-all"
+       href="/ui/notifications"
+       data-notification-action="view-all">
+        View all
+    </a>
+</div>
+
+@code {
+    [Parameter] public int UnreadCount { get; set; }
+    [Parameter] public EventCallback OnMarkAllAsRead { get; set; }
+    [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = null!;
+}

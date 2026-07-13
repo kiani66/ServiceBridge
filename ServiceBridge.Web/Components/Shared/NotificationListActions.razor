@@ -1,0 +1,44 @@
+@if (CanOpen || !Notification.IsRead)
+{
+    <div class="sb-page-actions" data-notification-actions>
+        @if (CanOpen)
+        {
+            <button class="sb-notification-table-action"
+                    type="button"
+                    disabled="@Busy"
+                    data-notification-action="open"
+                    aria-label="Open related item"
+                    @onclick="OpenAsync">
+                Open
+            </button>
+        }
+        @if (!Notification.IsRead)
+        {
+            <button class="sb-notification-table-action"
+                    type="button"
+                    disabled="@Busy"
+                    data-notification-action="mark-read"
+                    aria-label="Mark as read"
+                    @onclick="MarkAsReadAsync">
+                Mark as read
+            </button>
+        }
+    </div>
+}
+else
+{
+    <span class="sb-table-subtext" data-notification-actions>—</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public NotificationDto Notification { get; set; } = null!;
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<NotificationDto> OnOpen { get; set; }
+    [Parameter] public EventCallback<NotificationDto> OnMarkAsRead { get; set; }
+
+    private bool CanOpen =>
+        NotificationNavigation.TryGetSafeInternalRoute(Notification.LinkUrl, out _);
+
+    private Task OpenAsync() => OnOpen.InvokeAsync(Notification);
+    private Task MarkAsReadAsync() => OnMarkAsRead.InvokeAsync(Notification);
+}

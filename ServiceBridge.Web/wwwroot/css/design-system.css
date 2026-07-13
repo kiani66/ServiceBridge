@@ -344,6 +344,57 @@ a:focus {
     cursor: wait;
 }
 
+.sb-notification-item-static {
+    cursor: default;
+}
+
+.sb-notification-mark-read,
+.sb-notification-menu-action,
+.sb-notification-table-action {
+    background: transparent;
+    border: 0;
+    color: var(--sb-color-primary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: var(--sb-space-1) 0;
+}
+
+.sb-notification-mark-read {
+    justify-self: start;
+}
+
+.sb-notification-table-action {
+    border: 1px solid var(--sb-color-border);
+    border-radius: var(--sb-radius-sm);
+    padding: var(--sb-space-1) var(--sb-space-2);
+}
+
+.sb-notification-mark-read:focus-visible,
+.sb-notification-menu-action:focus-visible,
+.sb-notification-table-action:focus-visible,
+.sb-notification-view-all:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--sb-color-primary) 35%, transparent);
+    outline-offset: 2px;
+}
+
+.sb-notification-mark-read:disabled,
+.sb-notification-table-action:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.sb-notification-view-all {
+    color: var(--sb-color-primary);
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    padding: var(--sb-space-2);
+    text-align: center;
+    text-decoration: none;
+}
+
 .sb-notification-item span {
     color: var(--sb-color-primary);
     font-size: 12px;

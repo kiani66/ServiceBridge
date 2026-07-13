@@ -79,21 +79,10 @@
                 </MudTd>
                 <MudTd DataLabel="Created">@FormatDateTime(context.CreatedAtUtc)</MudTd>
                 <MudTd DataLabel="Action">
-                    <div class="sb-page-actions">
-                        <MudIconButton Icon="@Icons.Material.Outlined.OpenInNew"
-                                       Color="Color.Primary"
-                                       Size="Size.Small"
-                                       OnClick="@(() => OpenRelatedAsync(context))"
-                                       aria-label="Open related item" />
-                        @if (!context.IsRead)
-                        {
-                            <MudIconButton Icon="@Icons.Material.Outlined.MarkEmailRead"
-                                           Color="Color.Primary"
-                                           Size="Size.Small"
-                                           OnClick="@(() => MarkAsReadAsync(context.Id))"
-                                           aria-label="Mark as read" />
-                        }
-                    </div>
+                    <NotificationListActions Notification="@context"
+                                             Busy="@_busyNotifications.Contains(context.Id)"
+                                             OnOpen="OpenRelatedAsync"
+                                             OnMarkAsRead="MarkAsReadAsync" />
                 </MudTd>
             </RowTemplate>
         </MudTable>
@@ -118,7 +107,7 @@
 
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
-    private readonly HashSet<Guid> _openingNotifications = new();
+    private readonly HashSet<Guid> _busyNotifications = new();
     private const int PageSize = 20;
 
     private bool _loading = true;
@@ -187,16 +176,28 @@
         await LoadAsync(1);
     }
 
-    private async Task MarkAsReadAsync(Guid notificationId)
+    private async Task MarkAsReadAsync(NotificationDto notification)
     {
-        var result = await NotificationsClient.MarkAsReadAsync(notificationId);
-        if (result.RequiresAuthentication)
+        if (!_busyNotifications.Add(notification.Id))
         {
-            Navigation.NavigateTo("/Account/Login");
             return;
         }
 
-        await ReloadAsync();
+        try
+        {
+            var result = await NotificationsClient.MarkAsReadAsync(notification.Id);
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busyNotifications.Remove(notification.Id);
+        }
     }
 
     private async Task MarkAllAsReadAsync()
@@ -223,7 +224,7 @@
 
     private async Task OpenRelatedAsync(NotificationDto notification)
     {
-        if (!_openingNotifications.Add(notification.Id))
+        if (!_busyNotifications.Add(notification.Id))
         {
             return;
         }
@@ -239,7 +240,7 @@
         }
         finally
         {
-            _openingNotifications.Remove(notification.Id);
+            _busyNotifications.Remove(notification.Id);
         }
     }
 

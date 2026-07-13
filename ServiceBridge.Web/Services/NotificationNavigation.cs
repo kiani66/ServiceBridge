@@ -60,6 +60,8 @@ public static class NotificationNavigation
             linkUrl.StartsWith("//", StringComparison.Ordinal) ||
             linkUrl.Contains('\\') ||
             linkUrl.Any(char.IsControl) ||
+            !HasValidPercentEncoding(linkUrl) ||
+            DecodesToDangerousCharacters(linkUrl) ||
             !Uri.TryCreate(linkUrl, UriKind.Relative, out _))
         {
             return false;
@@ -67,5 +69,33 @@ public static class NotificationNavigation
 
         route = linkUrl;
         return true;
+    }
+
+    private static bool HasValidPercentEncoding(string value)
+    {
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (value[index] != '%')
+            {
+                continue;
+            }
+
+            if (index + 2 >= value.Length ||
+                !Uri.IsHexDigit(value[index + 1]) ||
+                !Uri.IsHexDigit(value[index + 2]))
+            {
+                return false;
+            }
+
+            index += 2;
+        }
+
+        return true;
+    }
+
+    private static bool DecodesToDangerousCharacters(string value)
+    {
+        var decoded = Uri.UnescapeDataString(value);
+        return decoded.Contains('\\') || decoded.Any(char.IsControl);
     }
 }

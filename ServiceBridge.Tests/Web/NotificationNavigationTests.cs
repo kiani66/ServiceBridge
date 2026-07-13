@@ -94,12 +94,23 @@ public class NotificationNavigationTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
+    [InlineData("   ")]
     [InlineData("https://external.example")]
     [InlineData("http://external.example")]
     [InlineData("//external.example")]
     [InlineData("javascript:alert(1)")]
+    [InlineData("data:text/html,unsafe")]
     [InlineData("/ui/\\external.example")]
     [InlineData("/ui/orders/42\r\n")]
+    [InlineData("/ui/%ZZ")]
+    [InlineData("/ui/%")]
+    [InlineData("/ui/%1")]
+    [InlineData("/ui/orders/%5cevil")]
+    [InlineData("/ui/orders/%5Cevil")]
+    [InlineData("/ui/orders/42%0d%0aX")]
+    [InlineData("/ui/orders/42%00")]
+    [InlineData("/ui/orders/42%1f")]
+    [InlineData("/ui/orders/42%7f")]
     public async Task OpenAsync_MissingMalformedOrExternalLink_MarksSafelyWithoutNavigation(
         string? linkUrl)
     {
@@ -124,6 +135,11 @@ public class NotificationNavigationTests
     [InlineData("/ui/admin/orders/42")]
     [InlineData("/ui/tickets/42")]
     [InlineData("/ui/admin/tickets/42?tab=messages")]
+    [InlineData("/ui/orders/42?tab=timeline&label=Order%20history")]
+    [InlineData("/ui/orders/42#activity")]
+    [InlineData("/ui/orders/42?tab=timeline#activity")]
+    [InlineData("/ui/search?q=%E2%9C%93")]
+    [InlineData("/ui/search?q=100%25")]
     public void TryGetSafeInternalRoute_AcceptsOnlyUiRelativeRoutes(string linkUrl)
     {
         Assert.True(NotificationNavigation.TryGetSafeInternalRoute(linkUrl, out var route));
