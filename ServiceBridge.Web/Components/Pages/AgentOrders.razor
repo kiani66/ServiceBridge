@@ -148,10 +148,10 @@
     private const int PageSize = 20;
 
     [SupplyParameterFromQuery(Name = "status")]
-    public OrderStatus? Status { get; set; }
+    public string? StatusQuery { get; set; }
 
     [SupplyParameterFromQuery(Name = "page")]
-    public int? Page { get; set; }
+    public string? PageQuery { get; set; }
 
     [SupplyParameterFromQuery(Name = "search")]
     public string? Search { get; set; }
@@ -176,9 +176,9 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _status = Status;
+        _status = ParseStatus(StatusQuery);
         _search = Search;
-        await LoadOrdersAsync(Math.Max(Page ?? 1, 1));
+        await LoadOrdersAsync(ParsePage(PageQuery));
     }
 
     private async Task OnStatusChanged(OrderStatus? status)
@@ -278,6 +278,26 @@
         Navigation.NavigateTo(
             Navigation.GetUriWithQueryParameters("/ui/agent/orders", query),
             replace: true);
+    }
+
+    private static OrderStatus? ParseStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return null;
+        }
+
+        return Enum.TryParse<OrderStatus>(status, ignoreCase: true, out var parsed) &&
+            Enum.IsDefined(parsed)
+                ? parsed
+                : null;
+    }
+
+    private static int ParsePage(string? page)
+    {
+        return int.TryParse(page, out var parsed) && parsed > 0
+            ? parsed
+            : 1;
     }
 
     private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
