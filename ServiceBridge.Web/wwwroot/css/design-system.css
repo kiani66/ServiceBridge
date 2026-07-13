@@ -331,8 +331,17 @@ a:focus {
 }
 
 .sb-notification-item:hover,
-.sb-notification-item:focus {
+.sb-notification-item:focus-visible {
     border-color: var(--sb-color-primary);
+}
+
+.sb-notification-item:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--sb-color-primary) 35%, transparent);
+    outline-offset: 2px;
+}
+
+.sb-notification-item:disabled {
+    cursor: wait;
 }
 
 .sb-notification-item span {

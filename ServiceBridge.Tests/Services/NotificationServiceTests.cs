@@ -36,10 +36,83 @@ public class NotificationServiceTests
         Assert.Equal(3, realtimeEvent.UnreadCount);
     }
 
+    [Fact]
+    public async Task OrderNotifications_StoreRecipientSpecificLinkUrls()
+    {
+        var repository = new FakeNotificationRepository();
+        var service = new NotificationService(repository, new FakeRealtimeEventPublisher());
+        var userId = Guid.NewGuid();
+        var agentId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        repository.ActiveAdminUserIds.Add(adminId);
+
+        await service.QueuePaymentCompletedAsync(userId, orderId, "SB-1");
+        await service.QueueOrderReadyForAssignmentAsync(orderId, "SB-1");
+        await service.QueueOrderAssignedAsync(userId, agentId, orderId, "SB-1");
+        await service.QueueAgentStartedProcessingAsync(userId, orderId, "SB-1");
+        await service.QueueOrderCompletedAsync(userId, orderId, "SB-1");
+        await service.QueueOrderFailedAsync(userId, orderId, "SB-1");
+        await service.QueueCustomerActionRequestedAsync(userId, orderId, "SB-1");
+        await service.QueueCustomerActionRespondedAsync(agentId, orderId, "SB-1");
+
+        Assert.All(
+            repository.Added.Where(notification => notification.UserId == userId),
+            notification => Assert.Equal($"/ui/orders/{orderId}", notification.LinkUrl));
+        Assert.All(
+            repository.Added.Where(notification => notification.UserId == agentId),
+            notification => Assert.Equal($"/ui/agent/orders/{orderId}", notification.LinkUrl));
+        Assert.Equal(
+            $"/ui/admin/orders/{orderId}",
+            Assert.Single(repository.Added.Where(notification =>
+                notification.UserId == adminId &&
+                notification.Title == "Order ready for assignment")).LinkUrl);
+    }
+
+    [Fact]
+    public async Task TicketAndRefundNotifications_StoreRecipientSpecificLinkUrls()
+    {
+        var repository = new FakeNotificationRepository();
+        var service = new NotificationService(repository, new FakeRealtimeEventPublisher());
+        var userId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        var ticketId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        repository.ActiveAdminUserIds.Add(adminId);
+
+        await service.QueueTicketUserReplyForAdminsAsync(ticketId, "T-1");
+        await service.QueueTicketPublicReplyForUserAsync(userId, ticketId, "T-1");
+        await service.QueueRefundRequestedForAdminsAsync(orderId, "SB-1");
+        await service.QueueRefundApprovedForUserAsync(userId, orderId, "SB-1");
+        await service.QueueRefundRejectedForUserAsync(userId, orderId, "SB-1");
+
+        Assert.Equal(
+            $"/ui/admin/tickets/{ticketId}",
+            Assert.Single(repository.Added.Where(notification =>
+                notification.UserId == adminId &&
+                notification.Type == NotificationType.TicketReplied)).LinkUrl);
+        Assert.Equal(
+            $"/ui/tickets/{ticketId}",
+            Assert.Single(repository.Added.Where(notification =>
+                notification.UserId == userId &&
+                notification.Type == NotificationType.TicketReplied)).LinkUrl);
+        Assert.Equal(
+            $"/ui/admin/orders/{orderId}",
+            Assert.Single(repository.Added.Where(notification =>
+                notification.UserId == adminId &&
+                notification.Type == NotificationType.RefundRequested)).LinkUrl);
+        Assert.All(
+            repository.Added.Where(notification =>
+                notification.UserId == userId &&
+                notification.Type is NotificationType.RefundApproved or NotificationType.RefundRejected),
+            notification => Assert.Equal($"/ui/orders/{orderId}", notification.LinkUrl));
+    }
+
     private sealed class FakeNotificationRepository : INotificationRepository
     {
         public List<Notification> Added { get; } = new();
         public Dictionary<Guid, int> UnreadCounts { get; } = new();
+        public List<Guid> ActiveAdminUserIds { get; } = new();
 
         public Task<PagedResultDto<NotificationDto>> GetForUserAsync(
             Guid userId,
@@ -68,7 +141,7 @@ public class NotificationServiceTests
 
         public Task<IReadOnlyCollection<Guid>> GetActiveAdminUserIdsAsync()
         {
-            return Task.FromResult<IReadOnlyCollection<Guid>>(Array.Empty<Guid>());
+            return Task.FromResult<IReadOnlyCollection<Guid>>(ActiveAdminUserIds);
         }
 
         public Task AddAsync(Notification notification)

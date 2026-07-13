@@ -2,7 +2,6 @@
 @attribute [Authorize]
 @inject NotificationsClient NotificationsClient
 @inject NavigationManager Navigation
-@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject RealtimeClient RealtimeClient
 @implements IDisposable
 
@@ -66,7 +65,6 @@
             <HeaderContent>
                 <MudTh>Status</MudTh>
                 <MudTh>Notification</MudTh>
-                <MudTh>Type</MudTh>
                 <MudTh>Created</MudTh>
                 <MudTh>Action</MudTh>
             </HeaderContent>
@@ -77,10 +75,9 @@
                 </MudTd>
                 <MudTd DataLabel="Notification">
                     <strong>@context.Title</strong>
-                    <span class="sb-table-subtext">@context.Message</span>
+                    <span class="sb-table-subtext">@context.Body</span>
                 </MudTd>
-                <MudTd DataLabel="Type">@TypeLabel(context.Type)</MudTd>
-                <MudTd DataLabel="Created">@FormatDateTime(context.CreatedAt)</MudTd>
+                <MudTd DataLabel="Created">@FormatDateTime(context.CreatedAtUtc)</MudTd>
                 <MudTd DataLabel="Action">
                     <div class="sb-page-actions">
                         <MudIconButton Icon="@Icons.Material.Outlined.OpenInNew"
@@ -121,13 +118,13 @@
 
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
+    private readonly HashSet<Guid> _openingNotifications = new();
     private const int PageSize = 20;
 
     private bool _loading = true;
     private bool _unreadOnly;
     private int _unreadCount;
     private string? _errorMessage;
-    private string _orderRoute = "/ui/orders";
     private PagedResultDto<NotificationDto> _notifications = new()
     {
         Page = 1,
@@ -137,24 +134,7 @@
     protected override async Task OnInitializedAsync()
     {
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToNotifications(HandleNotificationReceivedAsync));
-        await ResolveOrderRouteAsync();
         await LoadAsync(1);
-    }
-
-    private async Task ResolveOrderRouteAsync()
-    {
-        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var user = state.User;
-        if (user.IsInRole(AppConstants.Roles.Agent))
-        {
-            _orderRoute = "/ui/agent/orders";
-            return;
-        }
-
-        if (user.IsInRole(AppConstants.Roles.Admin))
-        {
-            _orderRoute = "/ui/admin";
-        }
     }
 
     private async Task LoadAsync(int page)
@@ -243,47 +223,24 @@
 
     private async Task OpenRelatedAsync(NotificationDto notification)
     {
-        if (!notification.IsRead)
+        if (!_openingNotifications.Add(notification.Id))
         {
-            await NotificationsClient.MarkAsReadAsync(notification.Id);
+            return;
         }
 
-        Navigation.NavigateTo(RelatedRoute(notification));
-    }
-
-    private static string TypeLabel(string type)
-    {
-        return type switch
+        try
         {
-            nameof(NotificationType.OrderCreated) => "Order created",
-            nameof(NotificationType.PaymentCompleted) => "Payment completed",
-            nameof(NotificationType.OrderAssignedToAgent) => "Order assigned",
-            nameof(NotificationType.AgentStartedProcessing) => "Processing started",
-            nameof(NotificationType.OrderCompleted) => "Order completed",
-            nameof(NotificationType.OrderFailed) => "Order failed",
-            nameof(NotificationType.CustomerActionRequested) => "Action requested",
-            nameof(NotificationType.CustomerActionResponded) => "Customer responded",
-            nameof(NotificationType.TicketCreated) => "Ticket created",
-            nameof(NotificationType.TicketReplied) => "Ticket replied",
-            nameof(NotificationType.TicketClosed) => "Ticket closed",
-            _ => type
-        };
-    }
-
-    private string RelatedRoute(NotificationDto notification)
-    {
-        if (notification.RelatedEntityType == "Ticket")
-        {
-            return _orderRoute == "/ui/admin"
-                ? $"/ui/admin/tickets/{notification.RelatedEntityId}"
-                : $"/ui/tickets/{notification.RelatedEntityId}";
+            _unreadCount = await NotificationNavigation.OpenAsync(
+                notification,
+                _unreadCount,
+                () => Task.CompletedTask,
+                id => NotificationsClient.MarkAsReadAsync(id),
+                route => Navigation.NavigateTo(route));
         }
-
-        return _orderRoute == "/ui/orders"
-            ? $"/ui/orders/{notification.RelatedEntityId}"
-            : _orderRoute == "/ui/agent/orders"
-                ? $"/ui/agent/orders/{notification.RelatedEntityId}"
-                : _orderRoute;
+        finally
+        {
+            _openingNotifications.Remove(notification.Id);
+        }
     }
 
     private static string FormatDateTime(DateTime value)

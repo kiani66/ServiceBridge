@@ -5,7 +5,8 @@
 
 <AuthorizeView>
     <Authorized Context="authContext">
-        <MudMenu Dense="true"
+        <MudMenu @ref="_menu"
+                 Dense="true"
                  AnchorOrigin="Origin.BottomRight"
                  TransformOrigin="Origin.TopRight"
                  PopoverClass="sb-notification-menu">
@@ -57,10 +58,11 @@
                             {
                                 <button class="sb-notification-item @(notification.IsRead ? "sb-notification-read" : null)"
                                         type="button"
+                                        disabled="@_openingNotifications.Contains(notification.Id)"
                                         @onclick="() => OpenNotificationAsync(notification)">
                                     <span>@notification.Title</span>
-                                    <strong>@notification.Message</strong>
-                                    <time>@FormatDateTime(notification.CreatedAt)</time>
+                                    <strong>@notification.Body</strong>
+                                    <time>@FormatDateTime(notification.CreatedAtUtc)</time>
                                 </button>
                             }
                         </div>
@@ -81,6 +83,9 @@
 
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
+    private readonly HashSet<Guid> _openingNotifications = new();
+    private MudMenu? _menu;
+    private Task? _refreshTask;
     private bool _loading = true;
     private int _unreadCount;
     private string? _errorMessage;
@@ -93,7 +98,18 @@
         await RefreshAsync();
     }
 
-    private async Task RefreshAsync()
+    private Task RefreshAsync()
+    {
+        if (_refreshTask is { IsCompleted: false })
+        {
+            return _refreshTask;
+        }
+
+        _refreshTask = RefreshCoreAsync();
+        return _refreshTask;
+    }
+
+    private async Task RefreshCoreAsync()
     {
         _loading = true;
         _errorMessage = null;
@@ -125,8 +141,10 @@
         }
         else
         {
-            _notifications = notificationsResult.Data?.Items ??
-                Array.Empty<NotificationDto>();
+            _notifications = (notificationsResult.Data?.Items ??
+                    Array.Empty<NotificationDto>())
+                .DistinctBy(notification => notification.Id)
+                .ToArray();
         }
 
         _loading = false;
@@ -134,12 +152,29 @@
 
     private async Task OpenNotificationAsync(NotificationDto notification)
     {
-        if (!notification.IsRead)
+        if (!_openingNotifications.Add(notification.Id))
         {
-            await NotificationsClient.MarkAsReadAsync(notification.Id);
+            return;
         }
 
-        Navigation.NavigateTo("/ui/notifications");
+        try
+        {
+            _unreadCount = await NotificationNavigation.OpenAsync(
+                notification,
+                _unreadCount,
+                CloseMenuAsync,
+                id => NotificationsClient.MarkAsReadAsync(id),
+                route => Navigation.NavigateTo(route));
+        }
+        finally
+        {
+            _openingNotifications.Remove(notification.Id);
+        }
+    }
+
+    private Task CloseMenuAsync()
+    {
+        return _menu?.CloseMenuAsync() ?? Task.CompletedTask;
     }
 
     private async Task MarkAllAsReadAsync()

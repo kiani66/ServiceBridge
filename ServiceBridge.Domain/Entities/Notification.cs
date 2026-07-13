@@ -10,6 +10,7 @@ public class Notification : BaseEntity
     public NotificationType Type { get; set; }
     public string RelatedEntityType { get; set; } = string.Empty;
     public Guid RelatedEntityId { get; set; }
+    public string? LinkUrl { get; set; }
     public bool IsRead { get; private set; }
     public DateTime? ReadAt { get; private set; }
 

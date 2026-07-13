@@ -157,6 +157,51 @@ public class UiStabilizationTests
     }
 
     [Fact]
+    public void NotificationDropdown_UsesKeyboardNativeItemsAndPreservesMenuActions()
+    {
+        var source = File.ReadAllText(ComponentPath("Navigation", "NotificationBell.razor"));
+
+        Assert.Contains("<button class=\"sb-notification-item", source);
+        Assert.Contains("type=\"button\"", source);
+        Assert.Contains("@onclick=\"() => OpenNotificationAsync(notification)\"", source);
+        Assert.Contains("OnClick=\"MarkAllAsReadAsync\"", source);
+        Assert.Contains("Href=\"/ui/notifications\"", source);
+        Assert.Contains("CloseMenuAsync", source);
+        Assert.Contains("_openingNotifications.Add(notification.Id)", source);
+    }
+
+    [Fact]
+    public void NotificationDropdown_CoalescesRealtimeRefreshesAndDeduplicatesItems()
+    {
+        var source = File.ReadAllText(ComponentPath("Navigation", "NotificationBell.razor"));
+
+        Assert.Contains("_refreshTask is { IsCompleted: false }", source);
+        Assert.Contains("DistinctBy(notification => notification.Id)", source);
+        Assert.Equal(
+            1,
+            source.Split("SubscribeToNotifications", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    public void NotificationListProjection_ContainsOnlyUiFieldsAndNoEntityInclude()
+    {
+        var properties = typeof(NotificationDto)
+            .GetProperties()
+            .Select(property => property.Name)
+            .OrderBy(name => name)
+            .ToArray();
+        var repository = File.ReadAllText(InfrastructurePath(
+            "Repositories",
+            "NotificationRepository.cs"));
+
+        Assert.Equal(
+            new[] { "Body", "CreatedAtUtc", "Id", "IsRead", "LinkUrl", "Title" },
+            properties);
+        Assert.DoesNotContain(".Include(", repository);
+        Assert.Contains("LinkUrl = x.LinkUrl", repository);
+    }
+
+    [Fact]
     public void AuthenticatedShell_UsesGridOwnedDesktopSidebarAndTemporaryMobileDrawer()
     {
         var source = File.ReadAllText(ComponentPath("Layout", "AppShell.razor"));
@@ -240,5 +285,16 @@ public class UiStabilizationTests
             "..",
             ".."));
         return Path.Combine([root, "ServiceBridge.Web", .. parts]);
+    }
+
+    private static string InfrastructurePath(params string[] parts)
+    {
+        var root = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            ".."));
+        return Path.Combine([root, "ServiceBridge.Infrastructure", .. parts]);
     }
 }
