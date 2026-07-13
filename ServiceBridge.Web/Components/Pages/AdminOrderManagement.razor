@@ -186,6 +186,7 @@ else
 
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
+    private readonly RealtimeRefreshCoordinator _realtimeRefresh = new();
     [Parameter] public Guid OrderId { get; set; }
 
     private bool _loading = true;
@@ -345,11 +346,11 @@ else
 
     private Task ReloadFromRealtimeAsync()
     {
-        return InvokeAsync(async () =>
+        return _realtimeRefresh.RunAsync(() => InvokeAsync(async () =>
         {
             await LoadOrderAsync();
             StateHasChanged();
-        });
+        }));
     }
 
     private static string FormatNullable(DateTime? value)

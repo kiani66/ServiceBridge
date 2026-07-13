@@ -1485,29 +1485,32 @@ a:focus {
 }
 
 .sb-lifecycle {
-    display: grid;
-    gap: var(--sb-space-3);
+    display: flex;
     list-style: none;
     margin: 0;
-    padding: 0;
+    overflow-x: auto;
+    padding: var(--sb-space-1) 0 var(--sb-space-2);
+    scrollbar-width: thin;
 }
 
 .sb-lifecycle-item {
-    align-items: flex-start;
+    align-content: start;
     display: grid;
-    gap: var(--sb-space-3);
-    grid-template-columns: auto 1fr;
+    flex: 1 0 88px;
+    gap: var(--sb-space-1);
+    justify-items: center;
     position: relative;
+    text-align: center;
 }
 
 .sb-lifecycle-item:not(:last-child)::after {
     background: var(--sb-color-border);
-    bottom: calc(var(--sb-space-3) * -1);
     content: "";
-    left: 15px;
+    height: 2px;
+    left: calc(50% + 16px);
     position: absolute;
-    top: 32px;
-    width: 2px;
+    right: calc(-50% + 16px);
+    top: 15px;
 }
 
 .sb-lifecycle-marker {
@@ -1527,14 +1530,17 @@ a:focus {
 .sb-lifecycle-item strong {
     color: var(--sb-color-text);
     display: block;
-    font-size: 14px;
-    line-height: 20px;
+    font-size: 12px;
+    line-height: 16px;
 }
 
-.sb-lifecycle-item span:last-child {
-    color: var(--sb-color-muted);
-    display: block;
-    font-size: 12px;
+.sb-lifecycle-current-label {
+    background: var(--sb-color-secondary-soft);
+    border-radius: 999px;
+    color: var(--sb-color-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px var(--sb-space-2);
 }
 
 .sb-lifecycle-complete .sb-lifecycle-marker,
@@ -1548,6 +1554,36 @@ a:focus {
     background: var(--sb-color-secondary-soft);
     border-color: var(--sb-color-secondary-border);
     color: var(--sb-color-secondary);
+}
+
+.sb-lifecycle-current.sb-lifecycle-tone-success .sb-lifecycle-marker {
+    background: #ecfdf3;
+    border-color: var(--sb-color-success);
+    color: var(--sb-color-success);
+}
+
+.sb-lifecycle-current.sb-lifecycle-tone-danger .sb-lifecycle-marker {
+    background: #fef2f2;
+    border-color: var(--sb-color-danger);
+    color: var(--sb-color-danger);
+}
+
+.sb-lifecycle-current.sb-lifecycle-tone-danger .sb-lifecycle-current-label {
+    background: #fef2f2;
+    color: var(--sb-color-danger);
+}
+
+.sb-lifecycle-future {
+    opacity: 0.68;
+}
+
+.sb-order-progress-card {
+    background: var(--sb-color-bg-soft);
+}
+
+.sb-activity-history-card .sb-timeline {
+    border-left: 1px solid var(--sb-color-border);
+    padding-left: var(--sb-space-4);
 }
 
 .sb-chart-card {

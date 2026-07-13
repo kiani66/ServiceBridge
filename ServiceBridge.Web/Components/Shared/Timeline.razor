@@ -1,4 +1,4 @@
-<ol class="sb-timeline">
+<ol class="sb-timeline" aria-label="@AriaLabel">
     @foreach (var item in Items)
     {
         <li>
@@ -13,5 +13,6 @@
 </ol>
 
 @code {
+    [Parameter] public string AriaLabel { get; set; } = "Timeline";
     [Parameter, EditorRequired] public IReadOnlyList<TimelineItem> Items { get; set; } = [];
 }

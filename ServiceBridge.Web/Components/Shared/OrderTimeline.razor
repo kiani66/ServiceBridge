@@ -1,29 +1,33 @@
-<section class="sb-detail-panel sb-order-detail-card">
+<section class="sb-detail-panel sb-order-detail-card sb-order-progress-card">
     <div class="sb-card-heading">
         <div>
-            <span class="sb-eyebrow">Timeline</span>
-            <h2>@Title</h2>
+            <span class="sb-eyebrow">Lifecycle summary</span>
+            <h2>Order progress</h2>
         </div>
     </div>
 
-    @if (ShowLifecycle)
-    {
-        <OrderLifecycle CurrentStatus="@CurrentStatus" />
-    }
+    <OrderLifecycle CurrentStatus="@CurrentStatus" />
+</section>
+
+<section class="sb-detail-panel sb-order-detail-card sb-activity-history-card">
+    <div class="sb-card-heading">
+        <div>
+            <span class="sb-eyebrow">Event log</span>
+            <h2>Activity history</h2>
+        </div>
+    </div>
 
     @if (Items.Count == 0)
     {
-        <p>No timeline entries have been recorded yet.</p>
+        <p>No activity entries have been recorded yet.</p>
     }
     else
     {
-        <Timeline Items="@Items" />
+        <Timeline Items="@Items" AriaLabel="Activity history" />
     }
 </section>
 
 @code {
-    [Parameter] public string Title { get; set; } = "Order timeline";
     [Parameter] public string CurrentStatus { get; set; } = nameof(OrderStatus.Created);
-    [Parameter] public bool ShowLifecycle { get; set; } = true;
     [Parameter, EditorRequired] public IReadOnlyList<TimelineItem> Items { get; set; } = [];
 }
