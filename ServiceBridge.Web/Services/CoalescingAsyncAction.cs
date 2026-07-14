@@ -1,5 +1,7 @@
 namespace ServiceBridge.Web.Services;
 
+using System.Runtime.ExceptionServices;
+
 public sealed class CoalescingAsyncAction : IDisposable
 {
     private readonly Func<Task> _action;
@@ -46,21 +48,17 @@ public sealed class CoalescingAsyncAction : IDisposable
 
     private async Task RunAsync()
     {
+        ExceptionDispatchInfo? capturedFailure = null;
+
         while (true)
         {
             try
             {
                 await _action();
             }
-            catch
+            catch (Exception exception)
             {
-                lock (_sync)
-                {
-                    _running = false;
-                    _pending = false;
-                }
-
-                throw;
+                capturedFailure ??= ExceptionDispatchInfo.Capture(exception);
             }
 
             lock (_sync)
@@ -69,11 +67,13 @@ public sealed class CoalescingAsyncAction : IDisposable
                 {
                     _running = false;
                     _pending = false;
-                    return;
+                    break;
                 }
 
                 _pending = false;
             }
         }
+
+        capturedFailure?.Throw();
     }
 }

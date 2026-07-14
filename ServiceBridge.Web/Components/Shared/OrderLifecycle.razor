@@ -1,15 +1,17 @@
-<ol class="sb-lifecycle" aria-label="Order lifecycle">
-    @foreach (var stage in _stages)
+<ol class="sb-lifecycle" aria-label="Order progress">
+    @foreach (var stage in Stages)
     {
-        var state = StageState(stage.Status);
-        <li class="sb-lifecycle-item sb-lifecycle-@state">
-            <span class="sb-lifecycle-marker">
-                <MudIcon Icon="@stage.Icon" Size="Size.Small" />
+        <li class="@StageClass(stage)"
+            aria-current="@(stage.State == OrderProgressStageState.Current ? "step" : null)"
+            aria-label="@StageAriaLabel(stage)">
+            <span class="sb-lifecycle-marker" aria-hidden="true">
+                <MudIcon Icon="@StageIcon(stage)" Size="Size.Small" />
             </span>
-            <div>
-                <strong>@stage.Label</strong>
-                <span>@StageDescription(stage.Status, state)</span>
-            </div>
+            <strong>@stage.Label</strong>
+            @if (stage.State == OrderProgressStageState.Current)
+            {
+                <span class="sb-lifecycle-current-label">Current</span>
+            }
         </li>
     }
 </ol>
@@ -17,64 +19,43 @@
 @code {
     [Parameter] public string CurrentStatus { get; set; } = nameof(OrderStatus.Created);
 
-    private readonly IReadOnlyList<LifecycleStage> _stages =
-    [
-        new(nameof(OrderStatus.Created), "Created", Icons.Material.Outlined.AddCircleOutline),
-        new(nameof(OrderStatus.Paid), "Paid", Icons.Material.Outlined.Payments),
-        new(nameof(OrderStatus.Assigned), "Assigned", Icons.Material.Outlined.AssignmentInd),
-        new(nameof(OrderStatus.Processing), "Processing", Icons.Material.Outlined.ManageHistory),
-        new(nameof(OrderStatus.Completed), "Completed", Icons.Material.Outlined.CheckCircle)
-    ];
+    private IReadOnlyList<OrderProgressStage> Stages => OrderProgress.For(CurrentStatus);
 
-    private string StageState(string status)
+    private static string StageClass(OrderProgressStage stage)
     {
-        var currentIndex = StageIndex(CurrentStatus);
-        var stageIndex = StageIndex(status);
-
-        if (CurrentStatus == nameof(OrderStatus.Failed) ||
-            CurrentStatus == nameof(OrderStatus.Cancelled))
-        {
-            return stageIndex <= currentIndex ? "complete" : "pending";
-        }
-
-        if (stageIndex < currentIndex)
-        {
-            return "complete";
-        }
-
-        return stageIndex == currentIndex ? "current" : "pending";
+        return $"sb-lifecycle-item sb-lifecycle-{stage.State.ToString().ToLowerInvariant()} sb-lifecycle-tone-{stage.Tone}";
     }
 
-    private static string StageDescription(string status, string state)
+    private static string StageAriaLabel(OrderProgressStage stage)
     {
-        if (state == "complete")
+        var state = stage.State switch
         {
-            return "Done";
-        }
+            OrderProgressStageState.Complete => "completed step",
+            OrderProgressStageState.Current => "current step",
+            _ => "upcoming step"
+        };
 
-        if (state == "current")
-        {
-            return status == nameof(OrderStatus.Paid)
-                ? "Awaiting assignment"
-                : "Current step";
-        }
-
-        return "Pending";
+        return $"{stage.Label}, {state}";
     }
 
-    private static int StageIndex(string status)
+    private static string StageIcon(OrderProgressStage stage)
     {
-        return status switch
+        if (stage.State == OrderProgressStageState.Complete)
         {
-            nameof(OrderStatus.WaitingForPayment) => 0,
-            nameof(OrderStatus.Paid) => 1,
-            nameof(OrderStatus.Assigned) => 2,
-            nameof(OrderStatus.Processing) => 3,
-            nameof(OrderStatus.Completed) => 4,
-            nameof(OrderStatus.Cancelled) or nameof(OrderStatus.Failed) => 3,
-            _ => 0
+            return Icons.Material.Outlined.Check;
+        }
+
+        return stage.Status switch
+        {
+            nameof(OrderStatus.Created) => Icons.Material.Outlined.AddCircleOutline,
+            nameof(OrderStatus.WaitingForPayment) => Icons.Material.Outlined.Schedule,
+            nameof(OrderStatus.Paid) => Icons.Material.Outlined.Payments,
+            nameof(OrderStatus.Assigned) => Icons.Material.Outlined.AssignmentInd,
+            nameof(OrderStatus.Processing) => Icons.Material.Outlined.ManageHistory,
+            nameof(OrderStatus.Completed) => Icons.Material.Outlined.CheckCircle,
+            nameof(OrderStatus.Cancelled) => Icons.Material.Outlined.Cancel,
+            nameof(OrderStatus.Failed) => Icons.Material.Outlined.ErrorOutline,
+            _ => Icons.Material.Outlined.RadioButtonChecked
         };
     }
-
-    private sealed record LifecycleStage(string Status, string Label, string Icon);
 }

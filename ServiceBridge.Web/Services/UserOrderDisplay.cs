@@ -100,11 +100,10 @@ public static class UserOrderDisplay
         IEnumerable<OrderStatusHistoryDto> history)
     {
         return history
-            .OrderBy(item => item.CreatedAt)
             .Select(item => new TimelineItem(
                 OrderStatusLabel(item.Status),
                 item.PreviousStatus is null
-                    ? "Order timeline started."
+                    ? "Order created."
                     : $"{OrderStatusLabel(item.PreviousStatus)} changed to {OrderStatusLabel(item.Status)}.",
                 FormatDateTime(item.CreatedAt),
                 OrderTone(item.Status)))

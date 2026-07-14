@@ -42,15 +42,11 @@ public class NotificationRepository : INotificationRepository
             .Select(x => new NotificationDto
             {
                 Id = x.Id,
-                UserId = x.UserId,
                 Title = x.Title,
-                Message = x.Message,
-                Type = x.Type.ToString(),
-                RelatedEntityType = x.RelatedEntityType,
-                RelatedEntityId = x.RelatedEntityId,
+                Body = x.Message,
+                CreatedAtUtc = x.CreatedAt,
                 IsRead = x.IsRead,
-                CreatedAt = x.CreatedAt,
-                ReadAt = x.ReadAt
+                LinkUrl = x.LinkUrl
             })
             .ToListAsync();
 

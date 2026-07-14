@@ -20,7 +20,7 @@ else if (_order is null)
     <ErrorState Title="Assigned order unavailable"
                 Message="@(_errorMessage ?? "The requested assigned order could not be loaded.")"
                 Icon="@Icons.Material.Outlined.AssignmentLate"
-                OnRetry="LoadOrderAsync">
+                OnRetry="RequestOrderReloadAsync">
         <Actions>
             <MudButton Href="/ui/agent" Variant="Variant.Outlined" Color="Color.Primary">Back to workspace</MudButton>
         </Actions>
@@ -261,8 +261,14 @@ else
 
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
+    private readonly CancellationTokenSource _lifetimeCts = new();
+    private RealtimeRefreshCoordinator? _realtimeRefresh;
+    private long _loadGeneration;
+    private Guid _requestedOrderId;
+    private long _actionOperationVersion;
     [Parameter] public Guid OrderId { get; set; }
 
+    private bool _disposed;
     private bool _loading = true;
     private bool _actionBusy;
     private bool _noteVisibleToCustomer;
@@ -332,6 +338,7 @@ else
 
     protected override void OnInitialized()
     {
+        _realtimeRefresh = new RealtimeRefreshCoordinator(RunOrderReloadCoreAsync);
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync));
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderAssignments(HandleOrderAssignedAsync));
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToCustomerActions(HandleCustomerActionChangedAsync));
@@ -339,40 +346,99 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        await LoadOrderAsync();
+        await RequestOrderReloadAsync();
     }
 
-    private async Task LoadOrderAsync()
+    private Task RequestOrderReloadAsync()
     {
-        _loading = true;
-        _errorMessage = null;
+        return InvokeAsync(RequestOrderReloadOnDispatcherAsync);
+    }
 
-        var result = await AgentOrdersClient.GetOrderAsync(OrderId);
-        if (result.RequiresAuthentication)
+    private Task RequestOrderReloadOnDispatcherAsync()
+    {
+        if (_disposed)
         {
-            Navigation.NavigateTo("/Account/Login");
-            return;
+            return Task.CompletedTask;
         }
 
-        _order = result.Success ? result.Data : null;
-        _errorMessage = result.ErrorMessage;
-        InitializeDeliveryCredentials();
-        _loading = false;
+        if (_requestedOrderId != OrderId)
+        {
+            ResetActionStateForRouteChange();
+        }
+
+        _requestedOrderId = OrderId;
+        _loadGeneration++;
+        if (!TryApplyRealtimeState(() =>
+            {
+                _loading = true;
+                _errorMessage = null;
+                _order = null;
+                _deliveryCredentials.Clear();
+            }))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _realtimeRefresh?.RunAsync() ?? Task.CompletedTask;
+    }
+
+    private Task RunOrderReloadCoreAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            await LoadOrderCoreAsync();
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    private async Task LoadOrderCoreAsync()
+    {
+        var generation = _loadGeneration;
+        var orderId = _requestedOrderId;
+        try
+        {
+            var result = await AgentOrdersClient.GetOrderAsync(orderId, _lifetimeCts.Token);
+            if (!IsCurrentLoad(generation, orderId))
+            {
+                return;
+            }
+
+            if (result.RequiresAuthentication)
+            {
+                TryApplyCurrentLoad(generation, orderId, () => Navigation.NavigateTo("/Account/Login"));
+                return;
+            }
+
+            TryApplyCurrentLoad(generation, orderId, () =>
+            {
+                _order = result.Success ? result.Data : null;
+                _errorMessage = result.ErrorMessage;
+                InitializeDeliveryCredentials();
+                _loading = false;
+            });
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
     }
 
     private Task StartProcessingAsync()
     {
         return RunActionAsync(
-            note => AgentOrdersClient.StartProcessingAsync(OrderId, note),
+            (orderId, note, token) => AgentOrdersClient.StartProcessingAsync(orderId, note, token),
             "Processing started.");
     }
 
     private Task SubmitInformationRequestAsync()
     {
         return RunActionAsync(
-            _ => AgentOrdersClient.RequestCustomerActionAsync(
-                OrderId,
-                _informationRequestMessage),
+            (orderId, message, token) => AgentOrdersClient.RequestCustomerActionAsync(
+                orderId,
+                message ?? string.Empty,
+                token),
             "Customer information requested.",
             requireNote: true,
             missingNoteMessage: "Enter the requested information message.",
@@ -383,7 +449,7 @@ else
     private Task CompleteAsync()
     {
         return RunActionAsync(
-            note => AgentOrdersClient.CompleteAsync(OrderId, note),
+            (orderId, note, token) => AgentOrdersClient.CompleteAsync(orderId, note, token),
             "Order completed.");
     }
 
@@ -395,8 +461,9 @@ else
             return Task.CompletedTask;
         }
 
+        var failureReason = _failureReason;
         return RunActionAsync(
-            _ => AgentOrdersClient.FailAsync(OrderId, _failureReason),
+            (orderId, _, token) => AgentOrdersClient.FailAsync(orderId, failureReason, token),
             "Order marked failed.",
             clearFailureReason: true);
     }
@@ -417,8 +484,14 @@ else
             return Task.CompletedTask;
         }
 
+        var credentials = new Dictionary<string, string>(
+            _deliveryCredentials,
+            StringComparer.OrdinalIgnoreCase);
         return RunActionAsync(
-            _ => AgentOrdersClient.SaveDeliveryCredentialsAsync(OrderId, _deliveryCredentials),
+            (orderId, _, token) => AgentOrdersClient.SaveDeliveryCredentialsAsync(
+                orderId,
+                credentials,
+                token),
             "Delivery credentials saved.");
     }
 
@@ -430,14 +503,20 @@ else
             return Task.CompletedTask;
         }
 
+        var noteText = _noteText;
+        var noteVisibleToCustomer = _noteVisibleToCustomer;
         return RunActionAsync(
-            _ => AgentOrdersClient.AddNoteAsync(OrderId, _noteText, _noteVisibleToCustomer),
+            (orderId, _, token) => AgentOrdersClient.AddNoteAsync(
+                orderId,
+                noteText,
+                noteVisibleToCustomer,
+                token),
             "Note added.",
             clearNote: true);
     }
 
     private async Task RunActionAsync(
-        Func<string?, Task<AgentOrdersApiResult<bool>>> action,
+        Func<Guid, string?, CancellationToken, Task<AgentOrdersApiResult<bool>>> action,
         string successMessage,
         bool requireNote = false,
         string? missingNoteMessage = null,
@@ -446,6 +525,11 @@ else
         bool clearInformationRequestMessage = false,
         bool clearFailureReason = false)
     {
+        if (_disposed || _actionBusy)
+        {
+            return;
+        }
+
         _actionError = null;
         _actionMessage = null;
         var actionNote = useInformationRequestMessage
@@ -458,84 +542,132 @@ else
             return;
         }
 
+        var orderId = OrderId;
+        var operationVersion = ++_actionOperationVersion;
         _actionBusy = true;
-        var result = await action(actionNote);
-        if (result.RequiresAuthentication)
+        try
         {
-            Navigation.NavigateTo("/Account/Login");
-            return;
-        }
+            var result = await action(orderId, actionNote, _lifetimeCts.Token);
+            if (!IsCurrentAction(orderId, operationVersion))
+            {
+                return;
+            }
 
-        if (!result.Success)
-        {
-            _actionError = result.ErrorMessage ?? "Unable to update this order.";
-            _actionBusy = false;
-            return;
-        }
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
 
-        if (clearNote)
-        {
-            _noteText = string.Empty;
-            _noteVisibleToCustomer = false;
-        }
+            if (!result.Success)
+            {
+                _actionError = result.ErrorMessage ?? "Unable to update this order.";
+                return;
+            }
 
-        if (clearInformationRequestMessage)
-        {
-            _informationRequestMessage = string.Empty;
-            _showInformationRequestForm = false;
-        }
-        else if (clearFailureReason)
-        {
-            _failureReason = string.Empty;
-        }
-        else
-        {
-            _operationNote = null;
-        }
+            if (clearNote)
+            {
+                _noteText = string.Empty;
+                _noteVisibleToCustomer = false;
+            }
 
-        _actionMessage = successMessage;
-        await LoadOrderAsync();
-        _actionBusy = false;
+            if (clearInformationRequestMessage)
+            {
+                _informationRequestMessage = string.Empty;
+                _showInformationRequestForm = false;
+            }
+            else if (clearFailureReason)
+            {
+                _failureReason = string.Empty;
+            }
+            else
+            {
+                _operationNote = null;
+            }
+
+            _actionMessage = successMessage;
+            await RequestOrderReloadAsync();
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
+        finally
+        {
+            if (IsCurrentAction(orderId, operationVersion))
+            {
+                _actionBusy = false;
+            }
+        }
     }
 
     private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
     {
-        if (message.OrderId != OrderId)
-        {
-            return Task.CompletedTask;
-        }
-
-        return ReloadFromRealtimeAsync();
+        return RequestRealtimeOrderReloadAsync(message.OrderId);
     }
 
     private Task HandleOrderAssignedAsync(OrderAssignedRealtimeDto message)
     {
-        if (message.OrderId != OrderId)
-        {
-            return Task.CompletedTask;
-        }
-
-        return ReloadFromRealtimeAsync();
+        return RequestRealtimeOrderReloadAsync(message.OrderId);
     }
 
     private Task HandleCustomerActionChangedAsync(
         CustomerActionChangedRealtimeDto message)
     {
-        if (message.OrderId != OrderId)
-        {
-            return Task.CompletedTask;
-        }
-
-        return ReloadFromRealtimeAsync();
+        return RequestRealtimeOrderReloadAsync(message.OrderId);
     }
 
-    private Task ReloadFromRealtimeAsync()
+    private Task RequestRealtimeOrderReloadAsync(Guid messageOrderId)
     {
-        return InvokeAsync(async () =>
+        return InvokeAsync(() =>
         {
-            await LoadOrderAsync();
-            StateHasChanged();
+            if (_disposed || messageOrderId != OrderId)
+            {
+                return Task.CompletedTask;
+            }
+
+            return RequestOrderReloadOnDispatcherAsync();
         });
+    }
+
+    private bool IsCurrentLoad(long generation, Guid orderId)
+    {
+        return !_disposed &&
+               generation == _loadGeneration &&
+               orderId == _requestedOrderId &&
+               orderId == OrderId;
+    }
+
+    private bool TryApplyCurrentLoad(long generation, Guid orderId, Action apply)
+    {
+        return IsCurrentLoad(generation, orderId) && TryApplyRealtimeState(apply);
+    }
+
+    private bool IsCurrentAction(Guid orderId, long operationVersion)
+    {
+        return !_disposed &&
+               orderId == OrderId &&
+               operationVersion == _actionOperationVersion;
+    }
+
+    private void ResetActionStateForRouteChange()
+    {
+        _actionOperationVersion++;
+        _actionBusy = false;
+        _actionError = null;
+        _actionMessage = null;
+        _operationNote = null;
+        _failureReason = string.Empty;
+        _informationRequestMessage = string.Empty;
+        _noteText = string.Empty;
+        _noteVisibleToCustomer = false;
+        _showInformationRequestForm = false;
+        _deliveryCredentials.Clear();
+    }
+
+    private bool TryApplyRealtimeState(Action apply)
+    {
+        return !_disposed &&
+               _realtimeRefresh?.TryApply(apply) == true;
     }
 
     private static string FormatNullable(DateTime? value)
@@ -605,6 +737,19 @@ else
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _actionOperationVersion++;
+        _actionBusy = false;
+        _lifetimeCts.Cancel();
+        _realtimeRefresh?.Dispose();
         _realtimeSubscriptions.Dispose();
+        _order = null;
+        _deliveryCredentials.Clear();
+        _lifetimeCts.Dispose();
     }
 }

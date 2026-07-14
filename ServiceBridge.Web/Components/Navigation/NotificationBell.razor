@@ -5,7 +5,8 @@
 
 <AuthorizeView>
     <Authorized Context="authContext">
-        <MudMenu Dense="true"
+        <MudMenu @ref="_menu"
+                 Dense="true"
                  AnchorOrigin="Origin.BottomRight"
                  TransformOrigin="Origin.TopRight"
                  PopoverClass="sb-notification-menu">
@@ -24,20 +25,8 @@
                 </MudTooltip>
             </ActivatorContent>
             <ChildContent>
-                <div class="sb-notification-dropdown">
-                    <div class="sb-notification-dropdown-header">
-                        <strong>Notifications</strong>
-                        @if (_unreadCount > 0)
-                        {
-                            <MudButton Variant="Variant.Text"
-                                       Color="Color.Primary"
-                                       Size="Size.Small"
-                                       OnClick="MarkAllAsReadAsync">
-                                Mark all read
-                            </MudButton>
-                        }
-                    </div>
-
+                <NotificationBellMenu UnreadCount="@_unreadCount"
+                                      OnMarkAllAsRead="MarkAllAsReadAsync">
                     @if (_loading)
                     {
                         <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
@@ -55,25 +44,14 @@
                         <div class="sb-notification-list">
                             @foreach (var notification in _notifications)
                             {
-                                <button class="sb-notification-item @(notification.IsRead ? "sb-notification-read" : null)"
-                                        type="button"
-                                        @onclick="() => OpenNotificationAsync(notification)">
-                                    <span>@notification.Title</span>
-                                    <strong>@notification.Message</strong>
-                                    <time>@FormatDateTime(notification.CreatedAt)</time>
-                                </button>
+                                <NotificationBellItem Notification="@notification"
+                                                      Busy="@_busyNotifications.Contains(notification.Id)"
+                                                      OnOpen="OpenNotificationAsync"
+                                                      OnMarkAsRead="MarkNotificationAsReadAsync" />
                             }
                         </div>
                     }
-
-                    <MudButton Href="/ui/notifications"
-                               Variant="Variant.Text"
-                               Color="Color.Primary"
-                               FullWidth="true"
-                               StartIcon="@Icons.Material.Outlined.Inbox">
-                        View all
-                    </MudButton>
-                </div>
+                </NotificationBellMenu>
             </ChildContent>
         </MudMenu>
     </Authorized>
@@ -81,7 +59,14 @@
 
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
+    private readonly HashSet<Guid> _busyNotifications = new();
+    private readonly CancellationTokenSource _lifetimeCts = new();
+    private MudMenu? _menu;
+    private CoalescingAsyncAction? _refreshAction;
+    private bool _disposed;
+    private bool _markAllBusy;
     private bool _loading = true;
+    private long _mutationVersion;
     private int _unreadCount;
     private string? _errorMessage;
     private IReadOnlyCollection<NotificationDto> _notifications =
@@ -89,24 +74,57 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _refreshAction = new CoalescingAsyncAction(RefreshCoreAsync);
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToNotifications(HandleNotificationReceivedAsync));
         await RefreshAsync();
     }
 
-    private async Task RefreshAsync()
+    private Task RefreshAsync()
     {
+        return _refreshAction?.RequestAsync() ?? Task.CompletedTask;
+    }
+
+    private async Task RefreshCoreAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var mutationVersion = _mutationVersion;
         _loading = true;
         _errorMessage = null;
 
-        var countResult = await NotificationsClient.GetUnreadCountAsync();
-        var notificationsResult = await NotificationsClient.GetNotificationsAsync(
-            page: 1,
-            pageSize: 5);
+        NotificationsApiResult<UnreadNotificationCountDto> countResult;
+        NotificationsApiResult<PagedResultDto<NotificationDto>> notificationsResult;
+        try
+        {
+            countResult = await NotificationsClient.GetUnreadCountAsync(_lifetimeCts.Token);
+            notificationsResult = await NotificationsClient.GetNotificationsAsync(
+                page: 1,
+                pageSize: 5,
+                cancellationToken: _lifetimeCts.Token);
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+            return;
+        }
+
+        if (_disposed)
+        {
+            return;
+        }
 
         if (countResult.RequiresAuthentication ||
             notificationsResult.RequiresAuthentication)
         {
             Navigation.NavigateTo("/Account/Login");
+            return;
+        }
+
+        if (mutationVersion != _mutationVersion)
+        {
+            _ = RefreshAsync();
             return;
         }
 
@@ -125,56 +143,217 @@
         }
         else
         {
-            _notifications = notificationsResult.Data?.Items ??
-                Array.Empty<NotificationDto>();
+            _notifications = (notificationsResult.Data?.Items ??
+                    Array.Empty<NotificationDto>())
+                .DistinctBy(notification => notification.Id)
+                .ToArray();
         }
 
         _loading = false;
     }
 
-    private async Task OpenNotificationAsync(NotificationDto notification)
+    internal async Task OpenNotificationAsync(NotificationDto notification)
     {
-        if (!notification.IsRead)
+        if (_disposed || !_busyNotifications.Add(notification.Id))
         {
-            await NotificationsClient.MarkAsReadAsync(notification.Id);
+            return;
         }
 
-        Navigation.NavigateTo("/ui/notifications");
+        try
+        {
+            var wasUnread = !notification.IsRead;
+            var preparation = await NotificationNavigation.PrepareOpenAsync(
+                notification,
+                CloseMenuAsync,
+                id => NotificationsClient.MarkAsReadAsync(id, _lifetimeCts.Token),
+                () => !_disposed);
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (wasUnread && preparation.MarkedAsRead)
+            {
+                ApplyReadMutation(notification.Id);
+            }
+
+            if (wasUnread)
+            {
+                QueueAuthoritativeRefresh();
+            }
+
+            if (preparation.Route is not null)
+            {
+                Navigation.NavigateTo(preparation.Route);
+            }
+        }
+        finally
+        {
+            if (!_disposed)
+            {
+                _busyNotifications.Remove(notification.Id);
+            }
+        }
+    }
+
+    private async Task MarkNotificationAsReadAsync(NotificationDto notification)
+    {
+        if (_disposed || !_busyNotifications.Add(notification.Id))
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await NotificationsClient.MarkAsReadAsync(
+                notification.Id,
+                _lifetimeCts.Token);
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (result.Success)
+            {
+                ApplyReadMutation(notification.Id);
+            }
+
+            QueueAuthoritativeRefresh();
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
+        finally
+        {
+            if (!_disposed)
+            {
+                _busyNotifications.Remove(notification.Id);
+            }
+        }
+    }
+
+    private Task CloseMenuAsync()
+    {
+        return _menu?.CloseMenuAsync() ?? Task.CompletedTask;
     }
 
     private async Task MarkAllAsReadAsync()
     {
-        var result = await NotificationsClient.MarkAllAsReadAsync();
-        if (result.RequiresAuthentication)
+        if (_disposed || _markAllBusy)
         {
-            Navigation.NavigateTo("/Account/Login");
             return;
         }
 
-        await RefreshAsync();
-    }
+        _markAllBusy = true;
+        try
+        {
+            var result = await NotificationsClient.MarkAllAsReadAsync(_lifetimeCts.Token);
+            if (_disposed)
+            {
+                return;
+            }
 
-    private static string FormatDateTime(DateTime value)
-    {
-        return value.ToString("yyyy-MM-dd HH:mm") + " UTC";
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (result.Success)
+            {
+                ApplyMarkAllMutation();
+            }
+
+            QueueAuthoritativeRefresh();
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
+        finally
+        {
+            if (!_disposed)
+            {
+                _markAllBusy = false;
+            }
+        }
     }
 
     private Task HandleNotificationReceivedAsync(RealtimeEventDto notification)
     {
         return InvokeAsync(async () =>
         {
+            if (_disposed)
+            {
+                return;
+            }
+
             if (notification.UnreadCount.HasValue)
             {
-                _unreadCount = notification.UnreadCount.Value;
+                _mutationVersion++;
+                _unreadCount = Math.Max(0, notification.UnreadCount.Value);
             }
 
             await RefreshAsync();
-            StateHasChanged();
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void ApplyReadMutation(Guid notificationId)
+    {
+        _mutationVersion++;
+        var current = _notifications.FirstOrDefault(item => item.Id == notificationId);
+        if (current is null || current.IsRead)
+        {
+            return;
+        }
+
+        current.IsRead = true;
+        _unreadCount = Math.Max(0, _unreadCount - 1);
+    }
+
+    private void ApplyMarkAllMutation()
+    {
+        _mutationVersion++;
+        foreach (var notification in _notifications)
+        {
+            notification.IsRead = true;
+        }
+
+        _unreadCount = 0;
+    }
+
+    private void QueueAuthoritativeRefresh()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshAsync();
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
         });
     }
 
     public void Dispose()
     {
+        _disposed = true;
+        _lifetimeCts.Cancel();
+        _refreshAction?.Dispose();
         _realtimeSubscriptions.Dispose();
+        _lifetimeCts.Dispose();
     }
 }

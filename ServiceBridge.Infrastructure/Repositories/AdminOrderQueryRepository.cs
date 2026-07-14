@@ -361,6 +361,7 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
             .AsNoTracking()
             .Where(x => x.OrderId == orderId)
             .OrderBy(x => x.CreatedAt)
+            .ThenBy(x => x.Id)
             .Select(x => new OrderStatusHistoryDto
             {
                 PreviousStatus = x.PreviousStatus.HasValue

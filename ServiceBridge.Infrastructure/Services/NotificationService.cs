@@ -113,7 +113,7 @@ public class NotificationService : INotificationService
                     EventType = RealtimeEventTypes.NotificationReceived,
                     EntityId = notification.RelatedEntityId,
                     EntityName = notification.RelatedEntityType,
-                    LinkUrl = LinkFor(notification),
+                    LinkUrl = notification.LinkUrl,
                     Title = notification.Title,
                     Message = notification.Message,
                     CreatedAtUtc = notification.CreatedAt,
@@ -133,7 +133,8 @@ public class NotificationService : INotificationService
             NotificationType.OrderCreated,
             "Order created",
             $"Order {orderNumber} was created and is waiting for payment.",
-            orderId);
+            orderId,
+            UserOrderLink(orderId));
     }
 
     public Task QueuePaymentCompletedAsync(
@@ -146,7 +147,8 @@ public class NotificationService : INotificationService
             NotificationType.PaymentCompleted,
             "Payment confirmed",
             $"Payment for order {orderNumber} was confirmed.",
-            orderId);
+            orderId,
+            UserOrderLink(orderId));
     }
 
     public async Task QueueOrderReadyForAssignmentAsync(
@@ -159,7 +161,8 @@ public class NotificationService : INotificationService
             NotificationType.PaymentCompleted,
             "Order ready for assignment",
             $"Order {orderNumber} is paid and ready for assignment.",
-            orderId)).ToArray();
+            orderId,
+            AdminOrderLink(orderId))).ToArray();
         _queuedRealtimeNotifications.AddRange(notifications);
 
         await _repository.AddRangeAsync(notifications);
@@ -178,13 +181,15 @@ public class NotificationService : INotificationService
                 NotificationType.OrderAssignedToAgent,
                 "Order assigned",
                 $"Order {orderNumber} was assigned to an agent.",
-                orderId),
+                orderId,
+                UserOrderLink(orderId)),
             Create(
                 agentId,
                 NotificationType.OrderAssignedToAgent,
                 "New assigned order",
                 $"Order {orderNumber} was assigned to you.",
-                orderId)
+                orderId,
+                AgentOrderLink(orderId))
         };
         _queuedRealtimeNotifications.AddRange(notifications);
 
@@ -201,7 +206,8 @@ public class NotificationService : INotificationService
             NotificationType.AgentStartedProcessing,
             "Processing started",
             $"An agent started processing order {orderNumber}.",
-            orderId);
+            orderId,
+            UserOrderLink(orderId));
     }
 
     public Task QueueOrderCompletedAsync(
@@ -214,7 +220,8 @@ public class NotificationService : INotificationService
             NotificationType.OrderCompleted,
             "Order completed",
             $"Order {orderNumber} has been completed.",
-            orderId);
+            orderId,
+            UserOrderLink(orderId));
     }
 
     public Task QueueOrderFailedAsync(
@@ -227,7 +234,8 @@ public class NotificationService : INotificationService
             NotificationType.OrderFailed,
             "Order failed",
             $"Order {orderNumber} could not be completed.",
-            orderId);
+            orderId,
+            UserOrderLink(orderId));
     }
 
     public Task QueueCustomerActionRequestedAsync(
@@ -240,7 +248,8 @@ public class NotificationService : INotificationService
             NotificationType.CustomerActionRequested,
             "Customer action requested",
             $"Order {orderNumber} needs your response before processing can continue.",
-            orderId);
+            orderId,
+            UserOrderLink(orderId));
     }
 
     public Task QueueCustomerActionRespondedAsync(
@@ -253,7 +262,8 @@ public class NotificationService : INotificationService
             NotificationType.CustomerActionResponded,
             "Customer response received",
             $"Customer information was provided for order {orderNumber}.",
-            orderId);
+            orderId,
+            AgentOrderLink(orderId));
     }
 
     public async Task QueueTicketCreatedForAdminsAsync(
@@ -267,7 +277,8 @@ public class NotificationService : INotificationService
             "New support ticket",
             $"Ticket {ticketNumber} was created and is waiting for support.",
             TicketEntityType,
-            ticketId)).ToArray();
+            ticketId,
+            AdminTicketLink(ticketId))).ToArray();
         _queuedRealtimeNotifications.AddRange(notifications);
 
         await _repository.AddRangeAsync(notifications);
@@ -284,7 +295,8 @@ public class NotificationService : INotificationService
             "Customer replied",
             $"Customer replied to ticket {ticketNumber}.",
             TicketEntityType,
-            ticketId)).ToArray();
+            ticketId,
+            AdminTicketLink(ticketId))).ToArray();
         _queuedRealtimeNotifications.AddRange(notifications);
 
         await _repository.AddRangeAsync(notifications);
@@ -301,7 +313,8 @@ public class NotificationService : INotificationService
             "Support replied",
             $"Support replied to ticket {ticketNumber}.",
             TicketEntityType,
-            ticketId);
+            ticketId,
+            UserTicketLink(ticketId));
     }
 
     public Task QueueTicketClosedForUserAsync(
@@ -315,7 +328,8 @@ public class NotificationService : INotificationService
             "Ticket closed",
             $"Ticket {ticketNumber} was closed by support.",
             TicketEntityType,
-            ticketId);
+            ticketId,
+            UserTicketLink(ticketId));
     }
 
     public async Task QueueRefundRequestedForAdminsAsync(
@@ -328,7 +342,8 @@ public class NotificationService : INotificationService
             NotificationType.RefundRequested,
             "Refund requested",
             $"Order {orderNumber} has a new refund request.",
-            orderId)).ToArray();
+            orderId,
+            AdminOrderLink(orderId))).ToArray();
         _queuedRealtimeNotifications.AddRange(notifications);
 
         await _repository.AddRangeAsync(notifications);
@@ -344,7 +359,8 @@ public class NotificationService : INotificationService
             NotificationType.RefundApproved,
             "Refund approved",
             $"Refund request for order {orderNumber} was approved.",
-            orderId);
+            orderId,
+            UserOrderLink(orderId));
     }
 
     public Task QueueRefundRejectedForUserAsync(
@@ -357,7 +373,8 @@ public class NotificationService : INotificationService
             NotificationType.RefundRejected,
             "Refund rejected",
             $"Refund request for order {orderNumber} was rejected.",
-            orderId);
+            orderId,
+            UserOrderLink(orderId));
     }
 
     private Task QueueAsync(
@@ -365,9 +382,17 @@ public class NotificationService : INotificationService
         NotificationType type,
         string title,
         string message,
-        Guid orderId)
+        Guid orderId,
+        string linkUrl)
     {
-        return QueueAsync(userId, type, title, message, OrderEntityType, orderId);
+        return QueueAsync(
+            userId,
+            type,
+            title,
+            message,
+            OrderEntityType,
+            orderId,
+            linkUrl);
     }
 
     private Task QueueAsync(
@@ -376,7 +401,8 @@ public class NotificationService : INotificationService
         string title,
         string message,
         string relatedEntityType,
-        Guid relatedEntityId)
+        Guid relatedEntityId,
+        string linkUrl)
     {
         var notification = Create(
             userId,
@@ -384,7 +410,8 @@ public class NotificationService : INotificationService
             title,
             message,
             relatedEntityType,
-            relatedEntityId);
+            relatedEntityId,
+            linkUrl);
         _queuedRealtimeNotifications.Add(notification);
 
         return _repository.AddAsync(notification);
@@ -395,9 +422,17 @@ public class NotificationService : INotificationService
         NotificationType type,
         string title,
         string message,
-        Guid orderId)
+        Guid orderId,
+        string linkUrl)
     {
-        return Create(userId, type, title, message, OrderEntityType, orderId);
+        return Create(
+            userId,
+            type,
+            title,
+            message,
+            OrderEntityType,
+            orderId,
+            linkUrl);
     }
 
     private static Notification Create(
@@ -406,7 +441,8 @@ public class NotificationService : INotificationService
         string title,
         string message,
         string relatedEntityType,
-        Guid relatedEntityId)
+        Guid relatedEntityId,
+        string linkUrl)
     {
         return new Notification
         {
@@ -417,16 +453,16 @@ public class NotificationService : INotificationService
             Type = type,
             RelatedEntityType = relatedEntityType,
             RelatedEntityId = relatedEntityId,
+            LinkUrl = linkUrl,
             CreatedAt = DateTime.UtcNow
         };
     }
 
-    private static string LinkFor(Notification notification)
-    {
-        return notification.RelatedEntityType == TicketEntityType
-            ? $"/ui/tickets/{notification.RelatedEntityId}"
-            : $"/ui/orders/{notification.RelatedEntityId}";
-    }
+    private static string UserOrderLink(Guid orderId) => $"/ui/orders/{orderId}";
+    private static string AgentOrderLink(Guid orderId) => $"/ui/agent/orders/{orderId}";
+    private static string AdminOrderLink(Guid orderId) => $"/ui/admin/orders/{orderId}";
+    private static string UserTicketLink(Guid ticketId) => $"/ui/tickets/{ticketId}";
+    private static string AdminTicketLink(Guid ticketId) => $"/ui/admin/tickets/{ticketId}";
 
     private static int NormalizePageSize(int pageSize)
     {

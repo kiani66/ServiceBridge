@@ -145,13 +145,14 @@
 
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
+    private readonly AgentOrdersQueryLifecycle _queryLifecycle = new();
     private const int PageSize = 20;
 
     [SupplyParameterFromQuery(Name = "status")]
-    public OrderStatus? Status { get; set; }
+    public string? StatusQuery { get; set; }
 
     [SupplyParameterFromQuery(Name = "page")]
-    public int? Page { get; set; }
+    public string? PageQuery { get; set; }
 
     [SupplyParameterFromQuery(Name = "search")]
     public string? Search { get; set; }
@@ -161,6 +162,7 @@
     private string? _errorMessage;
     private string? _search;
     private OrderStatus? _status;
+    private long _loadVersion;
     private PagedResultDto<AgentOrderListItemDto> _orders = new();
 
     private string EmptyDescription => _status.HasValue || !string.IsNullOrWhiteSpace(_search)
@@ -176,45 +178,57 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _status = Status;
-        _search = Search;
-        await LoadOrdersAsync(Math.Max(Page ?? 1, 1));
+        var query = AgentOrdersQueryState.Parse(StatusQuery, Search, PageQuery);
+        await _queryLifecycle.ApplyAsync(query, async appliedQuery =>
+        {
+            _status = appliedQuery.Status;
+            _search = appliedQuery.Search;
+            await LoadOrdersAsync(appliedQuery.Page);
+        });
     }
 
-    private async Task OnStatusChanged(OrderStatus? status)
+    private Task OnStatusChanged(OrderStatus? status)
     {
-        _status = status;
-        NavigateToPage(1);
-        await LoadOrdersAsync(1);
+        return NavigateToQuery(_queryLifecycle.Current with
+        {
+            Status = status,
+            Page = 1
+        });
     }
 
-    private async Task OnSearchChanged(string? search)
+    private Task OnSearchChanged(string? search)
     {
-        _search = search;
-        NavigateToPage(1);
-        await LoadOrdersAsync(1);
+        return NavigateToQuery(_queryLifecycle.Current with
+        {
+            Search = string.IsNullOrWhiteSpace(search) ? null : search,
+            Page = 1
+        });
     }
 
     private Task PreviousPage()
     {
         var page = Math.Max(_orders.Page - 1, 1);
-        NavigateToPage(page);
-        return LoadOrdersAsync(page);
+        return NavigateToQuery(_queryLifecycle.Current with { Page = page });
     }
 
     private Task NextPage()
     {
         var page = _orders.Page + 1;
-        NavigateToPage(page);
-        return LoadOrdersAsync(page);
+        return NavigateToQuery(_queryLifecycle.Current with { Page = page });
     }
 
     private async Task LoadOrdersAsync(int page)
     {
+        var loadVersion = Interlocked.Increment(ref _loadVersion);
         _loading = true;
         _errorMessage = null;
 
         var result = await AgentOrdersClient.GetOrdersAsync(page, PageSize, _status, _search);
+        if (loadVersion != Volatile.Read(ref _loadVersion))
+        {
+            return;
+        }
+
         if (result.RequiresAuthentication)
         {
             Navigation.NavigateTo("/Account/Login");
@@ -266,18 +280,24 @@
         _actionBusy = false;
     }
 
-    private void NavigateToPage(int page)
+    private Task NavigateToQuery(AgentOrdersQueryState queryState)
     {
+        if (!_queryLifecycle.ShouldNavigate(queryState))
+        {
+            return Task.CompletedTask;
+        }
+
         var query = new Dictionary<string, object?>
         {
-            ["page"] = page <= 1 ? null : page,
-            ["status"] = _status?.ToString(),
-            ["search"] = string.IsNullOrWhiteSpace(_search) ? null : _search
+            ["page"] = queryState.Page <= 1 ? null : queryState.Page,
+            ["status"] = queryState.Status?.ToString(),
+            ["search"] = queryState.Search
         };
 
         Navigation.NavigateTo(
             Navigation.GetUriWithQueryParameters("/ui/agent/orders", query),
             replace: true);
+        return Task.CompletedTask;
     }
 
     private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)

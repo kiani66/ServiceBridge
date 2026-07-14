@@ -1,0 +1,57 @@
+@if (CanOpen)
+{
+    <button class="@ItemClass"
+            type="button"
+            disabled="@Busy"
+            data-notification-action="open"
+            aria-label="Open notification: @Notification.Title"
+            @onclick="OpenAsync">
+        @Content
+    </button>
+}
+else
+{
+    <div class="@ItemClass sb-notification-item-static">
+        @Content
+        @if (!Notification.IsRead)
+        {
+            <button class="sb-notification-mark-read"
+                    type="button"
+                    disabled="@Busy"
+                    data-notification-action="mark-read"
+                    aria-label="Mark notification as read: @Notification.Title"
+                    @onclick="MarkAsReadAsync">
+                Mark as read
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public NotificationDto Notification { get; set; } = null!;
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<NotificationDto> OnOpen { get; set; }
+    [Parameter] public EventCallback<NotificationDto> OnMarkAsRead { get; set; }
+
+    private bool CanOpen =>
+        NotificationNavigation.TryGetSafeInternalRoute(Notification.LinkUrl, out _);
+
+    private string ItemClass =>
+        $"sb-notification-item {(Notification.IsRead ? "sb-notification-read" : null)}";
+
+    private RenderFragment Content => builder =>
+    {
+        builder.OpenElement(0, "span");
+        builder.AddContent(1, Notification.Title);
+        builder.CloseElement();
+        builder.OpenElement(2, "strong");
+        builder.AddContent(3, Notification.Body);
+        builder.CloseElement();
+        builder.OpenElement(4, "time");
+        builder.AddContent(5, Notification.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") + " UTC");
+        builder.CloseElement();
+    };
+
+    private Task OpenAsync() => OnOpen.InvokeAsync(Notification);
+    private Task MarkAsReadAsync() => OnMarkAsRead.InvokeAsync(Notification);
+}

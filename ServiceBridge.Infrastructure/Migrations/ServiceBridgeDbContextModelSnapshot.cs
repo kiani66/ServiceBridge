@@ -430,6 +430,10 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Property<bool>("IsRead")
                         .HasColumnType("bit");
 
+                    b.Property<string>("LinkUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("Message")
                         .IsRequired()
                         .HasMaxLength(500)

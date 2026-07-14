@@ -28,6 +28,9 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
             .IsRequired()
             .HasMaxLength(80);
 
+        entity.Property(x => x.LinkUrl)
+            .HasMaxLength(500);
+
         entity.Property(x => x.IsRead)
             .IsRequired();
 
