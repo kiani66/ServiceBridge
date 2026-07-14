@@ -93,6 +93,7 @@ builder.Services.AddScoped<IAdminPricingService, AdminPricingService>();
 builder.Services.AddScoped<IAdminInventoryCommandRepository, AdminInventoryCommandRepository>();
 builder.Services.AddScoped<IAdminInventoryQueryRepository, AdminInventoryQueryRepository>();
 builder.Services.AddScoped<IAdminInventoryQueryService, AdminInventoryQueryService>();
+builder.Services.AddScoped<IInventoryCodeFulfillmentRepository, InventoryCodeFulfillmentRepository>();
 builder.Services.AddScoped<CreateInventoryItemsCommand>();
 builder.Services.AddScoped<DisableInventoryItemCommand>();
 builder.Services.AddScoped<IPricingQuoteService, PricingQuoteService>();
