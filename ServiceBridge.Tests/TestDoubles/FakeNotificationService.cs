@@ -7,6 +7,7 @@ namespace ServiceBridge.Tests.TestDoubles;
 internal class FakeNotificationService : INotificationService
 {
     public List<string> QueuedTypes { get; } = new();
+    public List<FakeQueuedOrderCompletedNotification> QueuedOrderCompletions { get; } = new();
 
     public Task<ServiceResult<PagedResultDto<NotificationDto>>> GetForUserAsync(
         Guid userId,
@@ -92,6 +93,7 @@ internal class FakeNotificationService : INotificationService
         string orderNumber)
     {
         QueuedTypes.Add(nameof(QueueOrderCompletedAsync));
+        QueuedOrderCompletions.Add(new(userId, orderId, orderNumber));
         return Task.CompletedTask;
     }
 
@@ -182,3 +184,8 @@ internal class FakeNotificationService : INotificationService
         return Task.CompletedTask;
     }
 }
+
+internal sealed record FakeQueuedOrderCompletedNotification(
+    Guid UserId,
+    Guid OrderId,
+    string OrderNumber);
