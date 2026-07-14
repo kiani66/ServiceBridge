@@ -190,6 +190,7 @@ else
     private RealtimeRefreshCoordinator? _realtimeRefresh;
     private long _loadGeneration;
     private Guid _requestedOrderId;
+    private long _revealOperationVersion;
     [Parameter] public Guid OrderId { get; set; }
 
     private bool _disposed;
@@ -279,6 +280,11 @@ else
             return Task.CompletedTask;
         }
 
+        if (_requestedOrderId != OrderId)
+        {
+            ResetRevealStateForRouteChange();
+        }
+
         _requestedOrderId = OrderId;
         _loadGeneration++;
         if (!TryApplyRealtimeState(() =>
@@ -346,17 +352,18 @@ else
             return;
         }
 
-        _revealBusy = true;
-        _revealError = null;
         var generation = _loadGeneration;
         var orderId = OrderId;
+        var operationVersion = ++_revealOperationVersion;
+        _revealBusy = true;
+        _revealError = null;
 
         try
         {
             var result = await AdminOrdersClient.RevealCredentialsAsync(
                 orderId,
                 _lifetimeCts.Token);
-            if (!IsCurrentLoad(generation, orderId))
+            if (!IsCurrentRevealOperation(operationVersion, generation, orderId))
             {
                 return;
             }
@@ -370,7 +377,6 @@ else
             if (!result.Success || result.Data is null)
             {
                 _revealError = result.ErrorMessage ?? "Unable to reveal credentials.";
-                _revealBusy = false;
                 return;
             }
 
@@ -383,10 +389,16 @@ else
                     field.IsVisibleToCustomerAfterCompletion))
                 .ToArray();
             _credentialsRevealed = true;
-            _revealBusy = false;
         }
         catch (OperationCanceledException) when (_disposed)
         {
+        }
+        finally
+        {
+            if (IsCurrentRevealOperation(operationVersion, orderId))
+            {
+                _revealBusy = false;
+            }
         }
     }
 
@@ -432,6 +444,28 @@ else
         return IsCurrentLoad(generation, orderId) && TryApplyRealtimeState(apply);
     }
 
+    private bool IsCurrentRevealOperation(long operationVersion, long generation, Guid orderId)
+    {
+        return IsCurrentRevealOperation(operationVersion, orderId) &&
+               IsCurrentLoad(generation, orderId);
+    }
+
+    private bool IsCurrentRevealOperation(long operationVersion, Guid orderId)
+    {
+        return !_disposed &&
+               operationVersion == _revealOperationVersion &&
+               orderId == OrderId;
+    }
+
+    private void ResetRevealStateForRouteChange()
+    {
+        _revealOperationVersion++;
+        _revealBusy = false;
+        _revealError = null;
+        _credentialsRevealed = false;
+        _revealedCredentialItems = Array.Empty<CredentialDisplayItem>();
+    }
+
     private bool TryApplyRealtimeState(Action apply)
     {
         return !_disposed &&
@@ -451,6 +485,8 @@ else
         }
 
         _disposed = true;
+        _revealOperationVersion++;
+        _revealBusy = false;
         _lifetimeCts.Cancel();
         _realtimeRefresh?.Dispose();
         _realtimeSubscriptions.Dispose();

@@ -427,6 +427,395 @@ public sealed class OrderDetailComponentConcurrencyTests : BunitContext, IDispos
     }
 
     [Fact]
+    public async Task User_PaymentStartedOnPreviousRoute_DoesNotDisableOrNavigateFromNewOrder()
+    {
+        var orderA = Guid.NewGuid();
+        var orderB = Guid.NewGuid();
+        var paymentStarted = NewSignal();
+        var releasePayment = NewSignal();
+        var handler = new OrderDetailHttpHandler(async (request, _, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path == $"/api/orders/my/{orderA}")
+            {
+                return Success(UserOrder(orderA, "PAY-A", OrderStatus.WaitingForPayment));
+            }
+
+            if (request.Method == HttpMethod.Get && path == $"/api/orders/my/{orderB}")
+            {
+                return Success(UserOrder(orderB, "PAY-B", OrderStatus.WaitingForPayment));
+            }
+
+            if (request.Method == HttpMethod.Post && path == "/api/payments/initiate")
+            {
+                paymentStarted.TrySetResult();
+                await releasePayment.Task;
+                return Success(new PaymentInitiatedResponse { PaymentId = Guid.NewGuid() });
+            }
+
+            return EmptyRefunds(request);
+        });
+        await ConfigureAsync(handler);
+        var cut = Render<OrderDetails>(parameters =>
+            parameters.Add(component => component.OrderId, orderA));
+        var payA = cut.FindAll("button")
+            .Single(button => button.TextContent.Trim().Equals("Pay", StringComparison.Ordinal));
+
+        var paymentA = payA.ClickAsync(new MouseEventArgs());
+        await paymentStarted.Task;
+        await Renderer.Dispatcher.InvokeAsync(() =>
+            cut.Render(parameters => parameters.Add(component => component.OrderId, orderB)));
+
+        var payB = cut.FindAll("button")
+            .Single(button => button.TextContent.Trim().Equals("Pay", StringComparison.Ordinal));
+        Assert.False(payB.HasAttribute("disabled"));
+        Assert.Contains("PAY-B", cut.Markup);
+
+        releasePayment.TrySetResult();
+        await paymentA;
+
+        Assert.Contains("PAY-B", cut.Markup);
+        Assert.Equal(1, handler.Calls("POST /api/payments/initiate"));
+        Assert.Equal(0, handler.Calls("POST /api/payments/mock"));
+        Assert.Empty(Services.GetRequiredService<BunitNavigationManager>().History);
+    }
+
+    [Fact]
+    public async Task User_CancelStartedOnPreviousRoute_DoesNotDisableNewOrder()
+    {
+        var orderA = Guid.NewGuid();
+        var orderB = Guid.NewGuid();
+        var cancelStarted = NewSignal();
+        var releaseCancel = NewSignal();
+        var handler = new OrderDetailHttpHandler(async (request, _, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path == $"/api/orders/my/{orderA}")
+            {
+                return Success(CancelableUserOrder(orderA, "CANCEL-A"));
+            }
+
+            if (request.Method == HttpMethod.Get && path == $"/api/orders/my/{orderB}")
+            {
+                return Success(CancelableUserOrder(orderB, "CANCEL-B"));
+            }
+
+            if (request.Method == HttpMethod.Post && path == $"/api/orders/my/{orderA}/cancel")
+            {
+                cancelStarted.TrySetResult();
+                await releaseCancel.Task;
+                return CommandSuccess();
+            }
+
+            return EmptyRefunds(request);
+        });
+        await ConfigureAsync(handler);
+        var cut = Render<OrderDetails>(parameters =>
+            parameters.Add(component => component.OrderId, orderA));
+        await cut.FindAll("button")
+            .Single(button => button.TextContent.Trim().Equals("Cancel", StringComparison.Ordinal))
+            .ClickAsync(new MouseEventArgs());
+        var confirm = cut.FindAll("button")
+            .Single(button => button.TextContent.Trim().Equals("Cancel order", StringComparison.Ordinal));
+
+        var cancelA = confirm.ClickAsync(new MouseEventArgs());
+        await cancelStarted.Task;
+        await Renderer.Dispatcher.InvokeAsync(() =>
+            cut.Render(parameters => parameters.Add(component => component.OrderId, orderB)));
+
+        var cancelB = cut.FindAll("button")
+            .Single(button => button.TextContent.Trim().Equals("Cancel", StringComparison.Ordinal));
+        Assert.False(cancelB.HasAttribute("disabled"));
+        Assert.Empty(cut.FindAll("[role='dialog']"));
+
+        releaseCancel.TrySetResult();
+        await cancelA;
+
+        Assert.Contains("CANCEL-B", cut.Markup);
+        Assert.DoesNotContain("Order cancelled successfully.", cut.Markup);
+        Assert.Equal(1, handler.Calls($"POST /api/orders/my/{orderA}/cancel"));
+    }
+
+    [Fact]
+    public async Task User_RefundStartedOnPreviousRoute_DoesNotDisableNewOrder()
+    {
+        var orderA = Guid.NewGuid();
+        var orderB = Guid.NewGuid();
+        var refundStarted = NewSignal();
+        var releaseRefund = NewSignal();
+        var handler = new OrderDetailHttpHandler(async (request, _, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path == $"/api/orders/my/{orderA}")
+            {
+                return Success(RefundableUserOrder(orderA, "REFUND-A"));
+            }
+
+            if (request.Method == HttpMethod.Get && path == $"/api/orders/my/{orderB}")
+            {
+                return Success(RefundableUserOrder(orderB, "REFUND-B"));
+            }
+
+            if (request.Method == HttpMethod.Post && path == $"/api/orders/my/{orderA}/refunds")
+            {
+                refundStarted.TrySetResult();
+                await releaseRefund.Task;
+                return Success(new RefundRequestDto());
+            }
+
+            return EmptyRefunds(request);
+        });
+        await ConfigureAsync(handler);
+        var cut = Render<OrderDetails>(parameters =>
+            parameters.Add(component => component.OrderId, orderA));
+        SetPrivateField(cut.Instance, "_refundReason", "Route-race refund");
+        var refundAButton = cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Request refund", StringComparison.Ordinal));
+
+        var refundA = refundAButton.ClickAsync(new MouseEventArgs());
+        await refundStarted.Task;
+        await Renderer.Dispatcher.InvokeAsync(() =>
+            cut.Render(parameters => parameters.Add(component => component.OrderId, orderB)));
+
+        var refundBButton = cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Request refund", StringComparison.Ordinal));
+        Assert.False(refundBButton.HasAttribute("disabled"));
+
+        releaseRefund.TrySetResult();
+        await refundA;
+
+        Assert.Contains("REFUND-B", cut.Markup);
+        Assert.DoesNotContain("Refund request submitted.", cut.Markup);
+        Assert.Equal(1, handler.Calls($"POST /api/orders/my/{orderA}/refunds"));
+    }
+
+    [Fact]
+    public async Task User_CustomerResponseStartedOnPreviousRoute_DoesNotDisableNewOrder()
+    {
+        var orderA = Guid.NewGuid();
+        var orderB = Guid.NewGuid();
+        var responseStarted = NewSignal();
+        var releaseResponse = NewSignal();
+        var handler = new OrderDetailHttpHandler(async (request, _, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path == $"/api/orders/my/{orderA}")
+            {
+                return Success(UserOrderWithPendingAction(orderA, "ACTION-A"));
+            }
+
+            if (request.Method == HttpMethod.Get && path == $"/api/orders/my/{orderB}")
+            {
+                return Success(UserOrderWithPendingAction(orderB, "ACTION-B"));
+            }
+
+            if (request.Method == HttpMethod.Post &&
+                path == $"/api/orders/my/{orderA}/customer-actions/respond")
+            {
+                responseStarted.TrySetResult();
+                await releaseResponse.Task;
+                return CommandSuccess();
+            }
+
+            return EmptyRefunds(request);
+        });
+        await ConfigureAsync(handler);
+        var cut = Render<OrderDetails>(parameters =>
+            parameters.Add(component => component.OrderId, orderA));
+        await cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Provide Information", StringComparison.Ordinal))
+            .ClickAsync(new MouseEventArgs());
+        SetPrivateField(cut.Instance, "_customerActionResponse", "Response from A");
+        var submit = cut.FindAll("button")
+            .Single(button => button.TextContent.Trim().Equals("Submit", StringComparison.Ordinal));
+
+        var responseA = submit.ClickAsync(new MouseEventArgs());
+        await responseStarted.Task;
+        await Renderer.Dispatcher.InvokeAsync(() =>
+            cut.Render(parameters => parameters.Add(component => component.OrderId, orderB)));
+
+        var provideOnB = cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Provide Information", StringComparison.Ordinal));
+        Assert.False(provideOnB.HasAttribute("disabled"));
+        Assert.False(GetPrivateField<bool>(cut.Instance, "_showCustomerActionForm"));
+
+        releaseResponse.TrySetResult();
+        await responseA;
+
+        Assert.Contains("ACTION-B", cut.Markup);
+        Assert.DoesNotContain("Information submitted.", cut.Markup);
+        Assert.Equal(
+            1,
+            handler.Calls($"POST /api/orders/my/{orderA}/customer-actions/respond"));
+    }
+
+    [Fact]
+    public async Task Agent_OldActionCleanupCannotClearNewRouteAction_AndFailureReenablesControls()
+    {
+        var orderA = Guid.NewGuid();
+        var orderB = Guid.NewGuid();
+        var actionAStarted = NewSignal();
+        var releaseActionA = NewSignal();
+        var actionBStarted = NewSignal();
+        var releaseActionB = NewSignal();
+        var handler = new OrderDetailHttpHandler(async (request, _, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path == $"/api/agent/orders/{orderA}")
+            {
+                return Success(AgentOrder(orderA, "AGENT-A", OrderStatus.Assigned));
+            }
+
+            if (request.Method == HttpMethod.Get && path == $"/api/agent/orders/{orderB}")
+            {
+                return Success(AgentOrder(orderB, "AGENT-B", OrderStatus.Assigned));
+            }
+
+            if (request.Method == HttpMethod.Post && path == $"/api/agent/orders/{orderA}/start")
+            {
+                actionAStarted.TrySetResult();
+                await releaseActionA.Task;
+                return CommandSuccess();
+            }
+
+            if (request.Method == HttpMethod.Post && path == $"/api/agent/orders/{orderB}/start")
+            {
+                actionBStarted.TrySetResult();
+                await releaseActionB.Task;
+                return Failure("B action failed");
+            }
+
+            throw Unexpected(request);
+        });
+        await ConfigureAsync(handler);
+        var cut = Render<AgentOrderWorkspace>(parameters =>
+            parameters.Add(component => component.OrderId, orderA));
+        var startA = cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Start processing", StringComparison.Ordinal));
+
+        var actionA = startA.ClickAsync(new MouseEventArgs());
+        await actionAStarted.Task;
+        Assert.True(cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Start processing", StringComparison.Ordinal))
+            .HasAttribute("disabled"));
+        await cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Start processing", StringComparison.Ordinal))
+            .ClickAsync(new MouseEventArgs());
+        Assert.Equal(1, handler.Calls($"POST /api/agent/orders/{orderA}/start"));
+
+        await Renderer.Dispatcher.InvokeAsync(() =>
+            cut.Render(parameters => parameters.Add(component => component.OrderId, orderB)));
+        var startB = cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Start processing", StringComparison.Ordinal));
+        Assert.False(startB.HasAttribute("disabled"));
+
+        var actionB = startB.ClickAsync(new MouseEventArgs());
+        await actionBStarted.Task;
+        Assert.Equal(1, handler.Calls($"POST /api/agent/orders/{orderB}/start"));
+
+        releaseActionA.TrySetResult();
+        await actionA;
+
+        Assert.True(GetPrivateField<bool>(cut.Instance, "_actionBusy"));
+        Assert.True(cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Start processing", StringComparison.Ordinal))
+            .HasAttribute("disabled"));
+
+        releaseActionB.TrySetResult();
+        await actionB;
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.False(GetPrivateField<bool>(cut.Instance, "_actionBusy"));
+            Assert.False(cut.FindAll("button")
+                .Single(button => button.TextContent.Contains("Start processing", StringComparison.Ordinal))
+                .HasAttribute("disabled"));
+            Assert.Contains("B action failed", cut.Markup);
+            Assert.Contains("AGENT-B", cut.Markup);
+        });
+    }
+
+    [Fact]
+    public async Task Admin_OldRevealCannotClearOrExposeAcrossNewRouteReveal()
+    {
+        var orderA = Guid.NewGuid();
+        var orderB = Guid.NewGuid();
+        var revealAStarted = NewSignal();
+        var releaseRevealA = NewSignal();
+        var revealBStarted = NewSignal();
+        var releaseRevealB = NewSignal();
+        var handler = new OrderDetailHttpHandler(async (request, _, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path == $"/api/admin/orders/{orderA}")
+            {
+                return Success(AdminOrderWithMaskedCredential(orderA, "ADMIN-A"));
+            }
+
+            if (request.Method == HttpMethod.Get && path == $"/api/admin/orders/{orderB}")
+            {
+                return Success(AdminOrderWithMaskedCredential(orderB, "ADMIN-B"));
+            }
+
+            if (request.Method == HttpMethod.Post &&
+                path == $"/api/admin/orders/{orderA}/credentials/reveal")
+            {
+                revealAStarted.TrySetResult();
+                await releaseRevealA.Task;
+                return Success(AdminCredentials(orderA, "secret-from-a"));
+            }
+
+            if (request.Method == HttpMethod.Post &&
+                path == $"/api/admin/orders/{orderB}/credentials/reveal")
+            {
+                revealBStarted.TrySetResult();
+                await releaseRevealB.Task;
+                return Success(AdminCredentials(orderB, "secret-from-b"));
+            }
+
+            throw Unexpected(request);
+        });
+        await ConfigureAsync(handler);
+        var cut = Render<AdminOrderManagement>(parameters =>
+            parameters.Add(component => component.OrderId, orderA));
+        var revealAButton = cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Reveal credentials", StringComparison.Ordinal));
+
+        var revealA = revealAButton.ClickAsync(new MouseEventArgs());
+        await revealAStarted.Task;
+        await Renderer.Dispatcher.InvokeAsync(() =>
+            cut.Render(parameters => parameters.Add(component => component.OrderId, orderB)));
+
+        var revealBButton = cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Reveal credentials", StringComparison.Ordinal));
+        Assert.False(revealBButton.HasAttribute("disabled"));
+        Assert.DoesNotContain("secret-from-a", cut.Markup);
+
+        var revealB = revealBButton.ClickAsync(new MouseEventArgs());
+        await revealBStarted.Task;
+        releaseRevealA.TrySetResult();
+        await revealA;
+
+        Assert.True(GetPrivateField<bool>(cut.Instance, "_revealBusy"));
+        Assert.True(cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Reveal credentials", StringComparison.Ordinal))
+            .HasAttribute("disabled"));
+        Assert.DoesNotContain("secret-from-a", cut.Markup);
+        Assert.DoesNotContain("secret-from-b", cut.Markup);
+
+        releaseRevealB.TrySetResult();
+        await revealB;
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.False(GetPrivateField<bool>(cut.Instance, "_revealBusy"));
+            Assert.Contains("secret-from-b", cut.Markup);
+            Assert.DoesNotContain("secret-from-a", cut.Markup);
+            Assert.Contains("ADMIN-B", cut.Markup);
+        });
+    }
+
+    [Fact]
     public async Task User_DisposeDuringPayment_PreventsNavigation()
     {
         var orderId = Guid.NewGuid();
@@ -633,6 +1022,44 @@ public sealed class OrderDetailComponentConcurrencyTests : BunitContext, IDispos
         CreatedAt = DateTime.UtcNow
     };
 
+    private static UserOrderDetailDto CancelableUserOrder(Guid id, string number)
+    {
+        var order = UserOrder(id, number);
+        order.CanCancel = true;
+        return order;
+    }
+
+    private static UserOrderDetailDto RefundableUserOrder(Guid id, string number)
+    {
+        var order = UserOrder(id, number, OrderStatus.Paid);
+        order.Payments =
+        [
+            new PaymentHistoryDto
+            {
+                PaymentId = Guid.NewGuid(),
+                Status = nameof(PaymentStatus.Completed),
+                CreatedAt = DateTime.UtcNow,
+                CompletedAt = DateTime.UtcNow
+            }
+        ];
+        return order;
+    }
+
+    private static UserOrderDetailDto UserOrderWithPendingAction(Guid id, string number)
+    {
+        var order = UserOrder(id, number);
+        order.CustomerActions =
+        [
+            new CustomerActionRequestDto
+            {
+                Id = Guid.NewGuid(),
+                RequestText = $"Information for {number}",
+                RequestedAt = DateTime.UtcNow
+            }
+        ];
+        return order;
+    }
+
     private static AdminOrderDetailDto AdminOrder(Guid id, string number) => new()
     {
         OrderId = id,
@@ -644,6 +1071,37 @@ public sealed class OrderDetailComponentConcurrencyTests : BunitContext, IDispos
         FulfillmentMode = "Manual",
         Status = OrderStatus.Processing.ToString(),
         CreatedAt = DateTime.UtcNow
+    };
+
+    private static AdminOrderDetailDto AdminOrderWithMaskedCredential(Guid id, string number)
+    {
+        var order = AdminOrder(id, number);
+        order.Credentials =
+        [
+            new AgentOrderFieldDto
+            {
+                FieldKey = "password",
+                FieldLabel = "Password",
+                Value = string.Empty,
+                IsSensitive = true
+            }
+        ];
+        return order;
+    }
+
+    private static AdminOrderCredentialsDto AdminCredentials(Guid orderId, string value) => new()
+    {
+        OrderId = orderId,
+        Credentials =
+        [
+            new AgentOrderFieldDto
+            {
+                FieldKey = "password",
+                FieldLabel = "Password",
+                Value = value,
+                IsSensitive = true
+            }
+        ]
     };
 
     private static HttpResponseMessage EmptyRefunds(HttpRequestMessage request)
@@ -701,6 +1159,11 @@ public sealed class OrderDetailComponentConcurrencyTests : BunitContext, IDispos
         (T)instance.GetType()
             .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(instance)!;
+
+    private static void SetPrivateField<T>(object instance, string name, T value) =>
+        instance.GetType()
+            .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(instance, value);
 
     private sealed class OrderDetailHttpHandler(
         Func<HttpRequestMessage, int, CancellationToken, Task<HttpResponseMessage>> response)

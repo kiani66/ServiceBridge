@@ -265,6 +265,7 @@ else
     private RealtimeRefreshCoordinator? _realtimeRefresh;
     private long _loadGeneration;
     private Guid _requestedOrderId;
+    private long _actionOperationVersion;
     [Parameter] public Guid OrderId { get; set; }
 
     private bool _disposed;
@@ -360,6 +361,11 @@ else
             return Task.CompletedTask;
         }
 
+        if (_requestedOrderId != OrderId)
+        {
+            ResetActionStateForRouteChange();
+        }
+
         _requestedOrderId = OrderId;
         _loadGeneration++;
         if (!TryApplyRealtimeState(() =>
@@ -422,16 +428,16 @@ else
     private Task StartProcessingAsync()
     {
         return RunActionAsync(
-            (note, token) => AgentOrdersClient.StartProcessingAsync(OrderId, note, token),
+            (orderId, note, token) => AgentOrdersClient.StartProcessingAsync(orderId, note, token),
             "Processing started.");
     }
 
     private Task SubmitInformationRequestAsync()
     {
         return RunActionAsync(
-            (_, token) => AgentOrdersClient.RequestCustomerActionAsync(
-                OrderId,
-                _informationRequestMessage,
+            (orderId, message, token) => AgentOrdersClient.RequestCustomerActionAsync(
+                orderId,
+                message ?? string.Empty,
                 token),
             "Customer information requested.",
             requireNote: true,
@@ -443,7 +449,7 @@ else
     private Task CompleteAsync()
     {
         return RunActionAsync(
-            (note, token) => AgentOrdersClient.CompleteAsync(OrderId, note, token),
+            (orderId, note, token) => AgentOrdersClient.CompleteAsync(orderId, note, token),
             "Order completed.");
     }
 
@@ -455,8 +461,9 @@ else
             return Task.CompletedTask;
         }
 
+        var failureReason = _failureReason;
         return RunActionAsync(
-            (_, token) => AgentOrdersClient.FailAsync(OrderId, _failureReason, token),
+            (orderId, _, token) => AgentOrdersClient.FailAsync(orderId, failureReason, token),
             "Order marked failed.",
             clearFailureReason: true);
     }
@@ -477,10 +484,13 @@ else
             return Task.CompletedTask;
         }
 
+        var credentials = new Dictionary<string, string>(
+            _deliveryCredentials,
+            StringComparer.OrdinalIgnoreCase);
         return RunActionAsync(
-            (_, token) => AgentOrdersClient.SaveDeliveryCredentialsAsync(
-                OrderId,
-                _deliveryCredentials,
+            (orderId, _, token) => AgentOrdersClient.SaveDeliveryCredentialsAsync(
+                orderId,
+                credentials,
                 token),
             "Delivery credentials saved.");
     }
@@ -493,18 +503,20 @@ else
             return Task.CompletedTask;
         }
 
+        var noteText = _noteText;
+        var noteVisibleToCustomer = _noteVisibleToCustomer;
         return RunActionAsync(
-            (_, token) => AgentOrdersClient.AddNoteAsync(
-                OrderId,
-                _noteText,
-                _noteVisibleToCustomer,
+            (orderId, _, token) => AgentOrdersClient.AddNoteAsync(
+                orderId,
+                noteText,
+                noteVisibleToCustomer,
                 token),
             "Note added.",
             clearNote: true);
     }
 
     private async Task RunActionAsync(
-        Func<string?, CancellationToken, Task<AgentOrdersApiResult<bool>>> action,
+        Func<Guid, string?, CancellationToken, Task<AgentOrdersApiResult<bool>>> action,
         string successMessage,
         bool requireNote = false,
         string? missingNoteMessage = null,
@@ -530,12 +542,13 @@ else
             return;
         }
 
-        _actionBusy = true;
         var orderId = OrderId;
+        var operationVersion = ++_actionOperationVersion;
+        _actionBusy = true;
         try
         {
-            var result = await action(actionNote, _lifetimeCts.Token);
-            if (!CanContinueAction(orderId))
+            var result = await action(orderId, actionNote, _lifetimeCts.Token);
+            if (!IsCurrentAction(orderId, operationVersion))
             {
                 return;
             }
@@ -549,7 +562,6 @@ else
             if (!result.Success)
             {
                 _actionError = result.ErrorMessage ?? "Unable to update this order.";
-                _actionBusy = false;
                 return;
             }
 
@@ -575,13 +587,16 @@ else
 
             _actionMessage = successMessage;
             await RequestOrderReloadAsync();
-            if (CanContinueAction(orderId))
-            {
-                _actionBusy = false;
-            }
         }
         catch (OperationCanceledException) when (_disposed)
         {
+        }
+        finally
+        {
+            if (IsCurrentAction(orderId, operationVersion))
+            {
+                _actionBusy = false;
+            }
         }
     }
 
@@ -627,9 +642,26 @@ else
         return IsCurrentLoad(generation, orderId) && TryApplyRealtimeState(apply);
     }
 
-    private bool CanContinueAction(Guid orderId)
+    private bool IsCurrentAction(Guid orderId, long operationVersion)
     {
-        return !_disposed && orderId == OrderId;
+        return !_disposed &&
+               orderId == OrderId &&
+               operationVersion == _actionOperationVersion;
+    }
+
+    private void ResetActionStateForRouteChange()
+    {
+        _actionOperationVersion++;
+        _actionBusy = false;
+        _actionError = null;
+        _actionMessage = null;
+        _operationNote = null;
+        _failureReason = string.Empty;
+        _informationRequestMessage = string.Empty;
+        _noteText = string.Empty;
+        _noteVisibleToCustomer = false;
+        _showInformationRequestForm = false;
+        _deliveryCredentials.Clear();
     }
 
     private bool TryApplyRealtimeState(Action apply)
@@ -711,6 +743,8 @@ else
         }
 
         _disposed = true;
+        _actionOperationVersion++;
+        _actionBusy = false;
         _lifetimeCts.Cancel();
         _realtimeRefresh?.Dispose();
         _realtimeSubscriptions.Dispose();

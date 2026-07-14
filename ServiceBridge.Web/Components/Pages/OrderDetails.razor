@@ -266,6 +266,10 @@ else
     private RealtimeRefreshCoordinator? _realtimeRefresh;
     private long _loadGeneration;
     private Guid _requestedOrderId;
+    private long _refundOperationVersion;
+    private long _paymentOperationVersion;
+    private long _cancelOperationVersion;
+    private long _customerActionOperationVersion;
     [Parameter] public Guid OrderId { get; set; }
 
     private bool _disposed;
@@ -377,6 +381,11 @@ else
             return Task.CompletedTask;
         }
 
+        if (_requestedOrderId != OrderId)
+        {
+            ResetActionStateForRouteChange();
+        }
+
         _requestedOrderId = OrderId;
         _loadGeneration++;
         if (!TryApplyRealtimeState(() =>
@@ -477,15 +486,16 @@ else
             return;
         }
 
-        _refundBusy = true;
         var orderId = OrderId;
+        var operationVersion = ++_refundOperationVersion;
+        _refundBusy = true;
         try
         {
             var result = await RefundsClient.CreateAsync(
                 orderId,
                 _refundReason,
                 _lifetimeCts.Token);
-            if (!CanContinueAction(orderId))
+            if (!IsCurrentAction(orderId, operationVersion, _refundOperationVersion))
             {
                 return;
             }
@@ -499,20 +509,22 @@ else
             if (!result.Success)
             {
                 _refundError = result.ErrorMessage ?? "Unable to submit this refund request.";
-                _refundBusy = false;
                 return;
             }
 
             _refundReason = null;
             _refundMessage = "Refund request submitted.";
             await RequestOrderReloadAsync();
-            if (CanContinueAction(orderId))
-            {
-                _refundBusy = false;
-            }
         }
         catch (OperationCanceledException) when (_disposed)
         {
+        }
+        finally
+        {
+            if (IsCurrentAction(orderId, operationVersion, _refundOperationVersion))
+            {
+                _refundBusy = false;
+            }
         }
     }
 
@@ -523,9 +535,10 @@ else
             return;
         }
 
+        var orderId = OrderId;
+        var operationVersion = ++_paymentOperationVersion;
         _paymentError = null;
         _paymentBusy = true;
-        var orderId = OrderId;
 
         try
         {
@@ -533,7 +546,7 @@ else
                 orderId,
                 Guid.NewGuid(),
                 _lifetimeCts.Token);
-            if (!CanContinueAction(orderId))
+            if (!IsCurrentAction(orderId, operationVersion, _paymentOperationVersion))
             {
                 return;
             }
@@ -547,7 +560,6 @@ else
             if (!initiateResult.Success || initiateResult.Data is null)
             {
                 _paymentError = initiateResult.ErrorMessage ?? "Unable to start payment for this order.";
-                _paymentBusy = false;
                 return;
             }
 
@@ -555,7 +567,7 @@ else
                 initiateResult.Data.PaymentId,
                 succeed: true,
                 _lifetimeCts.Token);
-            if (!CanContinueAction(orderId))
+            if (!IsCurrentAction(orderId, operationVersion, _paymentOperationVersion))
             {
                 return;
             }
@@ -569,7 +581,6 @@ else
             if (!mockResult.Success || mockResult.Data is null)
             {
                 _paymentError = mockResult.ErrorMessage ?? "Unable to process the mock payment.";
-                _paymentBusy = false;
                 return;
             }
 
@@ -583,6 +594,13 @@ else
         catch (OperationCanceledException) when (_disposed)
         {
         }
+        finally
+        {
+            if (IsCurrentAction(orderId, operationVersion, _paymentOperationVersion))
+            {
+                _paymentBusy = false;
+            }
+        }
     }
 
     private async Task CancelOrderAsync()
@@ -592,15 +610,16 @@ else
             return;
         }
 
+        var orderId = OrderId;
+        var operationVersion = ++_cancelOperationVersion;
         _cancelError = null;
         _cancelMessage = null;
         _cancelBusy = true;
-        var orderId = OrderId;
 
         try
         {
             var result = await OrdersClient.CancelOrderAsync(orderId, _lifetimeCts.Token);
-            if (!CanContinueAction(orderId))
+            if (!IsCurrentAction(orderId, operationVersion, _cancelOperationVersion))
             {
                 return;
             }
@@ -614,19 +633,21 @@ else
             if (!result.Success)
             {
                 _cancelError = result.ErrorMessage ?? "Unable to cancel this order.";
-                _cancelBusy = false;
                 return;
             }
 
             _cancelMessage = "Order cancelled successfully.";
             await RequestOrderReloadAsync();
-            if (CanContinueAction(orderId))
-            {
-                _cancelBusy = false;
-            }
         }
         catch (OperationCanceledException) when (_disposed)
         {
+        }
+        finally
+        {
+            if (IsCurrentAction(orderId, operationVersion, _cancelOperationVersion))
+            {
+                _cancelBusy = false;
+            }
         }
     }
 
@@ -652,8 +673,9 @@ else
             return;
         }
 
-        _customerActionBusy = true;
         var orderId = OrderId;
+        var operationVersion = ++_customerActionOperationVersion;
+        _customerActionBusy = true;
         try
         {
             var result = await OrdersClient.RespondToCustomerActionAsync(
@@ -661,7 +683,7 @@ else
                 pendingRequest.Id,
                 _customerActionResponse,
                 _lifetimeCts.Token);
-            if (!CanContinueAction(orderId))
+            if (!IsCurrentAction(orderId, operationVersion, _customerActionOperationVersion))
             {
                 return;
             }
@@ -675,7 +697,6 @@ else
             if (!result.Success)
             {
                 _customerActionError = result.ErrorMessage ?? "Unable to submit your response.";
-                _customerActionBusy = false;
                 return;
             }
 
@@ -683,13 +704,16 @@ else
             _showCustomerActionForm = false;
             _customerActionMessage = "Information submitted.";
             await RequestOrderReloadAsync();
-            if (CanContinueAction(orderId))
-            {
-                _customerActionBusy = false;
-            }
         }
         catch (OperationCanceledException) when (_disposed)
         {
+        }
+        finally
+        {
+            if (IsCurrentAction(orderId, operationVersion, _customerActionOperationVersion))
+            {
+                _customerActionBusy = false;
+            }
         }
     }
 
@@ -730,9 +754,36 @@ else
         return IsCurrentLoad(generation, orderId) && TryApplyRealtimeState(apply);
     }
 
-    private bool CanContinueAction(Guid orderId)
+    private bool IsCurrentAction(Guid orderId, long operationVersion, long currentOperationVersion)
     {
-        return !_disposed && orderId == OrderId;
+        return !_disposed &&
+               orderId == OrderId &&
+               operationVersion == currentOperationVersion;
+    }
+
+    private void ResetActionStateForRouteChange()
+    {
+        _refundOperationVersion++;
+        _paymentOperationVersion++;
+        _cancelOperationVersion++;
+        _customerActionOperationVersion++;
+
+        _refundBusy = false;
+        _paymentBusy = false;
+        _cancelBusy = false;
+        _customerActionBusy = false;
+        _cancelDialogOpen = false;
+        _showCustomerActionForm = false;
+
+        _refundError = null;
+        _refundMessage = null;
+        _refundReason = null;
+        _paymentError = null;
+        _cancelError = null;
+        _cancelMessage = null;
+        _customerActionError = null;
+        _customerActionMessage = null;
+        _customerActionResponse = string.Empty;
     }
 
     private bool TryApplyRealtimeState(Action apply)
@@ -754,6 +805,14 @@ else
         }
 
         _disposed = true;
+        _refundOperationVersion++;
+        _paymentOperationVersion++;
+        _cancelOperationVersion++;
+        _customerActionOperationVersion++;
+        _refundBusy = false;
+        _paymentBusy = false;
+        _cancelBusy = false;
+        _customerActionBusy = false;
         _lifetimeCts.Cancel();
         _realtimeRefresh?.Dispose();
         _realtimeSubscriptions.Dispose();
