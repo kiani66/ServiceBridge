@@ -129,21 +129,40 @@ public sealed class NotificationComponentConcurrencyTests : BunitContext, IDispo
         var realtime = await ConfigureAsync(handler);
         var cut = Render<NotificationBell>();
         await EnsureBellMenuOpenAsync(realtime.Popover, cut);
-        var first = realtime.Popover.Find("button[data-notification-action='open']")
-            .ClickAsync(new MouseEventArgs());
+        var openAction = realtime.Popover.Find("button[data-notification-action='open']");
+        var first = openAction.ClickAsync(new MouseEventArgs());
         await markStarted.Task;
         Assert.Empty(realtime.Popover.FindAll("button[data-notification-action='open']"));
+
+        await EnsureBellMenuOpenAsync(realtime.Popover, cut);
+        var second = realtime.Popover.Find("button[data-notification-action='open']")
+            .ClickAsync(new MouseEventArgs());
         releaseMark.TrySetResult();
-        await first;
+        await Task.WhenAll(first, second);
+
+        if (realtime.Popover.FindAll("button[data-notification-action='open']").Count > 0)
+        {
+            await cut.InvokeAsync(() => cut.Find("button[aria-label='Notifications']").Click());
+        }
+
+        realtime.Popover.WaitForAssertion(() =>
+            Assert.Empty(realtime.Popover.FindAll("button[data-notification-action='open']")));
         await EnsureBellMenuOpenAsync(realtime.Popover, cut);
 
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(1, handler.MarkCalls);
-            Assert.Single(Services.GetRequiredService<BunitNavigationManager>().History);
+            var navigation = Services.GetRequiredService<BunitNavigationManager>();
+            Assert.Single(navigation.History);
+            Assert.EndsWith(
+                "/ui/orders/00000000-0000-0000-0000-000000000001",
+                navigation.Uri,
+                StringComparison.Ordinal);
             Assert.Equal(2, handler.CountCalls);
             Assert.Equal(2, handler.ListCalls);
-            Assert.False(cut.FindComponent<MudBadge>().Instance.Visible);
+            var badge = cut.FindComponent<MudBadge>().Instance;
+            Assert.False(badge.Visible);
+            Assert.Equal("0", badge.Content?.ToString());
             Assert.True(realtime.Popover.Find("button[data-notification-action='open']")
                 .ClassList.Contains("sb-notification-read"));
         });
