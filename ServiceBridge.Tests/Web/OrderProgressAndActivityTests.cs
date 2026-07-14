@@ -1,3 +1,5 @@
+using Bunit;
+using MudBlazor.Services;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Domain.Orders;
@@ -7,8 +9,15 @@ using Xunit;
 
 namespace ServiceBridge.Tests.Web;
 
-public class OrderProgressAndActivityTests
+public class OrderProgressAndActivityTests : BunitContext
 {
+    public OrderProgressAndActivityTests()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        Services.AddMudServices(options =>
+            options.PopoverOptions.CheckForPopoverProvider = false);
+    }
+
     [Theory]
     [InlineData(OrderStatus.Created, 0)]
     [InlineData(OrderStatus.WaitingForPayment, 1)]
@@ -153,27 +162,46 @@ public class OrderProgressAndActivityTests
     }
 
     [Fact]
-    public void SharedOrderDetailPages_UseOneProgressAndActivityComponent()
+    public void OrderTimeline_RendersSeparateProgressAndAppendOnlyActivity()
     {
-        var shared = File.ReadAllText(WebPath("Components", "Shared", "OrderTimeline.razor"));
+        var items = new[]
+        {
+            new TimelineItem("Processing", "Assigned changed to Processing.", "2026-07-13 08:00", "info"),
+            new TimelineItem("Processing", "Processing changed to Processing.", "2026-07-13 08:10", "info")
+        };
+        var cut = Render<OrderTimeline>(parameters => parameters
+            .Add(component => component.CurrentStatus, nameof(OrderStatus.Processing))
+            .Add(component => component.Items, items));
 
-        Assert.Contains("<h2>Order progress</h2>", shared);
-        Assert.Contains("<h2>Activity history</h2>", shared);
-        Assert.DoesNotContain("Order timeline", shared);
+        Assert.Equal(
+            ["Order progress", "Activity history"],
+            cut.FindAll("h2").Select(heading => heading.TextContent.Trim()));
+        Assert.Single(cut.FindAll("ol[aria-label='Order progress']"));
+        Assert.Equal(2, cut.FindAll("ol[aria-label='Activity history'] li").Count);
+        Assert.Equal(2, cut.FindAll("ol[aria-label='Activity history'] strong").Count(item =>
+            item.TextContent.Trim().Equals("Processing", StringComparison.Ordinal)));
+        Assert.Contains("Assigned changed to Processing.", cut.Markup);
+        Assert.Contains("Processing changed to Processing.", cut.Markup);
+        Assert.Contains("2026-07-13 08:00", cut.Markup);
+        Assert.Contains("2026-07-13 08:10", cut.Markup);
+    }
 
-        var lifecycle = File.ReadAllText(WebPath(
-            "Components",
-            "Shared",
-            "OrderLifecycle.razor"));
-        var timeline = File.ReadAllText(WebPath(
-            "Components",
-            "Shared",
-            "Timeline.razor"));
-        Assert.DoesNotContain(">Done<", lifecycle);
-        Assert.Contains("aria-current", lifecycle);
-        Assert.Contains("@item.Description", timeline);
-        Assert.Contains("@item.Time", timeline);
+    [Theory]
+    [InlineData(nameof(OrderStatus.Failed), "Failed")]
+    [InlineData(nameof(OrderStatus.Cancelled), "Cancelled")]
+    public void TerminalProgress_RendersCurrentTerminalState(string status, string label)
+    {
+        var cut = Render<OrderLifecycle>(parameters => parameters
+            .Add(component => component.CurrentStatus, status));
 
+        Assert.Equal(label, cut.Find("[aria-current='step'] strong").TextContent.Trim());
+        Assert.DoesNotContain("Completed", cut.Markup);
+    }
+
+    [Fact]
+    public void OrderDetailPageComposition_StaticArchitectureGuard()
+    {
+        // A shared component invocation across three Razor pages is a composition convention.
         foreach (var page in new[]
                  {
                      "OrderDetails.razor",
@@ -182,15 +210,14 @@ public class OrderProgressAndActivityTests
                  })
         {
             var source = File.ReadAllText(WebPath("Components", "Pages", page));
-            Assert.Equal(
-                1,
-                source.Split("<OrderTimeline", StringSplitOptions.None).Length - 1);
+            Assert.Equal(1, source.Split("<OrderTimeline", StringSplitOptions.None).Length - 1);
         }
     }
 
     [Fact]
-    public void HistoryProjections_AreChronologicalAndNeverDeduplicateStatuses()
+    public void HistoryProjections_StaticArchitectureGuard()
     {
+        // Query ordering and duplicate preservation span repository projections and are impractical to prove from one UI render.
         foreach (var repository in new[]
                  {
                      "UserOrderQueryRepository.cs",

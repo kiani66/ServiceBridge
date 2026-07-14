@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Bunit;
 using Bunit.TestDoubles;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -42,13 +43,14 @@ public sealed class NotificationComponentConcurrencyTests : BunitContext, IDispo
         var realtime = await ConfigureAsync(handler);
 
         var cut = Render<NotificationBell>();
-        var notification = Notification(notificationId, isRead: false);
-
+        await EnsureBellMenuOpenAsync(realtime.Popover, cut);
         var staleRefresh = realtime.Handlers.NotificationReceived(new RealtimeEventDto());
         await staleStarted.Task;
-        await cut.InvokeAsync(() => cut.Instance.OpenNotificationAsync(notification));
+        await realtime.Popover.Find("button[data-notification-action='open']")
+            .ClickAsync(new MouseEventArgs());
         releaseStale.TrySetResult();
         await staleRefresh;
+        await EnsureBellMenuOpenAsync(realtime.Popover, cut);
 
         cut.WaitForAssertion(() =>
         {
@@ -56,6 +58,8 @@ public sealed class NotificationComponentConcurrencyTests : BunitContext, IDispo
             Assert.Equal(3, handler.CountCalls);
             Assert.Equal(3, handler.ListCalls);
             Assert.Equal(1, handler.MarkCalls);
+            Assert.True(realtime.Popover.Find("button[data-notification-action='open']")
+                .ClassList.Contains("sb-notification-read"));
         });
         Assert.Single(Services.GetRequiredService<BunitNavigationManager>().History);
     }
@@ -122,14 +126,16 @@ public sealed class NotificationComponentConcurrencyTests : BunitContext, IDispo
                 return CommandResponse(success: true);
             }
         };
-        await ConfigureAsync(handler);
+        var realtime = await ConfigureAsync(handler);
         var cut = Render<NotificationBell>();
-        var notification = Notification(notificationId, isRead: false);
-        var first = cut.InvokeAsync(() => cut.Instance.OpenNotificationAsync(notification));
+        await EnsureBellMenuOpenAsync(realtime.Popover, cut);
+        var first = realtime.Popover.Find("button[data-notification-action='open']")
+            .ClickAsync(new MouseEventArgs());
         await markStarted.Task;
-        var second = cut.InvokeAsync(() => cut.Instance.OpenNotificationAsync(notification));
+        Assert.Empty(realtime.Popover.FindAll("button[data-notification-action='open']"));
         releaseMark.TrySetResult();
-        await Task.WhenAll(first, second);
+        await first;
+        await EnsureBellMenuOpenAsync(realtime.Popover, cut);
 
         cut.WaitForAssertion(() =>
         {
@@ -137,6 +143,9 @@ public sealed class NotificationComponentConcurrencyTests : BunitContext, IDispo
             Assert.Single(Services.GetRequiredService<BunitNavigationManager>().History);
             Assert.Equal(2, handler.CountCalls);
             Assert.Equal(2, handler.ListCalls);
+            Assert.False(cut.FindComponent<MudBadge>().Instance.Visible);
+            Assert.True(realtime.Popover.Find("button[data-notification-action='open']")
+                .ClassList.Contains("sb-notification-read"));
         });
     }
 
@@ -153,14 +162,18 @@ public sealed class NotificationComponentConcurrencyTests : BunitContext, IDispo
         };
         var realtime = await ConfigureAsync(handler);
         var cut = Render<NotificationBell>();
-        await cut.InvokeAsync(() => cut.Instance.OpenNotificationAsync(
-            Notification(notificationId, isRead: false)));
+        await EnsureBellMenuOpenAsync(realtime.Popover, cut);
+        await realtime.Popover.Find("button[data-notification-action='open']")
+            .ClickAsync(new MouseEventArgs());
+        await EnsureBellMenuOpenAsync(realtime.Popover, cut);
 
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(2, handler.CountCalls);
             Assert.Equal(2, handler.ListCalls);
             Assert.Single(Services.GetRequiredService<BunitNavigationManager>().History);
+            Assert.False(realtime.Popover.Find("button[data-notification-action='open']")
+                .ClassList.Contains("sb-notification-read"));
         });
 
         await realtime.Handlers.NotificationReceived(new RealtimeEventDto());
@@ -169,6 +182,8 @@ public sealed class NotificationComponentConcurrencyTests : BunitContext, IDispo
             Assert.False(cut.FindComponent<MudBadge>().Instance.Visible);
             Assert.Equal(3, handler.CountCalls);
             Assert.Equal(3, handler.ListCalls);
+            Assert.True(realtime.Popover.Find("button[data-notification-action='open']")
+                .ClassList.Contains("sb-notification-read"));
         });
     }
 
@@ -196,11 +211,12 @@ public sealed class NotificationComponentConcurrencyTests : BunitContext, IDispo
         };
         var realtime = await ConfigureAsync(handler);
         var cut = Render<NotificationBell>();
+        await EnsureBellMenuOpenAsync(realtime.Popover, cut);
 
         var staleRefresh = realtime.Handlers.NotificationReceived(new RealtimeEventDto());
         await staleStarted.Task;
-        await cut.InvokeAsync(() => cut.Instance.OpenNotificationAsync(
-            Notification(notificationId, isRead: false)));
+        await realtime.Popover.Find("button[data-notification-action='open']")
+            .ClickAsync(new MouseEventArgs());
         cut.Instance.Dispose();
         cut.Dispose();
         releaseStale.TrySetResult();
@@ -235,7 +251,8 @@ public sealed class NotificationComponentConcurrencyTests : BunitContext, IDispo
             });
         await realtimeClient.StartAsync();
         Services.AddSingleton(realtimeClient);
-        return new RealtimeHarness(realtimeClient, handlers!);
+        var popover = Render<MudPopoverProvider>();
+        return new RealtimeHarness(realtimeClient, handlers!, popover);
     }
 
     void IDisposable.Dispose()
@@ -285,6 +302,14 @@ public sealed class NotificationComponentConcurrencyTests : BunitContext, IDispo
 
     private static TaskCompletionSource NewSignal() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private static async Task EnsureBellMenuOpenAsync(
+        IRenderedComponent<MudPopoverProvider> popover,
+        IRenderedComponent<NotificationBell> cut)
+    {
+        await cut.InvokeAsync(() => cut.Find("button[aria-label='Notifications']").Click());
+        popover.WaitForElement("button[data-notification-action='open']");
+    }
 
     private sealed class NotificationHttpHandler : HttpMessageHandler
     {
@@ -340,7 +365,8 @@ public sealed class NotificationComponentConcurrencyTests : BunitContext, IDispo
 
     private sealed record RealtimeHarness(
         RealtimeClient Client,
-        RealtimeConnectionHandlers Handlers);
+        RealtimeConnectionHandlers Handlers,
+        IRenderedComponent<MudPopoverProvider> Popover);
 
     private sealed class FakeRealtimeConnection : IRealtimeConnection
     {
