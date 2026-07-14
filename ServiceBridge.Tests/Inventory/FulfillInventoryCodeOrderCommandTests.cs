@@ -170,6 +170,28 @@ public sealed class FulfillInventoryCodeOrderCommandTests
     }
 
     [Fact]
+    public async Task ExistingDeliveredAllocationWithPaidOrder_ReconcilesOrderCompletion()
+    {
+        var order = CreatePaidOrder();
+        var item = CreateDeliveredItem(order);
+        var deliveredAt = item.DeliveredAtUtc;
+        var setup = CreateSetup(existingAllocation: item);
+
+        var result = await setup.Command.ExecuteAsync(
+            order,
+            Guid.NewGuid(),
+            UtcNow);
+
+        AssertOutcome(
+            result,
+            InventoryCodeFulfillmentOutcome.ResumedExistingAllocation);
+        Assert.Equal(OrderStatus.Completed, order.Status);
+        Assert.Equal(deliveredAt, item.DeliveredAtUtc);
+        Assert.Equal(0, setup.Repository.LockCalls);
+        Assert.Empty(setup.Notifications.QueuedOrderCompletions);
+    }
+
+    [Fact]
     public async Task ExistingDeliveredAllocationWithCompletedOrder_IsAlreadyFulfilledWithoutMutation()
     {
         var order = CreateCompletedOrder();

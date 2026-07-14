@@ -104,6 +104,9 @@ builder.Services.AddScoped<IUserOrderQueryRepository, UserOrderQueryRepository>(
 builder.Services.AddScoped<IUserOrderCommandRepository, UserOrderCommandRepository>();
 builder.Services.AddScoped<IRefundRequestRepository, RefundRequestRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+builder.Services.AddScoped<
+    IPaymentConfirmationTransactionManager,
+    PaymentConfirmationTransactionManager>();
 builder.Services.AddScoped<MockPaymentGateway>();
 builder.Services.AddScoped<IMockPaymentGateway>(serviceProvider =>
     serviceProvider.GetRequiredService<MockPaymentGateway>());

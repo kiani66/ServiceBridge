@@ -127,6 +127,11 @@ public sealed class FulfillInventoryCodeOrderCommand
                 return Outcome(InventoryCodeFulfillmentOutcome.AlreadyFulfilled);
             }
 
+            if (order.Status == OrderStatus.Paid)
+            {
+                order.StartInventoryFulfillment(systemActorId, ReservedNote);
+            }
+
             if (order.Status == OrderStatus.Processing)
             {
                 order.CompleteInventoryFulfillment(systemActorId, DeliveredNote);

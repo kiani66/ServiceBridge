@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ServiceBridge.Application.DTOs;
+using ServiceBridge.Application.Inventory;
 using ServiceBridge.Application.Payments;
 using ServiceBridge.Application.Results;
 using ServiceBridge.Domain.Entities;
@@ -537,13 +538,19 @@ public class PaymentServiceTests
     {
         paymentGateway ??= new FakePaymentGateway();
         realtimePublisher ??= new FakeRealtimeEventPublisher();
+        var notifications = new FakeNotificationService();
+        var inventoryRepository = new FakeInventoryCodeFulfillmentRepository();
 
         return new PaymentService(
             repository,
             gateway ?? new FakeMockPaymentGateway(),
             new FakePaymentGatewayFactory([paymentGateway]),
-            new FakeNotificationService(),
+            notifications,
             realtimePublisher,
+            new FulfillInventoryCodeOrderCommand(
+                inventoryRepository,
+                notifications),
+            new FakePaymentConfirmationTransactionManager(),
             NullLogger<PaymentService>.Instance);
     }
 }

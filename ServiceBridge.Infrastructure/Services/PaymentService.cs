@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ServiceBridge.Application.DTOs;
+using ServiceBridge.Application.Inventory;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Payments;
 using ServiceBridge.Application.Results;
@@ -17,6 +18,8 @@ public class PaymentService : IPaymentService
     private readonly IPaymentGatewayFactory _gatewayFactory;
     private readonly INotificationService _notificationService;
     private readonly IRealtimeEventPublisher _realtimeEventPublisher;
+    private readonly FulfillInventoryCodeOrderCommand _fulfillInventoryCodeOrder;
+    private readonly IPaymentConfirmationTransactionManager _transactionManager;
     private readonly ILogger<PaymentService> _logger;
 
     public PaymentService(
@@ -25,6 +28,8 @@ public class PaymentService : IPaymentService
         IPaymentGatewayFactory gatewayFactory,
         INotificationService notificationService,
         IRealtimeEventPublisher realtimeEventPublisher,
+        FulfillInventoryCodeOrderCommand fulfillInventoryCodeOrder,
+        IPaymentConfirmationTransactionManager transactionManager,
         ILogger<PaymentService> logger)
     {
         _repository = repository;
@@ -32,6 +37,8 @@ public class PaymentService : IPaymentService
         _gatewayFactory = gatewayFactory;
         _notificationService = notificationService;
         _realtimeEventPublisher = realtimeEventPublisher;
+        _fulfillInventoryCodeOrder = fulfillInventoryCodeOrder;
+        _transactionManager = transactionManager;
         _logger = logger;
     }
 
@@ -220,6 +227,8 @@ public class PaymentService : IPaymentService
                 "Failure reason cannot exceed 1000 characters.");
         }
 
+        await using var transaction = await _transactionManager.BeginAsync();
+
         var payment = await _repository.GetPaymentWithOrderAsync(request.PaymentId);
         if (payment == null)
         {
@@ -254,18 +263,36 @@ public class PaymentService : IPaymentService
                     409);
             }
 
-            return await _repository.SaveChangesAsync()
-                ? ServiceResult.Ok(AppMessages.PaymentRefunded)
-                : ServiceResult.Fail(
-                    AppMessages.PaymentAlreadyProcessed,
-                    AppConstants.ErrorCodes.Conflict,
-                    409);
+            return await SaveCommitAndPublishAsync(
+                transaction,
+                payment,
+                AppMessages.PaymentRefunded,
+                publishRealtime: false);
         }
 
         if (payment.Status != PaymentStatus.Pending)
         {
             if (IsIdempotentConfirmation(payment.Status, request.Status))
             {
+                if (request.Status == PaymentStatus.Completed &&
+                    payment.Order.ServiceFulfillmentModeSnapshot ==
+                    FulfillmentMode.InventoryCode)
+                {
+                    var fulfillment = await FulfillInventoryOrderAsync(
+                        payment,
+                        DateTime.UtcNow);
+                    if (!fulfillment.Success)
+                    {
+                        return fulfillment.Result;
+                    }
+
+                    return await SaveCommitAndPublishAsync(
+                        transaction,
+                        payment,
+                        AppMessages.PaymentConfirmed,
+                        fulfillment.OrderChanged);
+                }
+
                 return ServiceResult.Ok(
                     request.Status == PaymentStatus.Completed
                         ? AppMessages.PaymentConfirmed
@@ -295,9 +322,24 @@ public class PaymentService : IPaymentService
                     payment.Order.UserId,
                     payment.Order.Id,
                     payment.Order.OrderNumber);
-                await _notificationService.QueueOrderReadyForAssignmentAsync(
-                    payment.Order.Id,
-                    payment.Order.OrderNumber);
+
+                if (payment.Order.ServiceFulfillmentModeSnapshot ==
+                    FulfillmentMode.InventoryCode)
+                {
+                    var fulfillment = await FulfillInventoryOrderAsync(
+                        payment,
+                        confirmedAtUtc);
+                    if (!fulfillment.Success)
+                    {
+                        return fulfillment.Result;
+                    }
+                }
+                else
+                {
+                    await _notificationService.QueueOrderReadyForAssignmentAsync(
+                        payment.Order.Id,
+                        payment.Order.OrderNumber);
+                }
             }
             else
             {
@@ -316,25 +358,13 @@ public class PaymentService : IPaymentService
                 409);
         }
 
-        var saved = await _repository.SaveChangesAsync();
-        if (!saved)
-        {
-            return ServiceResult.Fail(
-                AppMessages.PaymentAlreadyProcessed,
-                AppConstants.ErrorCodes.Conflict,
-                409);
-        }
-
-        if (request.Status == PaymentStatus.Completed)
-        {
-            await _notificationService.PublishQueuedRealtimeAsync();
-            await NotifyOrderPaidTransitionAsync(payment);
-        }
-
-        return ServiceResult.Ok(
+        return await SaveCommitAndPublishAsync(
+            transaction,
+            payment,
             request.Status == PaymentStatus.Completed
                 ? AppMessages.PaymentConfirmed
-                : AppMessages.PaymentFailed);
+                : AppMessages.PaymentFailed,
+            publishRealtime: request.Status == PaymentStatus.Completed);
     }
 
     public async Task<ServiceResult> VerifyCallbackAsync(
@@ -442,6 +472,80 @@ public class PaymentService : IPaymentService
                requestedStatus is PaymentStatus.Completed or PaymentStatus.Failed;
     }
 
+    private async Task<InventoryFulfillmentDecision> FulfillInventoryOrderAsync(
+        Payment payment,
+        DateTime utcNow)
+    {
+        var fulfillment = await _fulfillInventoryCodeOrder.ExecuteAsync(
+            payment.Order,
+            payment.Id,
+            utcNow);
+        if (!fulfillment.Success)
+        {
+            return new InventoryFulfillmentDecision(ToFailure(fulfillment), false);
+        }
+
+        return fulfillment.Data switch
+        {
+            InventoryCodeFulfillmentOutcome.Fulfilled =>
+                InventoryFulfillmentDecision.Accepted(orderChanged: true),
+            InventoryCodeFulfillmentOutcome.ResumedExistingAllocation =>
+                InventoryFulfillmentDecision.Accepted(orderChanged: true),
+            InventoryCodeFulfillmentOutcome.AlreadyFulfilled =>
+                InventoryFulfillmentDecision.Accepted(orderChanged: false),
+            InventoryCodeFulfillmentOutcome.NoInventory =>
+                InventoryFulfillmentDecision.Accepted(orderChanged: false),
+            _ => new InventoryFulfillmentDecision(
+                ServiceResult.Fail(
+                    AppMessages.PaymentOrderNotPending,
+                    AppConstants.ErrorCodes.Conflict,
+                    409),
+                false)
+        };
+    }
+
+    private async Task<ServiceResult> SaveCommitAndPublishAsync(
+        IPaymentConfirmationTransaction transaction,
+        Payment payment,
+        string successMessage,
+        bool publishRealtime)
+    {
+        if (!await _repository.SaveChangesAsync())
+        {
+            return ServiceResult.Fail(
+                AppMessages.PaymentAlreadyProcessed,
+                AppConstants.ErrorCodes.Conflict,
+                409);
+        }
+
+        await transaction.CommitAsync();
+
+        if (publishRealtime)
+        {
+            await PublishPostCommitRealtimeAsync(payment);
+        }
+
+        return ServiceResult.Ok(successMessage);
+    }
+
+    private async Task PublishPostCommitRealtimeAsync(Payment payment)
+    {
+        try
+        {
+            await _notificationService.PublishQueuedRealtimeAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Payment {PaymentId} committed, but queued notification realtime publication failed for order {OrderId}.",
+                payment.Id,
+                payment.OrderId);
+        }
+
+        await NotifyOrderPaidTransitionAsync(payment);
+    }
+
     private static ServiceResult ValidationFailedCallback(
         string key,
         string message)
@@ -481,6 +585,20 @@ public class PaymentService : IPaymentService
                 "Payment {PaymentId} was confirmed, but realtime order update failed for order {OrderId}.",
                 payment.Id,
                 payment.OrderId);
+        }
+    }
+
+    private sealed record InventoryFulfillmentDecision(
+        ServiceResult Result,
+        bool OrderChanged)
+    {
+        public bool Success => Result.Success;
+
+        public static InventoryFulfillmentDecision Accepted(bool orderChanged)
+        {
+            return new InventoryFulfillmentDecision(
+                ServiceResult.Ok(),
+                orderChanged);
         }
     }
 }

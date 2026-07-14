@@ -11,6 +11,7 @@ internal class FakePaymentRepository : IPaymentRepository
     public Payment? ExistingPendingPayment { get; set; }
     public bool PaymentIdExists { get; set; }
     public bool SaveSucceeds { get; set; } = true;
+    public IList<string>? Operations { get; set; }
     public Payment? AddedPayment { get; private set; }
     public int SaveCount { get; private set; }
 
@@ -44,12 +45,14 @@ internal class FakePaymentRepository : IPaymentRepository
 
     public Task<Payment?> GetPaymentWithOrderAsync(Guid paymentId)
     {
+        Operations?.Add("payment.load");
         return Task.FromResult(Payment?.Id == paymentId ? Payment : null);
     }
 
     public Task<bool> SaveChangesAsync()
     {
         SaveCount++;
+        Operations?.Add("payment.save");
         return Task.FromResult(SaveSucceeds);
     }
 }
