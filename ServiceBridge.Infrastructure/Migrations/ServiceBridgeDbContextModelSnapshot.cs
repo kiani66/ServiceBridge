@@ -543,6 +543,9 @@ namespace ServiceBridge.Infrastructure.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<int>("ServiceFulfillmentModeSnapshot")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("ServiceId")
                         .HasColumnType("uniqueidentifier");
 
@@ -589,6 +592,8 @@ namespace ServiceBridge.Infrastructure.Migrations
                             t.HasCheckConstraint("CK_Orders_FinalAmount_Matches", "[FinalAmountIrr] = [BaseAmountIrr] + [ProfitAmountIrr]");
 
                             t.HasCheckConstraint("CK_Orders_Pricing_NonNegative", "[ForeignPrice] >= 0 AND [ExchangeRateSnapshot] > 0 AND [MarginPercentSnapshot] >= 0 AND [MarginPercentSnapshot] <= 100 AND [BaseAmountIrr] >= 0 AND [ProfitAmountIrr] >= 0 AND [FinalAmountIrr] >= 0");
+
+                            t.HasCheckConstraint("CK_Orders_ServiceFulfillmentModeSnapshot_Valid", "[ServiceFulfillmentModeSnapshot] IN (1, 2, 3, 4)");
                         });
                 });
 

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using ServiceBridge.Domain.Entities;
+using ServiceBridge.Domain.Enums;
 using ServiceBridge.Infrastructure.Data;
 using Xunit;
 
@@ -83,6 +84,25 @@ public class OrderModelTests
     }
 
     [Fact]
+    public void Order_ServiceFulfillmentModeSnapshot_IsRequiredIntegerEnumWithValidityConstraint()
+    {
+        var orderType = _context.Model.FindEntityType(typeof(Order))!;
+        var snapshot = orderType.FindProperty(nameof(Order.ServiceFulfillmentModeSnapshot))!;
+        var designTimeOrderType = _context.GetService<IDesignTimeModel>()
+            .Model.FindEntityType(typeof(Order))!;
+
+        Assert.False(snapshot.IsNullable);
+        Assert.Equal(typeof(FulfillmentMode), snapshot.ClrType);
+        Assert.Equal("int", snapshot.GetColumnType());
+        Assert.Contains(
+            designTimeOrderType.GetCheckConstraints(),
+            constraint => constraint.Name ==
+                          "CK_Orders_ServiceFulfillmentModeSnapshot_Valid" &&
+                          constraint.Sql ==
+                          "[ServiceFulfillmentModeSnapshot] IN (1, 2, 3, 4)");
+    }
+
+    [Fact]
     public void Order_HasPricingIntegrityConstraints()
     {
         var designTimeModel = _context.GetService<IDesignTimeModel>().Model;
@@ -150,6 +170,7 @@ public class OrderModelTests
         var protectedProperties = new[]
         {
             nameof(Order.Status),
+            nameof(Order.ServiceFulfillmentModeSnapshot),
             nameof(Order.ForeignPrice),
             nameof(Order.CurrencyCode),
             nameof(Order.ExchangeRateSnapshot),

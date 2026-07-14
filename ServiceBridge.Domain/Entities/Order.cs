@@ -1,6 +1,7 @@
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Domain.Exceptions;
 using ServiceBridge.Domain.Orders;
+using ServiceFulfillmentMode = ServiceBridge.Domain.Enums.FulfillmentMode;
 
 namespace ServiceBridge.Domain.Entities;
 
@@ -18,6 +19,8 @@ public class Order : BaseEntity
     public OrderType OrderType { get; set; }
     public OrderFulfillmentMode FulfillmentMode { get; internal set; } =
         OrderFulfillmentMode.UseExistingAccount;
+    public ServiceFulfillmentMode ServiceFulfillmentModeSnapshot { get; internal set; } =
+        ServiceFulfillmentMode.ManualAgent;
     public OrderStatus Status { get; internal set; }
     public decimal ForeignPrice { get; internal set; }
     public string CurrencyCode { get; internal set; } = string.Empty;
@@ -178,6 +181,24 @@ public class Order : BaseEntity
     public void StartProcessing(Guid agentId, string? note = null)
     {
         TransitionByAgent(agentId, OrderStatus.Processing, note);
+    }
+
+    public void StartInventoryFulfillment(Guid systemActorId, string? note = null)
+    {
+        TransitionForInventoryFulfillment(
+            OrderStatus.Paid,
+            OrderStatus.Processing,
+            systemActorId,
+            note);
+    }
+
+    public void CompleteInventoryFulfillment(Guid systemActorId, string? note = null)
+    {
+        TransitionForInventoryFulfillment(
+            OrderStatus.Processing,
+            OrderStatus.Completed,
+            systemActorId,
+            note);
     }
 
     public void RequestCustomerAction(Guid agentId, string note)
@@ -366,6 +387,41 @@ public class Order : BaseEntity
             ActorType = OrderLogActorType.Agent,
             ActorId = agentId,
             ChangedByUserId = agentId,
+            Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+            CreatedAt = changedAtUtc
+        });
+    }
+
+    private void TransitionForInventoryFulfillment(
+        OrderStatus requiredCurrentStatus,
+        OrderStatus newStatus,
+        Guid systemActorId,
+        string? note)
+    {
+        if (ServiceFulfillmentModeSnapshot != ServiceFulfillmentMode.InventoryCode ||
+            Status != requiredCurrentStatus)
+        {
+            throw new InvalidOrderTransitionException(Status, newStatus);
+        }
+
+        var changedAtUtc = DateTime.UtcNow;
+        var previousStatus = Status;
+        Status = newStatus;
+        UpdatedAt = changedAtUtc;
+
+        if (newStatus == OrderStatus.Completed)
+        {
+            CompletedAt = changedAtUtc;
+        }
+
+        _statusHistory.Add(new OrderStatusHistory
+        {
+            OrderId = Id,
+            PreviousStatus = previousStatus,
+            NewStatus = newStatus,
+            ActorType = OrderLogActorType.System,
+            ActorId = systemActorId,
+            ChangedByUserId = null,
             Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
             CreatedAt = changedAtUtc
         });

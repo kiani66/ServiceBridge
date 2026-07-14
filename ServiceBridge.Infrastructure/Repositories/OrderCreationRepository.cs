@@ -44,6 +44,7 @@ public class OrderCreationRepository : IOrderCreationRepository
                 VariantRegionCode = x.RegionCode,
                 CurrencyCode = x.CurrencyCode,
                 BasePrice = x.BasePrice,
+                ServiceFulfillmentMode = x.FulfillmentMode,
                 SupportsUseExistingAccount = x.Service.SupportsUseExistingAccount,
                 SupportsCreateNewAccount = x.Service.SupportsCreateNewAccount,
                 RequiredFields = x.Service.RequiredFields
