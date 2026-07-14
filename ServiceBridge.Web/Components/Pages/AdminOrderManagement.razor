@@ -269,6 +269,11 @@ else
 
     private Task RequestOrderReloadAsync()
     {
+        return InvokeAsync(RequestOrderReloadOnDispatcherAsync);
+    }
+
+    private Task RequestOrderReloadOnDispatcherAsync()
+    {
         if (_disposed)
         {
             return Task.CompletedTask;
@@ -387,33 +392,31 @@ else
 
     private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
     {
-        if (message.OrderId != OrderId)
-        {
-            return Task.CompletedTask;
-        }
-
-        return RequestOrderReloadAsync();
+        return RequestRealtimeOrderReloadAsync(message.OrderId);
     }
 
     private Task HandleOrderAssignedAsync(OrderAssignedRealtimeDto message)
     {
-        if (message.OrderId != OrderId)
-        {
-            return Task.CompletedTask;
-        }
-
-        return RequestOrderReloadAsync();
+        return RequestRealtimeOrderReloadAsync(message.OrderId);
     }
 
     private Task HandleCustomerActionChangedAsync(
         CustomerActionChangedRealtimeDto message)
     {
-        if (message.OrderId != OrderId)
-        {
-            return Task.CompletedTask;
-        }
+        return RequestRealtimeOrderReloadAsync(message.OrderId);
+    }
 
-        return RequestOrderReloadAsync();
+    private Task RequestRealtimeOrderReloadAsync(Guid messageOrderId)
+    {
+        return InvokeAsync(() =>
+        {
+            if (_disposed || messageOrderId != OrderId)
+            {
+                return Task.CompletedTask;
+            }
+
+            return RequestOrderReloadOnDispatcherAsync();
+        });
     }
 
     private bool IsCurrentLoad(long generation, Guid orderId)

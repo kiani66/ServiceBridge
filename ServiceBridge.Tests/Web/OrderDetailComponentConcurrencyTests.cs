@@ -230,6 +230,203 @@ public sealed class OrderDetailComponentConcurrencyTests : BunitContext, IDispos
     }
 
     [Fact]
+    public async Task User_QueuedRouteChangeRejectsLatePreviousEvent()
+    {
+        var orderA = Guid.NewGuid();
+        var orderB = Guid.NewGuid();
+        var handler = new OrderDetailHttpHandler((request, _, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == $"/api/orders/my/{orderA}")
+            {
+                return Task.FromResult(Success(UserOrder(orderA, "USER-A")));
+            }
+
+            if (path == $"/api/orders/my/{orderB}")
+            {
+                return Task.FromResult(Success(UserOrder(orderB, "USER-B")));
+            }
+
+            return Task.FromResult(EmptyRefunds(request));
+        });
+        var realtime = await ConfigureAsync(handler);
+        var cut = Render<OrderDetails>(parameters =>
+            parameters.Add(component => component.OrderId, orderA));
+
+        await using (var dispatcherBlock = await BlockRendererDispatcherAsync())
+        {
+            var routeChange = Renderer.Dispatcher.InvokeAsync(() =>
+                cut.Render(parameters => parameters.Add(component => component.OrderId, orderB)));
+            var staleEvent = realtime.Handlers.OrderUpdated(
+                new OrderUpdatedRealtimeDto { OrderId = orderA });
+
+            dispatcherBlock.Release();
+            await Task.WhenAll(dispatcherBlock.Completion, routeChange, staleEvent);
+        }
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("USER-B", cut.Markup);
+            Assert.DoesNotContain("USER-A", cut.Markup);
+            Assert.Equal(1, handler.Calls($"GET /api/orders/my/{orderA}"));
+            Assert.Equal(1, handler.Calls($"GET /api/orders/my/{orderB}"));
+        });
+    }
+
+    [Fact]
+    public async Task Agent_QueuedRouteChangeRejectsLatePreviousEvent()
+    {
+        var orderA = Guid.NewGuid();
+        var orderB = Guid.NewGuid();
+        var handler = new OrderDetailHttpHandler((request, _, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == $"/api/agent/orders/{orderA}")
+            {
+                return Task.FromResult(Success(AgentOrder(orderA, "AGENT-A")));
+            }
+
+            if (path == $"/api/agent/orders/{orderB}")
+            {
+                return Task.FromResult(Success(AgentOrder(orderB, "AGENT-B")));
+            }
+
+            throw Unexpected(request);
+        });
+        var realtime = await ConfigureAsync(handler);
+        var cut = Render<AgentOrderWorkspace>(parameters =>
+            parameters.Add(component => component.OrderId, orderA));
+
+        await using (var dispatcherBlock = await BlockRendererDispatcherAsync())
+        {
+            var routeChange = Renderer.Dispatcher.InvokeAsync(() =>
+                cut.Render(parameters => parameters.Add(component => component.OrderId, orderB)));
+            var staleEvent = realtime.Handlers.OrderUpdated(
+                new OrderUpdatedRealtimeDto { OrderId = orderA });
+
+            dispatcherBlock.Release();
+            await Task.WhenAll(dispatcherBlock.Completion, routeChange, staleEvent);
+        }
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("AGENT-B", cut.Markup);
+            Assert.DoesNotContain("AGENT-A", cut.Markup);
+            Assert.Equal(1, handler.Calls($"GET /api/agent/orders/{orderA}"));
+            Assert.Equal(1, handler.Calls($"GET /api/agent/orders/{orderB}"));
+        });
+    }
+
+    [Fact]
+    public async Task Admin_QueuedRouteChangeRejectsLatePreviousEvent_AndCurrentEventsCoalesce()
+    {
+        var orderA = Guid.NewGuid();
+        var orderB = Guid.NewGuid();
+        var activeStarted = NewSignal();
+        var releaseActive = NewSignal();
+        var handler = new OrderDetailHttpHandler(async (request, call, token) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == $"/api/admin/orders/{orderA}")
+            {
+                return Success(AdminOrder(orderA, "ORDER-A"));
+            }
+
+            if (path == $"/api/admin/orders/{orderB}")
+            {
+                if (call == 2)
+                {
+                    activeStarted.TrySetResult();
+                    await releaseActive.Task.WaitAsync(token);
+                    return Success(AdminOrder(orderB, "ORDER-B-INTERMEDIATE"));
+                }
+
+                return Success(AdminOrder(
+                    orderB,
+                    call == 1 ? "ORDER-B-INITIAL" : "ORDER-B-LATEST"));
+            }
+
+            throw Unexpected(request);
+        });
+        var realtime = await ConfigureAsync(handler);
+        var cut = Render<AdminOrderManagement>(parameters =>
+            parameters.Add(component => component.OrderId, orderA));
+
+        await using (var dispatcherBlock = await BlockRendererDispatcherAsync())
+        {
+            var routeChange = Renderer.Dispatcher.InvokeAsync(() =>
+                cut.Render(parameters => parameters.Add(component => component.OrderId, orderB)));
+            var staleEvent = realtime.Handlers.OrderUpdated(
+                new OrderUpdatedRealtimeDto { OrderId = orderA });
+
+            dispatcherBlock.Release();
+            await Task.WhenAll(dispatcherBlock.Completion, routeChange, staleEvent);
+        }
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("ORDER-B-INITIAL", cut.Markup);
+            Assert.DoesNotContain("ORDER-A", cut.Markup);
+            Assert.Equal(1, handler.Calls($"GET /api/admin/orders/{orderA}"));
+            Assert.Equal(1, handler.Calls($"GET /api/admin/orders/{orderB}"));
+        });
+
+        var first = realtime.Handlers.OrderUpdated(
+            new OrderUpdatedRealtimeDto { OrderId = orderB });
+        await activeStarted.Task;
+        var second = realtime.Handlers.OrderUpdated(
+            new OrderUpdatedRealtimeDto { OrderId = orderB });
+        var third = realtime.Handlers.OrderUpdated(
+            new OrderUpdatedRealtimeDto { OrderId = orderB });
+        releaseActive.TrySetResult();
+        await Task.WhenAll(first, second, third);
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("ORDER-B-LATEST", cut.Markup);
+            Assert.DoesNotContain("ORDER-B-INTERMEDIATE", cut.Markup);
+            Assert.Equal(3, handler.Calls($"GET /api/admin/orders/{orderB}"));
+        });
+    }
+
+    [Fact]
+    public async Task Admin_DisposeBeforeQueuedRealtimeCallback_PreventsMutationAndRendering()
+    {
+        var orderId = Guid.NewGuid();
+        var handler = new OrderDetailHttpHandler((request, _, _) =>
+        {
+            if (request.Method == HttpMethod.Get &&
+                request.RequestUri!.AbsolutePath == $"/api/admin/orders/{orderId}")
+            {
+                return Task.FromResult(Success(AdminOrder(orderId, "ADMIN-DISPOSE")));
+            }
+
+            throw Unexpected(request);
+        });
+        var realtime = await ConfigureAsync(handler);
+        var cut = Render<AdminOrderManagement>(parameters =>
+            parameters.Add(component => component.OrderId, orderId));
+        var initialGeneration = GetPrivateField<long>(cut.Instance, "_loadGeneration");
+        var initialRenderCount = cut.RenderCount;
+        var initialRequestCount = handler.Calls($"GET /api/admin/orders/{orderId}");
+
+        await using (var dispatcherBlock = await BlockRendererDispatcherAsync())
+        {
+            var callback = realtime.Handlers.OrderUpdated(
+                new OrderUpdatedRealtimeDto { OrderId = orderId });
+            cut.Instance.Dispose();
+
+            dispatcherBlock.Release();
+            await Task.WhenAll(dispatcherBlock.Completion, callback);
+        }
+
+        Assert.Equal(initialGeneration, GetPrivateField<long>(cut.Instance, "_loadGeneration"));
+        Assert.Equal(initialRequestCount, handler.Calls($"GET /api/admin/orders/{orderId}"));
+        Assert.Equal(initialRenderCount, cut.RenderCount);
+        cut.Dispose();
+    }
+
+    [Fact]
     public async Task User_DisposeDuringPayment_PreventsNavigation()
     {
         var orderId = Guid.NewGuid();
@@ -486,6 +683,25 @@ public sealed class OrderDetailComponentConcurrencyTests : BunitContext, IDispos
     private static TaskCompletionSource NewSignal() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    private async Task<RendererDispatcherBlock> BlockRendererDispatcherAsync()
+    {
+        var entered = NewSignal();
+        var release = new ManualResetEventSlim();
+        var completion = Task.Run(() => Renderer.Dispatcher.InvokeAsync(() =>
+        {
+            entered.TrySetResult();
+            release.Wait();
+        }));
+
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        return new RendererDispatcherBlock(release, completion);
+    }
+
+    private static T GetPrivateField<T>(object instance, string name) =>
+        (T)instance.GetType()
+            .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(instance)!;
+
     private sealed class OrderDetailHttpHandler(
         Func<HttpRequestMessage, int, CancellationToken, Task<HttpResponseMessage>> response)
         : HttpMessageHandler
@@ -513,6 +729,30 @@ public sealed class OrderDetailComponentConcurrencyTests : BunitContext, IDispos
     private sealed record RealtimeHarness(
         RealtimeClient Client,
         RealtimeConnectionHandlers Handlers);
+
+    private sealed class RendererDispatcherBlock(
+        ManualResetEventSlim release,
+        Task completion) : IAsyncDisposable
+    {
+        private int _released;
+
+        public Task Completion { get; } = completion;
+
+        public void Release()
+        {
+            if (Interlocked.Exchange(ref _released, 1) == 0)
+            {
+                release.Set();
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            Release();
+            await Completion;
+            release.Dispose();
+        }
+    }
 
     private sealed class FakeRealtimeConnection : IRealtimeConnection
     {
