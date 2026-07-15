@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Inventory;
+using ServiceBridge.Application.Payments;
 using ServiceBridge.Domain.Entities;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Infrastructure.Data;
@@ -298,6 +299,100 @@ public sealed class AdminInventoryCodeFulfillmentSqlServerTests :
     }
 
     [SqlServerInventoryAllocationFact]
+    public async Task DuplicatePaymentConfirmationAndAdminRetry_CompleteSafely()
+    {
+        var scenario = await SeedScenarioAsync(includeInventory: true);
+        var paymentBefore = await ReadPaymentSnapshotAsync(
+            scenario.CompletedPaymentId);
+        var synchronization = new PaymentAdminConcurrencySynchronization();
+
+        await using var paymentContext = _fixture.CreateContext(
+            new PaymentOrderLockInterceptor(synchronization));
+        await using var adminContext = _fixture.CreateContext(
+            new AdminOrderLockInterceptor(synchronization));
+        var paymentService = CreatePaymentService(
+            paymentContext,
+            new FakeRealtimeEventPublisher());
+        var adminService = CreateService(
+            adminContext,
+            new FakeRealtimeEventPublisher());
+
+        var paymentTask = paymentService.ConfirmAsync(
+            new ConfirmPaymentRequest
+            {
+                PaymentId = scenario.CompletedPaymentId,
+                Status = PaymentStatus.Completed,
+                GatewayReference = "stage-3b1b-duplicate-completed"
+            },
+            "{}");
+
+        await synchronization.WaitUntilPaymentOrderLockedAsync();
+
+        var adminTask = adminService.RetryAsync(
+            scenario.AdminId,
+            scenario.OrderId);
+
+        await synchronization.WaitUntilAdminOrderRequestedAsync();
+
+        await Task.WhenAll(paymentTask, adminTask)
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        var paymentResult = await paymentTask;
+        var adminResult = await adminTask;
+        Assert.True(paymentResult.Success);
+        Assert.True(adminResult.Success);
+        Assert.Equal(
+            InventoryCodeFulfillmentOutcome.AlreadyFulfilled,
+            adminResult.Data?.Outcome);
+
+        await using var verificationContext = _fixture.CreateContext();
+        var paymentAfter = await ReadPaymentSnapshotAsync(
+            verificationContext,
+            scenario.CompletedPaymentId);
+        var order = await verificationContext.Orders
+            .Include(candidate => candidate.StatusHistory)
+            .SingleAsync(candidate => candidate.Id == scenario.OrderId);
+
+        Assert.Equal(paymentBefore, paymentAfter);
+        Assert.Equal(PaymentStatus.Completed, paymentAfter.Status);
+        Assert.Equal(OrderStatus.Completed, order.Status);
+        Assert.Equal(
+            1,
+            await verificationContext.InventoryItems.CountAsync(candidate =>
+                candidate.ReservedForOrderId == scenario.OrderId &&
+                candidate.Status == InventoryItemStatus.Delivered));
+        Assert.Equal(
+            1,
+            await verificationContext.InventoryItems.CountAsync(candidate =>
+                candidate.Id == scenario.ItemId &&
+                candidate.ReservedForOrderId == scenario.OrderId));
+        AssertFulfillmentHistory(order, expectedCount: 1);
+        Assert.Equal(
+            1,
+            await CompletionNotificationCountAsync(
+                verificationContext,
+                scenario.OrderId));
+        var completionNotification = await verificationContext.Notifications
+            .SingleAsync(candidate =>
+                candidate.RelatedEntityId == scenario.OrderId &&
+                candidate.Type == NotificationType.OrderCompleted);
+        Assert.DoesNotContain(
+            ProtectedTestPayload,
+            completionNotification.Message);
+        Assert.NotNull(scenario.CodeFingerprint);
+        Assert.DoesNotContain(
+            scenario.CodeFingerprint,
+            completionNotification.Message);
+        Assert.Equal(
+            1,
+            await RetryAuditCountAsync(verificationContext, scenario.OrderId));
+        Assert.Equal(
+            0,
+            await verificationContext.AgentAssignments.CountAsync(candidate =>
+                candidate.OrderId == scenario.OrderId));
+    }
+
+    [SqlServerInventoryAllocationFact]
     public async Task LatestPayment_DeterministicallyControlsRetryEligibility()
     {
         var now = DateTime.UtcNow;
@@ -395,6 +490,28 @@ public sealed class AdminInventoryCodeFulfillmentSqlServerTests :
             notifications,
             realtimeEventPublisher,
             NullLogger<AdminInventoryCodeFulfillmentService>.Instance);
+    }
+
+    private static PaymentService CreatePaymentService(
+        ServiceBridgeDbContext context,
+        IRealtimeEventPublisher realtimeEventPublisher)
+    {
+        var notifications = new NotificationService(
+            new NotificationRepository(context),
+            realtimeEventPublisher);
+        var fulfillment = new FulfillInventoryCodeOrderCommand(
+            new InventoryCodeFulfillmentRepository(context),
+            notifications);
+
+        return new PaymentService(
+            new PaymentRepository(context),
+            new FakeMockPaymentGateway(),
+            new FakePaymentGatewayFactory([new FakePaymentGateway()]),
+            notifications,
+            realtimeEventPublisher,
+            fulfillment,
+            new PaymentConfirmationTransactionManager(context),
+            NullLogger<PaymentService>.Instance);
     }
 
     private async Task<RetryScenario> SeedScenarioAsync(
@@ -500,13 +617,14 @@ public sealed class AdminInventoryCodeFulfillmentSqlServerTests :
         InventoryItem? item = null;
         if (includeInventory)
         {
+            var codeFingerprint = string.Concat(
+                Guid.NewGuid().ToString("N"),
+                Guid.NewGuid().ToString("N"));
             item = InventoryItem.Create(
                 variant.Id,
                 FulfillmentMode.InventoryCode,
                 ProtectedTestPayload,
-                string.Concat(
-                    Guid.NewGuid().ToString("N"),
-                    Guid.NewGuid().ToString("N")),
+                codeFingerprint,
                 admin.Id,
                 now.AddMinutes(-7));
         }
@@ -525,7 +643,8 @@ public sealed class AdminInventoryCodeFulfillmentSqlServerTests :
             admin.Id,
             order.Id,
             completedPayment.Id,
-            item?.Id);
+            item?.Id,
+            item?.CodeFingerprint);
     }
 
     private static Payment CreatePayment(Order order, PaymentSeed seed)
@@ -807,6 +926,90 @@ public sealed class AdminInventoryCodeFulfillmentSqlServerTests :
         }
     }
 
+    private sealed class PaymentAdminConcurrencySynchronization
+    {
+        private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
+        private readonly TaskCompletionSource _paymentOrderLocked =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _adminOrderRequested =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void PaymentOrderLocked()
+        {
+            _paymentOrderLocked.TrySetResult();
+        }
+
+        public void AdminOrderRequested()
+        {
+            _adminOrderRequested.TrySetResult();
+        }
+
+        public Task WaitUntilPaymentOrderLockedAsync() =>
+            _paymentOrderLocked.Task.WaitAsync(Timeout);
+
+        public Task WaitUntilAdminOrderRequestedAsync() =>
+            _adminOrderRequested.Task.WaitAsync(Timeout);
+    }
+
+    private sealed class PaymentOrderLockInterceptor : DbCommandInterceptor
+    {
+        private readonly PaymentAdminConcurrencySynchronization _synchronization;
+
+        public PaymentOrderLockInterceptor(
+            PaymentAdminConcurrencySynchronization synchronization)
+        {
+            _synchronization = synchronization;
+        }
+
+        public override async ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command,
+            CommandExecutedEventData eventData,
+            DbDataReader result,
+            CancellationToken cancellationToken = default)
+        {
+            if (IsOrderLock(command))
+            {
+                _synchronization.PaymentOrderLocked();
+                await _synchronization.WaitUntilAdminOrderRequestedAsync();
+            }
+
+            return result;
+        }
+    }
+
+    private sealed class AdminOrderLockInterceptor : DbCommandInterceptor
+    {
+        private readonly PaymentAdminConcurrencySynchronization _synchronization;
+
+        public AdminOrderLockInterceptor(
+            PaymentAdminConcurrencySynchronization synchronization)
+        {
+            _synchronization = synchronization;
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>>
+            ReaderExecutingAsync(
+                DbCommand command,
+                CommandEventData eventData,
+                InterceptionResult<DbDataReader> result,
+                CancellationToken cancellationToken = default)
+        {
+            if (IsOrderLock(command))
+            {
+                _synchronization.AdminOrderRequested();
+            }
+
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    private static bool IsOrderLock(DbCommand command)
+    {
+        return command.CommandText.Contains(
+            "FROM [Orders] WITH (UPDLOCK, ROWLOCK)",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class ThrowingRealtimeEventPublisher : IRealtimeEventPublisher
     {
         public Task PublishNotificationReceivedAsync(
@@ -850,7 +1053,8 @@ public sealed class AdminInventoryCodeFulfillmentSqlServerTests :
         Guid AdminId,
         Guid OrderId,
         Guid CompletedPaymentId,
-        Guid? ItemId);
+        Guid? ItemId,
+        string? CodeFingerprint);
 
     private sealed record PaymentSnapshot(
         Guid Id,

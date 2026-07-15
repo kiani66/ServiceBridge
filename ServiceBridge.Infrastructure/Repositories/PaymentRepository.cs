@@ -48,6 +48,41 @@ public class PaymentRepository : IPaymentRepository
             .FirstOrDefaultAsync(x => x.Id == paymentId);
     }
 
+    public async Task<Payment?> GetPaymentWithOrderForConfirmationAsync(
+        Guid paymentId)
+    {
+        if (_context.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException(
+                "Payment confirmation requires an active database transaction.");
+        }
+
+        _context.ChangeTracker.Clear();
+
+        var orderId = await _context.Payments
+            .AsNoTracking()
+            .Where(payment => payment.Id == paymentId)
+            .Select(payment => (Guid?)payment.OrderId)
+            .SingleOrDefaultAsync();
+        if (orderId is null)
+        {
+            return null;
+        }
+
+        await _context.Orders
+            .FromSqlInterpolated($"""
+                SELECT *
+                FROM [Orders] WITH (UPDLOCK, ROWLOCK)
+                WHERE [Id] = {orderId.Value}
+                """)
+            .SingleAsync();
+
+        return await _context.Payments
+            .Include(payment => payment.Order)
+            .Include(payment => payment.Events)
+            .SingleAsync(payment => payment.Id == paymentId);
+    }
+
     public async Task<bool> SaveChangesAsync()
     {
         try

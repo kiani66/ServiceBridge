@@ -50,6 +50,10 @@ public sealed class InventoryCodePaymentTests
             OrderStatus.Completed.ToString(),
             Assert.Single(setup.Realtime.OrderUpdates).Status);
         AssertOccursBefore(setup.Operations, "inventory.lock", "payment.save");
+        AssertOccursBefore(
+            setup.Operations,
+            "payment.confirmation-lock-load",
+            "inventory.lock");
         AssertOccursBefore(setup.Operations, "payment.save", "transaction.commit");
         AssertOccursBefore(setup.Operations, "transaction.commit", "notification.publish");
         AssertOccursBefore(setup.Operations, "transaction.commit", "realtime.order.publish");

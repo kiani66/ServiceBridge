@@ -229,7 +229,10 @@ public class PaymentService : IPaymentService
 
         await using var transaction = await _transactionManager.BeginAsync();
 
-        var payment = await _repository.GetPaymentWithOrderAsync(request.PaymentId);
+        var payment = request.Status == PaymentStatus.Completed
+            ? await _repository.GetPaymentWithOrderForConfirmationAsync(
+                request.PaymentId)
+            : await _repository.GetPaymentWithOrderAsync(request.PaymentId);
         if (payment == null)
         {
             return ServiceResult.Fail(

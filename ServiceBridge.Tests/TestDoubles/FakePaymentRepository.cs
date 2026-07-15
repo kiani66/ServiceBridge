@@ -49,6 +49,12 @@ internal class FakePaymentRepository : IPaymentRepository
         return Task.FromResult(Payment?.Id == paymentId ? Payment : null);
     }
 
+    public Task<Payment?> GetPaymentWithOrderForConfirmationAsync(Guid paymentId)
+    {
+        Operations?.Add("payment.confirmation-lock-load");
+        return Task.FromResult(Payment?.Id == paymentId ? Payment : null);
+    }
+
     public Task<bool> SaveChangesAsync()
     {
         SaveCount++;
