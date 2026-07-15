@@ -21,291 +21,280 @@
 </PageHeader>
 
 <PageSection MaxWidth="wide">
-    @if (_loading)
-    {
-        <LoadingState Text="Loading assignment queue" />
-    }
-    else if (!string.IsNullOrWhiteSpace(_errorMessage))
-    {
-        <ErrorState Title="Unable to load assignment queue"
-                    Message="@_errorMessage"
-                    OnRetry="@(() => LoadAsync(Math.Max(_orders.Page, 1)))" />
-    }
-    else if (_orders.Items.Count == 0)
-    {
-        <EmptyState Title="Queue is clear"
-                    Description="New paid orders will appear here for assignment."
-                    Icon="@Icons.Material.Outlined.AssignmentTurnedIn" />
-    }
-    else if (_agents.Count == 0)
-    {
-        <EmptyState Title="No active agents"
-                    Description="Activate an agent before assigning paid orders."
-                    Icon="@Icons.Material.Outlined.SupportAgent" />
-    }
-    else
-    {
-        <MudTable Items="@_orders.Items" Hover="true" Dense="true" Class="sb-data-table">
-            <HeaderContent>
-                <MudTh>Order</MudTh>
-                <MudTh>Customer</MudTh>
-                <MudTh>Service</MudTh>
-                <MudTh>Paid</MudTh>
-                <MudTh>Amount</MudTh>
-                <MudTh>Assignment</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Order">
-                    <strong>@context.OrderNumber</strong>
-                    <span class="sb-table-subtext">
-                        <MudLink Href="@($"/ui/admin/orders/{context.OrderId}")">View details</MudLink>
-                    </span>
-                </MudTd>
-                <MudTd DataLabel="Customer">@context.CustomerName</MudTd>
-                <MudTd DataLabel="Service">
-                    @context.ServiceName
-                    <span class="sb-table-subtext">
-                        @VariantLabel(context.PlanName, context.PlanDurationDays, context.PlanRegionCode)
-                    </span>
-                </MudTd>
-                <MudTd DataLabel="Paid">@UserOrderDisplay.FormatDateTime(context.PaidAt)</MudTd>
-                <MudTd DataLabel="Amount">@context.FinalAmountIrr.ToString("N0") IRR</MudTd>
-                <MudTd DataLabel="Assignment">
-                    <div class="sb-action-cell">
-                        <MudSelect T="Guid?"
-                                   Label="Agent"
-                                   Variant="Variant.Outlined"
-                                   Margin="Margin.Dense"
-                                   Value="@SelectedAgent(context.OrderId)"
-                                   ValueChanged="@((Guid? value) => SetSelectedAgent(context.OrderId, value))"
-                                   Class="sb-search-compact">
-                            <MudSelectItem T="Guid?" Value="null">Select agent</MudSelectItem>
-                            @foreach (var agent in _agents)
-                            {
-                                <MudSelectItem T="Guid?" Value="@agent.AgentId">
-                                    @agent.FullName (@agent.ActiveOrderCount active)
-                                </MudSelectItem>
-                            }
-                        </MudSelect>
-                        <MudTextField T="string"
-                                      Label="Notes"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      MaxLength="1000"
-                                      Value="@SelectedNotes(context.OrderId)"
-                                      ValueChanged="@((string? value) => SetSelectedNotes(context.OrderId, value))"
-                                      Class="sb-search-compact" />
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Primary"
-                                   Size="Size.Small"
-                                   Disabled="@(_actionBusy || !SelectedAgent(context.OrderId).HasValue)"
-                                   StartIcon="@Icons.Material.Outlined.AssignmentInd"
-                                   OnClick="@(() => AssignAsync(context.OrderId))">
-                            Assign
-                        </MudButton>
-                    </div>
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
-
-        @if (_orders.TotalPages > 1)
+    <section aria-labelledby="assignment-queue-title">
+        <h2 id="assignment-queue-title" class="sb-section-title">Assignment queue</h2>
+        @if (_loading)
         {
-            <div class="sb-pagination">
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Primary"
-                           Disabled="@(_orders.Page <= 1 || _loading)"
-                           StartIcon="@Icons.Material.Outlined.ChevronLeft"
-                           OnClick="PreviousPage">
-                    Previous
-                </MudButton>
-                <span>Page @_orders.Page of @_orders.TotalPages</span>
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Primary"
-                           Disabled="@(_orders.Page >= _orders.TotalPages || _loading)"
-                           EndIcon="@Icons.Material.Outlined.ChevronRight"
-                           OnClick="NextPage">
-                    Next
-                </MudButton>
-            </div>
+            <LoadingState Text="Loading assignment queue" />
         }
+        else if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <ErrorState Title="Unable to load assignment queue"
+                        Message="@_errorMessage"
+                        OnRetry="@(() => RequestQueuesReloadAsync(Math.Max(_orders.Page, 1)))" />
+        }
+        else if (_orders.Items.Count == 0)
+        {
+            <EmptyState Title="Queue is clear"
+                        Description="New paid orders will appear here for assignment."
+                        Icon="@Icons.Material.Outlined.AssignmentTurnedIn" />
+        }
+        else if (_agents.Count == 0)
+        {
+            <EmptyState Title="No active agents"
+                        Description="Activate an agent before assigning paid orders."
+                        Icon="@Icons.Material.Outlined.SupportAgent" />
+        }
+        else
+        {
+            <MudTable Items="@_orders.Items" Hover="true" Dense="true" Class="sb-data-table">
+                <HeaderContent>
+                    <MudTh>Order</MudTh><MudTh>Customer</MudTh><MudTh>Service</MudTh><MudTh>Paid</MudTh><MudTh>Amount</MudTh><MudTh>Assignment</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Order"><strong>@context.OrderNumber</strong><span class="sb-table-subtext"><MudLink Href="@($"/ui/admin/orders/{context.OrderId}")">View details</MudLink></span></MudTd>
+                    <MudTd DataLabel="Customer">@context.CustomerName</MudTd>
+                    <MudTd DataLabel="Service">@context.ServiceName<span class="sb-table-subtext">@VariantLabel(context.PlanName, context.PlanDurationDays, context.PlanRegionCode)</span></MudTd>
+                    <MudTd DataLabel="Paid">@UserOrderDisplay.FormatDateTime(context.PaidAt)</MudTd>
+                    <MudTd DataLabel="Amount">@context.FinalAmountIrr.ToString("N0") IRR</MudTd>
+                    <MudTd DataLabel="Assignment">
+                        <div class="sb-action-cell">
+                            <MudSelect T="Guid?" Label="Agent" Variant="Variant.Outlined" Margin="Margin.Dense" Value="@SelectedAgent(context.OrderId)" ValueChanged="@((Guid? value) => SetSelectedAgent(context.OrderId, value))" Class="sb-search-compact">
+                                <MudSelectItem T="Guid?" Value="null">Select agent</MudSelectItem>
+                                @foreach (var agent in _agents) { <MudSelectItem T="Guid?" Value="@agent.AgentId">@agent.FullName (@agent.ActiveOrderCount active)</MudSelectItem> }
+                            </MudSelect>
+                            <MudTextField T="string" Label="Notes" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="1000" Value="@SelectedNotes(context.OrderId)" ValueChanged="@((string? value) => SetSelectedNotes(context.OrderId, value))" Class="sb-search-compact" />
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="@(_actionBusy || !SelectedAgent(context.OrderId).HasValue)" StartIcon="@Icons.Material.Outlined.AssignmentInd" OnClick="@(() => AssignAsync(context.OrderId))">Assign</MudButton>
+                        </div>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </section>
+
+    <section class="sb-panel-divider" aria-labelledby="inventory-fulfillment-title">
+        <div class="sb-card-heading">
+            <div>
+                <span class="sb-eyebrow">InventoryCode</span>
+                <h2 id="inventory-fulfillment-title">Inventory fulfillment</h2>
+                <p>Orders requiring stock allocation or fulfillment reconciliation.</p>
+            </div>
+            <StatusBadge Text="@_pendingInventory.TotalCount.ToString()" Tone="info" />
+        </div>
+
+        @if (_inventoryLoading)
+        {
+            <LoadingState Text="Loading inventory fulfillment queue" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_inventoryError))
+        {
+            <ErrorState Title="Unable to load inventory fulfillment"
+                        Message="@_inventoryError"
+                        OnRetry="@(() => RequestQueuesReloadAsync(Math.Max(_pendingInventory.Page, 1)))" />
+        }
+        else if (_pendingInventory.Items.Count == 0)
+        {
+            <EmptyState Title="Inventory fulfillment queue is clear"
+                        Description="No paid InventoryCode orders need operational attention."
+                        Icon="@Icons.Material.Outlined.Inventory2" />
+        }
+        else
+        {
+            @if (!string.IsNullOrWhiteSpace(_retryMessage)) { <MudAlert Severity="Severity.Success" Dense="true">@_retryMessage</MudAlert> }
+            @if (!string.IsNullOrWhiteSpace(_retryError)) { <MudAlert Severity="Severity.Error" Dense="true">@_retryError</MudAlert> }
+            <MudTable Items="@_pendingInventory.Items" Hover="true" Dense="true" Class="sb-data-table">
+                <HeaderContent>
+                    <MudTh>Order</MudTh><MudTh>Customer</MudTh><MudTh>Service</MudTh><MudTh>Status</MudTh><MudTh>Fulfillment</MudTh><MudTh>Allocation</MudTh><MudTh>Paid</MudTh><MudTh>Created</MudTh><MudTh>Action</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Order"><strong>@context.OrderNumber</strong><span class="sb-table-subtext"><MudLink Href="@($"/ui/admin/orders/{context.OrderId}")">View details</MudLink></span></MudTd>
+                    <MudTd DataLabel="Customer">@context.UserName</MudTd>
+                    <MudTd DataLabel="Service">@context.ServiceName<span class="sb-table-subtext">@(context.VariantName ?? "-")</span></MudTd>
+                    <MudTd DataLabel="Status"><StatusBadge Text="@UserOrderDisplay.OrderStatusLabel(context.OrderStatus)" Tone="@UserOrderDisplay.OrderTone(context.OrderStatus)" /></MudTd>
+                    <MudTd DataLabel="Fulfillment"><StatusBadge Text="@InventoryStateLabel(context.InventoryFulfillmentState)" Tone="@InventoryStateTone(context.InventoryFulfillmentState)" /></MudTd>
+                    <MudTd DataLabel="Allocation">@(context.InventoryAllocationStatus ?? "No allocation")</MudTd>
+                    <MudTd DataLabel="Paid">@FormatNullable(context.PaidAt)</MudTd>
+                    <MudTd DataLabel="Created">@UserOrderDisplay.FormatDateTime(context.CreatedAt)</MudTd>
+                    <MudTd DataLabel="Action">
+                        @if (context.CanRetryInventoryFulfillment)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="@(_retryBusy || _actionBusy)" StartIcon="@Icons.Material.Outlined.Refresh" OnClick="@(() => OpenRetryDialog(context))">Retry</MudButton>
+                        }
+                        else
+                        {
+                            <StatusBadge Text="Retry unavailable" Tone="neutral" />
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </section>
+
+    @if (_orders.TotalPages > 1 || _pendingInventory.TotalPages > 1)
+    {
+        var currentPage = Math.Max(_orders.Page, _pendingInventory.Page);
+        var totalPages = Math.Max(_orders.TotalPages, _pendingInventory.TotalPages);
+        <div class="sb-pagination">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(currentPage <= 1 || _loading || _inventoryLoading)" StartIcon="@Icons.Material.Outlined.ChevronLeft" OnClick="PreviousPage">Previous</MudButton>
+            <span>Page @currentPage of @totalPages</span>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(currentPage >= totalPages || _loading || _inventoryLoading)" EndIcon="@Icons.Material.Outlined.ChevronRight" OnClick="NextPage">Next</MudButton>
+        </div>
     }
 </PageSection>
 
+<ConfirmationDialog Open="_retryDialogOpen"
+                    OpenChanged="HandleRetryDialogChangedAsync"
+                    Title="Retry inventory fulfillment"
+                    Description="The system will attempt allocation from available inventory. Inventory codes are never shown or requested here."
+                    ConfirmText="@(_retryBusy ? "Retrying..." : "Retry fulfillment")"
+                    IsBusy="_retryBusy"
+                    OnConfirmed="RetryInventoryFulfillmentAsync" />
+
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
+    private readonly CancellationTokenSource _lifetimeCts = new();
     private const int PageSize = 20;
-
-    [SupplyParameterFromQuery(Name = "page")]
-    public int? Page { get; set; }
-
+    private RealtimeRefreshCoordinator? _realtimeRefresh;
+    private int _requestedPage = 1;
+    private bool _disposed;
     private bool _loading = true;
+    private bool _inventoryLoading = true;
     private bool _actionBusy;
+    private bool _retryBusy;
+    private bool _retryDialogOpen;
     private string? _errorMessage;
+    private string? _inventoryError;
+    private string? _retryMessage;
+    private string? _retryError;
+    private AdminPendingInventoryFulfillmentDto? _retryOrder;
     private PagedResultDto<AdminAssignableOrderDto> _orders = new();
+    private PagedResultDto<AdminPendingInventoryFulfillmentDto> _pendingInventory = new();
     private IReadOnlyCollection<AgentSummaryDto> _agents = Array.Empty<AgentSummaryDto>();
     private readonly Dictionary<Guid, Guid?> _selectedAgents = new();
     private readonly Dictionary<Guid, string?> _assignmentNotes = new();
 
+    [SupplyParameterFromQuery(Name = "page")] public int? Page { get; set; }
+
     protected override void OnInitialized()
     {
+        _realtimeRefresh = new RealtimeRefreshCoordinator(RunQueuesReloadCoreAsync);
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderUpdates(HandleOrderUpdatedAsync));
         _realtimeSubscriptions.Add(RealtimeClient.SubscribeToOrderAssignments(HandleOrderAssignedAsync));
     }
 
-    protected override async Task OnParametersSetAsync()
+    protected override Task OnParametersSetAsync() => RequestQueuesReloadAsync(Math.Max(Page ?? 1, 1));
+
+    private Task PreviousPage() => NavigateAndReloadAsync(Math.Max(CurrentPage - 1, 1));
+    private Task NextPage() => NavigateAndReloadAsync(CurrentPage + 1);
+    private int CurrentPage => Math.Max(Math.Max(_orders.Page, _pendingInventory.Page), 1);
+
+    private Task NavigateAndReloadAsync(int page)
     {
-        await LoadAsync(Math.Max(Page ?? 1, 1));
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters("/ui/admin/orders", new Dictionary<string, object?> { ["page"] = page <= 1 ? null : page }), replace: true);
+        return RequestQueuesReloadAsync(page);
     }
 
-    private Task PreviousPage()
+    private Task RequestQueuesReloadAsync(int page)
     {
-        var page = Math.Max(_orders.Page - 1, 1);
-        NavigateToPage(page);
-        return LoadAsync(page);
+        if (_disposed) return Task.CompletedTask;
+        _requestedPage = Math.Max(page, 1);
+        return _realtimeRefresh?.RunAsync() ?? Task.CompletedTask;
     }
 
-    private Task NextPage()
+    private Task RunQueuesReloadCoreAsync() => InvokeAsync(async () =>
     {
-        var page = _orders.Page + 1;
-        NavigateToPage(page);
-        return LoadAsync(page);
-    }
+        await LoadAssignmentCoreAsync(_requestedPage);
+        await LoadInventoryCoreAsync(_requestedPage);
+        if (!_disposed) StateHasChanged();
+    });
 
-    private async Task LoadAsync(int page)
+    private async Task LoadAssignmentCoreAsync(int page)
     {
-        _loading = true;
-        _errorMessage = null;
-
-        var ordersResult = await AdminOrdersClient.GetPaidUnassignedOrdersAsync(page, PageSize);
-        if (RedirectIfAuthRequired(ordersResult.RequiresAuthentication))
+        _loading = true; _errorMessage = null;
+        try
         {
-            return;
+            var ordersResult = await AdminOrdersClient.GetPaidUnassignedOrdersAsync(page, PageSize, _lifetimeCts.Token);
+            var agentsResult = await AdminOrdersClient.GetActiveAgentsAsync(_lifetimeCts.Token);
+            if (_disposed || RedirectIfAuthRequired(ordersResult.RequiresAuthentication || agentsResult.RequiresAuthentication)) return;
+            _orders = ordersResult.Success && ordersResult.Data is not null ? ordersResult.Data : new();
+            _agents = agentsResult.Success && agentsResult.Data is not null ? agentsResult.Data : Array.Empty<AgentSummaryDto>();
+            _errorMessage = ordersResult.ErrorMessage ?? agentsResult.ErrorMessage;
         }
+        catch (OperationCanceledException) when (_disposed) { }
+        finally { if (!_disposed) _loading = false; }
+    }
 
-        var agentsResult = await AdminOrdersClient.GetActiveAgentsAsync();
-        if (RedirectIfAuthRequired(agentsResult.RequiresAuthentication))
+    private async Task LoadInventoryCoreAsync(int page)
+    {
+        _inventoryLoading = true; _inventoryError = null;
+        try
         {
-            return;
+            var result = await AdminOrdersClient.GetPendingInventoryFulfillmentAsync(page, PageSize, _lifetimeCts.Token);
+            if (_disposed || RedirectIfAuthRequired(result.RequiresAuthentication)) return;
+            _pendingInventory = result.Success && result.Data is not null ? result.Data : new();
+            _inventoryError = result.ErrorMessage;
         }
-
-        _orders = ordersResult.Success && ordersResult.Data is not null
-            ? ordersResult.Data
-            : new PagedResultDto<AdminAssignableOrderDto>();
-        _agents = agentsResult.Success && agentsResult.Data is not null
-            ? agentsResult.Data
-            : Array.Empty<AgentSummaryDto>();
-        _errorMessage = ordersResult.ErrorMessage ?? agentsResult.ErrorMessage;
-        _loading = false;
+        catch (OperationCanceledException) when (_disposed) { }
+        finally { if (!_disposed) _inventoryLoading = false; }
     }
 
     private async Task AssignAsync(Guid orderId)
     {
         var agentId = SelectedAgent(orderId);
-        if (!agentId.HasValue)
+        if (!agentId.HasValue) { _errorMessage = "Select an agent before assigning the order."; return; }
+        _actionBusy = true; _errorMessage = null;
+        try
         {
-            _errorMessage = "Select an agent before assigning the order.";
-            return;
+            var result = await AdminOrdersClient.AssignAsync(orderId, agentId.Value, SelectedNotes(orderId), _lifetimeCts.Token);
+            if (_disposed || RedirectIfAuthRequired(result.RequiresAuthentication)) return;
+            if (!result.Success) { _errorMessage = result.ErrorMessage ?? "Unable to assign the order."; return; }
+            _selectedAgents.Remove(orderId); _assignmentNotes.Remove(orderId);
+            await RequestQueuesReloadAsync(CurrentPage);
         }
+        catch (OperationCanceledException) when (_disposed) { }
+        finally { if (!_disposed) _actionBusy = false; }
+    }
 
-        _actionBusy = true;
-        _errorMessage = null;
-        var result = await AdminOrdersClient.AssignAsync(
-            orderId,
-            agentId.Value,
-            SelectedNotes(orderId));
-        if (RedirectIfAuthRequired(result.RequiresAuthentication))
+    private void OpenRetryDialog(AdminPendingInventoryFulfillmentDto order)
+    {
+        if (_disposed || _retryBusy || !order.CanRetryInventoryFulfillment) return;
+        _retryOrder = order; _retryError = null; _retryMessage = null; _retryDialogOpen = true;
+    }
+
+    private Task HandleRetryDialogChangedAsync(bool open) { if (!_retryBusy) _retryDialogOpen = open; return Task.CompletedTask; }
+
+    private async Task RetryInventoryFulfillmentAsync()
+    {
+        if (_disposed || _retryBusy || _retryOrder is not { CanRetryInventoryFulfillment: true } order) return;
+        _retryBusy = true; _retryError = null; _retryMessage = null;
+        try
         {
-            return;
+            var result = await AdminOrdersClient.RetryInventoryCodeFulfillmentAsync(order.OrderId, _lifetimeCts.Token);
+            if (_disposed || RedirectIfAuthRequired(result.RequiresAuthentication)) return;
+            if (result.Success && result.Data is not null) _retryMessage = RetryOutcomeMessage(result.Data.Outcome);
+            else _retryError = result.ErrorMessage ?? "Unable to retry inventory fulfillment.";
+            await RequestQueuesReloadAsync(CurrentPage);
         }
-
-        if (!result.Success)
-        {
-            _errorMessage = result.ErrorMessage ?? "Unable to assign the order.";
-            _actionBusy = false;
-            return;
-        }
-
-        _selectedAgents.Remove(orderId);
-        _assignmentNotes.Remove(orderId);
-        await LoadAsync(Math.Max(_orders.Page, 1));
-        _actionBusy = false;
+        catch (OperationCanceledException) when (_disposed) { }
+        finally { if (!_disposed) { _retryBusy = false; _retryDialogOpen = false; _retryOrder = null; } }
     }
 
-    private Guid? SelectedAgent(Guid orderId)
-    {
-        return _selectedAgents.TryGetValue(orderId, out var agentId)
-            ? agentId
-            : null;
-    }
-
-    private void SetSelectedAgent(Guid orderId, Guid? agentId)
-    {
-        _selectedAgents[orderId] = agentId;
-    }
-
-    private string? SelectedNotes(Guid orderId)
-    {
-        return _assignmentNotes.TryGetValue(orderId, out var notes)
-            ? notes
-            : null;
-    }
-
-    private void SetSelectedNotes(Guid orderId, string? notes)
-    {
-        _assignmentNotes[orderId] = notes;
-    }
-
-    private void NavigateToPage(int page)
-    {
-        var query = new Dictionary<string, object?>
-        {
-            ["page"] = page <= 1 ? null : page
-        };
-
-        Navigation.NavigateTo(
-            Navigation.GetUriWithQueryParameters("/ui/admin/orders", query),
-            replace: true);
-    }
-
-    private bool RedirectIfAuthRequired(bool requiresAuthentication)
-    {
-        if (!requiresAuthentication)
-        {
-            return false;
-        }
-
-        Navigation.NavigateTo("/Account/Login");
-        return true;
-    }
-
-    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
-    {
-        return ReloadFromRealtimeAsync();
-    }
-
-    private Task HandleOrderAssignedAsync(OrderAssignedRealtimeDto message)
-    {
-        return ReloadFromRealtimeAsync();
-    }
-
-    private Task ReloadFromRealtimeAsync()
-    {
-        return InvokeAsync(async () =>
-        {
-            await LoadAsync(Math.Max(_orders.Page, 1));
-            StateHasChanged();
-        });
-    }
-
-    private static string VariantLabel(string? planName, int? durationDays, string? regionCode)
-    {
-        var parts = new[] { planName, durationDays.HasValue ? $"{durationDays.Value} days" : null, regionCode }
-            .Where(part => !string.IsNullOrWhiteSpace(part));
-        return string.Join(" / ", parts);
-    }
+    private Guid? SelectedAgent(Guid orderId) => _selectedAgents.TryGetValue(orderId, out var value) ? value : null;
+    private void SetSelectedAgent(Guid orderId, Guid? value) => _selectedAgents[orderId] = value;
+    private string? SelectedNotes(Guid orderId) => _assignmentNotes.TryGetValue(orderId, out var value) ? value : null;
+    private void SetSelectedNotes(Guid orderId, string? value) => _assignmentNotes[orderId] = value;
+    private bool RedirectIfAuthRequired(bool required) { if (!required) return false; Navigation.NavigateTo("/Account/Login"); return true; }
+    private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto _) => RequestQueuesReloadAsync(CurrentPage);
+    private Task HandleOrderAssignedAsync(OrderAssignedRealtimeDto _) => RequestQueuesReloadAsync(CurrentPage);
+    private static string VariantLabel(string? name, int? days, string? region) => string.Join(" / ", new[] { name, days.HasValue ? $"{days.Value} days" : null, region }.Where(value => !string.IsNullOrWhiteSpace(value)));
+    private static string FormatNullable(DateTime? value) => value.HasValue ? UserOrderDisplay.FormatDateTime(value.Value) : "-";
+    private static string InventoryStateLabel(AdminInventoryFulfillmentState state) => state switch { AdminInventoryFulfillmentState.AwaitingStock => "Awaiting stock", AdminInventoryFulfillmentState.RecoverableAllocation => "Recoverable allocation", AdminInventoryFulfillmentState.Inconsistent => "Inconsistent", AdminInventoryFulfillmentState.Fulfilled => "Fulfilled", _ => "Not applicable" };
+    private static string InventoryStateTone(AdminInventoryFulfillmentState state) => state switch { AdminInventoryFulfillmentState.AwaitingStock => "warning", AdminInventoryFulfillmentState.RecoverableAllocation => "info", AdminInventoryFulfillmentState.Inconsistent => "danger", AdminInventoryFulfillmentState.Fulfilled => "success", _ => "neutral" };
+    private static string RetryOutcomeMessage(InventoryCodeFulfillmentOutcome outcome) => outcome switch { InventoryCodeFulfillmentOutcome.Fulfilled => "Inventory fulfillment completed.", InventoryCodeFulfillmentOutcome.ResumedExistingAllocation => "Existing inventory allocation resumed.", InventoryCodeFulfillmentOutcome.AlreadyFulfilled => "This order was already fulfilled.", InventoryCodeFulfillmentOutcome.NoInventory => "No inventory is currently available. The order remains in the queue.", _ => "Inventory fulfillment was refreshed." };
 
     public void Dispose()
     {
-        _realtimeSubscriptions.Dispose();
+        if (_disposed) return;
+        _disposed = true; _lifetimeCts.Cancel(); _realtimeRefresh?.Dispose(); _realtimeSubscriptions.Dispose(); _retryBusy = false; _retryOrder = null; _lifetimeCts.Dispose();
     }
 }

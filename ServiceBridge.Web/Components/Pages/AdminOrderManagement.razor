@@ -140,6 +140,53 @@ else
                     </div>
                 </section>
 
+                @if (_order.ServiceFulfillmentMode == "InventoryCode")
+                {
+                    <section class="sb-detail-panel sb-order-detail-card">
+                        <div class="sb-card-heading">
+                            <div>
+                                <span class="sb-eyebrow">InventoryCode</span>
+                                <h2>Inventory fulfillment</h2>
+                            </div>
+                            <StatusBadge Text="@InventoryStateLabel(_order.InventoryFulfillmentState)"
+                                         Tone="@InventoryStateTone(_order.InventoryFulfillmentState)" />
+                        </div>
+
+                        <dl class="sb-fact-list">
+                            <div><dt>Service fulfillment mode</dt><dd>@_order.ServiceFulfillmentMode</dd></div>
+                            <div><dt>Inventory fulfillment state</dt><dd>@InventoryStateLabel(_order.InventoryFulfillmentState)</dd></div>
+                            <div><dt>Allocation status</dt><dd>@(_order.InventoryAllocationStatus ?? "No allocation")</dd></div>
+                            <div><dt>Retry eligibility</dt><dd>@(_order.CanRetryInventoryFulfillment ? "Eligible" : "Not eligible")</dd></div>
+                        </dl>
+
+                        @if (!string.IsNullOrWhiteSpace(_retryMessage))
+                        {
+                            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Dense="true">@_retryMessage</MudAlert>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(_retryError))
+                        {
+                            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true">@_retryError</MudAlert>
+                        }
+
+                        <div class="sb-grid-toolbar-actions">
+                            @if (_order.CanRetryInventoryFulfillment)
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Disabled="@_retryBusy"
+                                           StartIcon="@Icons.Material.Outlined.Refresh"
+                                           OnClick="OpenRetryDialog">
+                                    Retry fulfillment
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <StatusBadge Text="Retry unavailable" Tone="neutral" />
+                            }
+                        </div>
+                    </section>
+                }
+
                 <PaymentCard Title="Payment information"
                              Payments="@_order.Payments" />
 
@@ -184,6 +231,14 @@ else
     </PageSection>
 }
 
+<ConfirmationDialog Open="_retryDialogOpen"
+                    OpenChanged="HandleRetryDialogChangedAsync"
+                    Title="Retry inventory fulfillment"
+                    Description="The system will attempt allocation from available inventory. Inventory codes are never shown or requested here."
+                    ConfirmText="@(_retryBusy ? "Retrying..." : "Retry fulfillment")"
+                    IsBusy="_retryBusy"
+                    OnConfirmed="RetryInventoryFulfillmentAsync" />
+
 @code {
     private readonly RealtimeSubscriptionCollection _realtimeSubscriptions = new();
     private readonly CancellationTokenSource _lifetimeCts = new();
@@ -191,14 +246,19 @@ else
     private long _loadGeneration;
     private Guid _requestedOrderId;
     private long _revealOperationVersion;
+    private long _retryOperationVersion;
     [Parameter] public Guid OrderId { get; set; }
 
     private bool _disposed;
     private bool _loading = true;
     private bool _revealBusy;
+    private bool _retryBusy;
+    private bool _retryDialogOpen;
     private bool _credentialsRevealed;
     private string? _errorMessage;
     private string? _revealError;
+    private string? _retryError;
+    private string? _retryMessage;
     private AdminOrderDetailDto? _order;
     private IReadOnlyList<CredentialDisplayItem> _revealedCredentialItems =
         Array.Empty<CredentialDisplayItem>();
@@ -402,6 +462,82 @@ else
         }
     }
 
+    private void OpenRetryDialog()
+    {
+        if (_disposed || _retryBusy || _order?.CanRetryInventoryFulfillment != true)
+        {
+            return;
+        }
+
+        _retryError = null;
+        _retryMessage = null;
+        _retryDialogOpen = true;
+    }
+
+    private Task HandleRetryDialogChangedAsync(bool open)
+    {
+        if (!_retryBusy)
+        {
+            _retryDialogOpen = open;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task RetryInventoryFulfillmentAsync()
+    {
+        if (_disposed || _retryBusy || _order?.CanRetryInventoryFulfillment != true)
+        {
+            return;
+        }
+
+        var generation = _loadGeneration;
+        var orderId = OrderId;
+        var operationVersion = ++_retryOperationVersion;
+        _retryBusy = true;
+        _retryError = null;
+        _retryMessage = null;
+
+        try
+        {
+            var result = await AdminOrdersClient.RetryInventoryCodeFulfillmentAsync(
+                orderId,
+                _lifetimeCts.Token);
+            if (!IsCurrentRetryOperation(operationVersion, generation, orderId))
+            {
+                return;
+            }
+
+            if (result.RequiresAuthentication)
+            {
+                Navigation.NavigateTo("/Account/Login");
+                return;
+            }
+
+            if (result.Success && result.Data is not null)
+            {
+                _retryMessage = RetryOutcomeMessage(result.Data.Outcome);
+            }
+            else
+            {
+                _retryError = result.ErrorMessage ?? "Unable to retry inventory fulfillment.";
+            }
+
+            await RequestOrderReloadAsync();
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
+        finally
+        {
+            if (IsCurrentRetryOperation(operationVersion, orderId))
+            {
+                _retryBusy = false;
+                _retryDialogOpen = false;
+            }
+        }
+    }
+
     private Task HandleOrderUpdatedAsync(OrderUpdatedRealtimeDto message)
     {
         return RequestRealtimeOrderReloadAsync(message.OrderId);
@@ -457,13 +593,34 @@ else
                orderId == OrderId;
     }
 
+    private bool IsCurrentRetryOperation(
+        long operationVersion,
+        long generation,
+        Guid orderId)
+    {
+        return IsCurrentRetryOperation(operationVersion, orderId) &&
+               IsCurrentLoad(generation, orderId);
+    }
+
+    private bool IsCurrentRetryOperation(long operationVersion, Guid orderId)
+    {
+        return !_disposed &&
+               operationVersion == _retryOperationVersion &&
+               orderId == OrderId;
+    }
+
     private void ResetRevealStateForRouteChange()
     {
         _revealOperationVersion++;
+        _retryOperationVersion++;
         _revealBusy = false;
         _revealError = null;
         _credentialsRevealed = false;
         _revealedCredentialItems = Array.Empty<CredentialDisplayItem>();
+        _retryBusy = false;
+        _retryDialogOpen = false;
+        _retryError = null;
+        _retryMessage = null;
     }
 
     private bool TryApplyRealtimeState(Action apply)
@@ -477,6 +634,42 @@ else
         return value.HasValue ? UserOrderDisplay.FormatDateTime(value.Value) : "-";
     }
 
+    private static string InventoryStateLabel(AdminInventoryFulfillmentState state)
+    {
+        return state switch
+        {
+            AdminInventoryFulfillmentState.AwaitingStock => "Awaiting stock",
+            AdminInventoryFulfillmentState.RecoverableAllocation => "Recoverable allocation",
+            AdminInventoryFulfillmentState.Inconsistent => "Inconsistent",
+            AdminInventoryFulfillmentState.Fulfilled => "Fulfilled",
+            _ => "Not applicable"
+        };
+    }
+
+    private static string InventoryStateTone(AdminInventoryFulfillmentState state)
+    {
+        return state switch
+        {
+            AdminInventoryFulfillmentState.AwaitingStock => "warning",
+            AdminInventoryFulfillmentState.RecoverableAllocation => "info",
+            AdminInventoryFulfillmentState.Inconsistent => "danger",
+            AdminInventoryFulfillmentState.Fulfilled => "success",
+            _ => "neutral"
+        };
+    }
+
+    private static string RetryOutcomeMessage(InventoryCodeFulfillmentOutcome outcome)
+    {
+        return outcome switch
+        {
+            InventoryCodeFulfillmentOutcome.Fulfilled => "Inventory fulfillment completed.",
+            InventoryCodeFulfillmentOutcome.ResumedExistingAllocation => "Existing inventory allocation resumed.",
+            InventoryCodeFulfillmentOutcome.AlreadyFulfilled => "This order was already fulfilled.",
+            InventoryCodeFulfillmentOutcome.NoInventory => "No inventory is currently available.",
+            _ => "Inventory fulfillment was refreshed."
+        };
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -486,7 +679,10 @@ else
 
         _disposed = true;
         _revealOperationVersion++;
+        _retryOperationVersion++;
         _revealBusy = false;
+        _retryBusy = false;
+        _retryDialogOpen = false;
         _lifetimeCts.Cancel();
         _realtimeRefresh?.Dispose();
         _realtimeSubscriptions.Dispose();
