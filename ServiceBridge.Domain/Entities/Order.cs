@@ -53,7 +53,8 @@ public class Order : BaseEntity
 
     public bool CanTransitionTo(OrderStatus newStatus)
     {
-        return OrderStatusTransitions.CanTransition(Status, newStatus);
+        return newStatus != OrderStatus.Assigned &&
+               CanApplyTransition(newStatus);
     }
 
     public void TransitionTo(
@@ -67,37 +68,13 @@ public class Order : BaseEntity
             throw new InvalidOrderTransitionException(Status, newStatus);
         }
 
-        var previousStatus = Status;
-        Status = newStatus;
-        UpdatedAt = changedAtUtc;
-
-        switch (newStatus)
-        {
-            case OrderStatus.Paid:
-                PaidAt = changedAtUtc;
-                break;
-            case OrderStatus.Assigned:
-                AssignedAt = changedAtUtc;
-                break;
-            case OrderStatus.Completed:
-                CompletedAt = changedAtUtc;
-                break;
-            case OrderStatus.Cancelled:
-                CancelledAt = changedAtUtc;
-                break;
-        }
-
-        _statusHistory.Add(new OrderStatusHistory
-        {
-            OrderId = Id,
-            PreviousStatus = previousStatus,
-            NewStatus = newStatus,
-            ActorType = OrderLogActorType.User,
-            ActorId = changedByUserId,
-            ChangedByUserId = changedByUserId,
-            Note = note,
-            CreatedAt = changedAtUtc
-        });
+        ApplyTransition(
+            newStatus,
+            changedAtUtc,
+            OrderLogActorType.User,
+            changedByUserId,
+            changedByUserId,
+            note);
     }
 
     public void MoveToWaitingForPayment(Guid userId, DateTime changedAtUtc)
@@ -146,18 +123,14 @@ public class Order : BaseEntity
             throw new InvalidOrderFulfillmentOperationException();
         }
 
-        if (Status != OrderStatus.Paid ||
+        if (!CanApplyTransition(OrderStatus.Assigned) ||
             AssignedAgentId.HasValue)
         {
             throw new InvalidOrderTransitionException(Status, OrderStatus.Assigned);
         }
 
         var assignedAtUtc = DateTime.UtcNow;
-        var previousStatus = Status;
-        Status = OrderStatus.Assigned;
         AssignedAgentId = agentId;
-        AssignedAt = assignedAtUtc;
-        UpdatedAt = assignedAtUtc;
 
         _assignments.Add(new AgentAssignment
         {
@@ -171,17 +144,13 @@ public class Order : BaseEntity
             CreatedAt = assignedAtUtc
         });
 
-        _statusHistory.Add(new OrderStatusHistory
-        {
-            OrderId = Id,
-            PreviousStatus = previousStatus,
-            NewStatus = OrderStatus.Assigned,
-            ActorType = OrderLogActorType.Admin,
-            ActorId = adminId,
-            ChangedByUserId = adminId,
-            Note = statusNote,
-            CreatedAt = assignedAtUtc
-        });
+        ApplyTransition(
+            OrderStatus.Assigned,
+            assignedAtUtc,
+            OrderLogActorType.Admin,
+            adminId,
+            adminId,
+            statusNote);
     }
 
     public void StartProcessing(Guid agentId, string? note = null)
@@ -357,6 +326,52 @@ public class Order : BaseEntity
             NewStatus = Status,
             ActorType = OrderLogActorType.User,
             ActorId = changedByUserId,
+            ChangedByUserId = changedByUserId,
+            Note = note,
+            CreatedAt = changedAtUtc
+        });
+    }
+
+    private bool CanApplyTransition(OrderStatus newStatus)
+    {
+        return OrderStatusTransitions.CanTransition(Status, newStatus);
+    }
+
+    private void ApplyTransition(
+        OrderStatus newStatus,
+        DateTime changedAtUtc,
+        OrderLogActorType actorType,
+        Guid actorId,
+        Guid? changedByUserId,
+        string? note)
+    {
+        var previousStatus = Status;
+        Status = newStatus;
+        UpdatedAt = changedAtUtc;
+
+        switch (newStatus)
+        {
+            case OrderStatus.Paid:
+                PaidAt = changedAtUtc;
+                break;
+            case OrderStatus.Assigned:
+                AssignedAt = changedAtUtc;
+                break;
+            case OrderStatus.Completed:
+                CompletedAt = changedAtUtc;
+                break;
+            case OrderStatus.Cancelled:
+                CancelledAt = changedAtUtc;
+                break;
+        }
+
+        _statusHistory.Add(new OrderStatusHistory
+        {
+            OrderId = Id,
+            PreviousStatus = previousStatus,
+            NewStatus = newStatus,
+            ActorType = actorType,
+            ActorId = actorId,
             ChangedByUserId = changedByUserId,
             Note = note,
             CreatedAt = changedAtUtc
