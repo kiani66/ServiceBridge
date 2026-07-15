@@ -26,6 +26,10 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         entity.Property(x => x.FulfillmentMode)
             .IsRequired();
 
+        entity.Property(x => x.ServiceFulfillmentModeSnapshot)
+            .HasConversion<int>()
+            .IsRequired();
+
         entity.Property(x => x.Status)
             .IsRequired();
 
@@ -115,6 +119,10 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             table.HasCheckConstraint(
                 "CK_Orders_FinalAmount_Matches",
                 "[FinalAmountIrr] = [BaseAmountIrr] + [ProfitAmountIrr]");
+
+            table.HasCheckConstraint(
+                "CK_Orders_ServiceFulfillmentModeSnapshot_Valid",
+                "[ServiceFulfillmentModeSnapshot] IN (1, 2, 3, 4)");
         });
     }
 }

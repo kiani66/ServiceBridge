@@ -13,13 +13,17 @@ public class AdminOrdersController : BaseApiController
 {
     private readonly IAdminOrderQueryService _queryService;
     private readonly IAdminOrderAssignmentService _assignmentService;
+    private readonly IAdminInventoryCodeFulfillmentService
+        _inventoryCodeFulfillmentService;
 
     public AdminOrdersController(
         IAdminOrderQueryService queryService,
-        IAdminOrderAssignmentService assignmentService)
+        IAdminOrderAssignmentService assignmentService,
+        IAdminInventoryCodeFulfillmentService inventoryCodeFulfillmentService)
     {
         _queryService = queryService;
         _assignmentService = assignmentService;
+        _inventoryCodeFulfillmentService = inventoryCodeFulfillmentService;
     }
 
     [HttpGet]
@@ -45,6 +49,15 @@ public class AdminOrdersController : BaseApiController
     {
         return ToActionResult(
             await _queryService.GetPaidUnassignedOrdersAsync(page, pageSize));
+    }
+
+    [HttpGet("inventory-fulfillment/pending")]
+    public async Task<IActionResult> GetPendingInventoryFulfillment(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = IAdminOrderQueryService.DefaultPageSize)
+    {
+        return ToActionResult(
+            await _queryService.GetPendingInventoryFulfillmentAsync(page, pageSize));
     }
 
     [HttpGet("agents")]
@@ -127,5 +140,22 @@ public class AdminOrdersController : BaseApiController
             orderId,
             request);
         return ToActionResult(result);
+    }
+
+    [HttpPost("{orderId:guid}/inventory-fulfillment/retry")]
+    public async Task<IActionResult> RetryInventoryCodeFulfillment(
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var adminId))
+        {
+            return UnauthorizedServiceResult();
+        }
+
+        return ToActionResult(
+            await _inventoryCodeFulfillmentService.RetryAsync(
+                adminId,
+                orderId,
+                cancellationToken));
     }
 }

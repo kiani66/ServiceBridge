@@ -25,6 +25,21 @@ public class AdminOrderQueryTests
     }
 
     [Fact]
+    public async Task PendingInventoryFulfillment_BoundsPagingBeforeRepositoryCall()
+    {
+        var repository = new FakeAdminOrderQueryRepository();
+        var service = CreateService(repository);
+
+        var result = await service.GetPendingInventoryFulfillmentAsync(0, 1000);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, repository.LastPendingPage);
+        Assert.Equal(
+            IAdminOrderQueryService.MaximumPageSize,
+            repository.LastPendingPageSize);
+    }
+
+    [Fact]
     public async Task AuditEvents_BoundsPagingBeforeRepositoryCall()
     {
         var repository = new FakeAdminOrderQueryRepository();
@@ -199,6 +214,8 @@ public class AdminOrderQueryTests
         public int? LastPageSize { get; private set; }
         public int? LastOrderPage { get; private set; }
         public int? LastOrderPageSize { get; private set; }
+        public int? LastPendingPage { get; private set; }
+        public int? LastPendingPageSize { get; private set; }
         public OrderStatus? LastOrderStatus { get; private set; }
         public string? LastOrderSearch { get; private set; }
         public Guid? LastAssignedAgentId { get; private set; }
@@ -236,6 +253,19 @@ public class AdminOrderQueryTests
                 Page = page,
                 PageSize = pageSize
             });
+        }
+
+        public Task<PagedResultDto<AdminPendingInventoryFulfillmentDto>>
+            GetPendingInventoryFulfillmentAsync(int page, int pageSize)
+        {
+            LastPendingPage = page;
+            LastPendingPageSize = pageSize;
+            return Task.FromResult(
+                new PagedResultDto<AdminPendingInventoryFulfillmentDto>
+                {
+                    Page = page,
+                    PageSize = pageSize
+                });
         }
 
         public Task<IReadOnlyCollection<AgentSummaryDto>> GetActiveAgentsAsync()

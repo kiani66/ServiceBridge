@@ -10,12 +10,14 @@ internal sealed class FakeAuditLogWriter : IAuditLogWriter
     public bool ThrowOnQueue { get; set; }
     public int? ThrowOnQueueCall { get; set; }
     public int QueueCallCount { get; private set; }
+    public IList<string>? Operations { get; set; }
 
     public Task QueueAsync(
         AuditLogEntry entry,
         CancellationToken cancellationToken = default)
     {
         QueueCallCount++;
+        Operations?.Add("audit.queue");
         if (ThrowOnQueue || ThrowOnQueueCall == QueueCallCount)
         {
             throw new InvalidOperationException("Audit queue failed.");

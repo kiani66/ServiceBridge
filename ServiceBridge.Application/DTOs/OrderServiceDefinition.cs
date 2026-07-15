@@ -22,6 +22,7 @@ public class OrderServiceDefinition
     public string? VariantRegionCode { get; set; }
     public string CurrencyCode { get; set; } = string.Empty;
     public decimal BasePrice { get; set; }
+    public FulfillmentMode ServiceFulfillmentMode { get; set; } = FulfillmentMode.ManualAgent;
     public bool SupportsUseExistingAccount { get; set; } = true;
     public bool SupportsCreateNewAccount { get; set; }
     public IReadOnlyCollection<OrderFieldDefinition> RequiredFields { get; set; } =

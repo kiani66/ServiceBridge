@@ -14,6 +14,8 @@ public interface IAdminOrderQueryRepository
     Task<PagedResultDto<AdminAssignableOrderDto>> GetPaidUnassignedOrdersAsync(
         int page,
         int pageSize);
+    Task<PagedResultDto<AdminPendingInventoryFulfillmentDto>>
+        GetPendingInventoryFulfillmentAsync(int page, int pageSize);
     Task<IReadOnlyCollection<AgentSummaryDto>> GetActiveAgentsAsync();
     Task<AdminOrderDashboardSummaryDto> GetDashboardSummaryAsync();
     Task<AdminOrderDetailDto?> GetOrderDetailAsync(Guid adminId, Guid orderId);

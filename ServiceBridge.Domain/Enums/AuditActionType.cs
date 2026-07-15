@@ -16,5 +16,6 @@ public enum AuditActionType
     SettingsChanged = 12,
     TicketClosed = 13,
     InventoryItemCreated = 14,
-    InventoryItemDisabled = 15
+    InventoryItemDisabled = 15,
+    InventoryFulfillmentRetried = 16
 }

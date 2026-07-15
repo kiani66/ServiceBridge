@@ -70,6 +70,20 @@ public sealed class AdminOrdersClient
             cancellationToken);
     }
 
+    public Task<AdminOrdersApiResult<PagedResultDto<AdminPendingInventoryFulfillmentDto>>>
+        GetPendingInventoryFulfillmentAsync(
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default)
+    {
+        return SendAsync<PagedResultDto<AdminPendingInventoryFulfillmentDto>>(
+            client => client.GetAsync(
+                $"api/admin/orders/inventory-fulfillment/pending?page={Math.Max(page, 1)}&pageSize={pageSize}",
+                cancellationToken),
+            "Unable to load the inventory fulfillment queue right now.",
+            cancellationToken);
+    }
+
     public Task<AdminOrdersApiResult<IReadOnlyCollection<AgentSummaryDto>>>
         GetActiveAgentsAsync(CancellationToken cancellationToken = default)
     {
@@ -203,6 +217,20 @@ public sealed class AdminOrdersClient
                 },
                 cancellationToken),
             "Unable to assign this order right now.",
+            cancellationToken);
+    }
+
+    public Task<AdminOrdersApiResult<RetryInventoryCodeFulfillmentResultDto>>
+        RetryInventoryCodeFulfillmentAsync(
+            Guid orderId,
+            CancellationToken cancellationToken = default)
+    {
+        return SendAsync<RetryInventoryCodeFulfillmentResultDto>(
+            client => client.PostAsync(
+                $"api/admin/orders/{orderId}/inventory-fulfillment/retry",
+                content: null,
+                cancellationToken),
+            "Unable to retry inventory fulfillment right now.",
             cancellationToken);
     }
 

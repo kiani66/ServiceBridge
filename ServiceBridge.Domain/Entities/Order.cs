@@ -1,6 +1,7 @@
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Domain.Exceptions;
 using ServiceBridge.Domain.Orders;
+using ServiceFulfillmentMode = ServiceBridge.Domain.Enums.FulfillmentMode;
 
 namespace ServiceBridge.Domain.Entities;
 
@@ -18,6 +19,8 @@ public class Order : BaseEntity
     public OrderType OrderType { get; set; }
     public OrderFulfillmentMode FulfillmentMode { get; internal set; } =
         OrderFulfillmentMode.UseExistingAccount;
+    public ServiceFulfillmentMode ServiceFulfillmentModeSnapshot { get; internal set; } =
+        ServiceFulfillmentMode.ManualAgent;
     public OrderStatus Status { get; internal set; }
     public decimal ForeignPrice { get; internal set; }
     public string CurrencyCode { get; internal set; } = string.Empty;
@@ -50,7 +53,8 @@ public class Order : BaseEntity
 
     public bool CanTransitionTo(OrderStatus newStatus)
     {
-        return OrderStatusTransitions.CanTransition(Status, newStatus);
+        return newStatus != OrderStatus.Assigned &&
+               CanApplyTransition(newStatus);
     }
 
     public void TransitionTo(
@@ -64,37 +68,13 @@ public class Order : BaseEntity
             throw new InvalidOrderTransitionException(Status, newStatus);
         }
 
-        var previousStatus = Status;
-        Status = newStatus;
-        UpdatedAt = changedAtUtc;
-
-        switch (newStatus)
-        {
-            case OrderStatus.Paid:
-                PaidAt = changedAtUtc;
-                break;
-            case OrderStatus.Assigned:
-                AssignedAt = changedAtUtc;
-                break;
-            case OrderStatus.Completed:
-                CompletedAt = changedAtUtc;
-                break;
-            case OrderStatus.Cancelled:
-                CancelledAt = changedAtUtc;
-                break;
-        }
-
-        _statusHistory.Add(new OrderStatusHistory
-        {
-            OrderId = Id,
-            PreviousStatus = previousStatus,
-            NewStatus = newStatus,
-            ActorType = OrderLogActorType.User,
-            ActorId = changedByUserId,
-            ChangedByUserId = changedByUserId,
-            Note = note,
-            CreatedAt = changedAtUtc
-        });
+        ApplyTransition(
+            newStatus,
+            changedAtUtc,
+            OrderLogActorType.User,
+            changedByUserId,
+            changedByUserId,
+            note);
     }
 
     public void MoveToWaitingForPayment(Guid userId, DateTime changedAtUtc)
@@ -138,17 +118,19 @@ public class Order : BaseEntity
         string? assignmentNotes,
         string statusNote)
     {
-        if (Status != OrderStatus.Paid || AssignedAgentId.HasValue)
+        if (ServiceFulfillmentModeSnapshot != ServiceFulfillmentMode.ManualAgent)
+        {
+            throw new InvalidOrderFulfillmentOperationException();
+        }
+
+        if (!CanApplyTransition(OrderStatus.Assigned) ||
+            AssignedAgentId.HasValue)
         {
             throw new InvalidOrderTransitionException(Status, OrderStatus.Assigned);
         }
 
         var assignedAtUtc = DateTime.UtcNow;
-        var previousStatus = Status;
-        Status = OrderStatus.Assigned;
         AssignedAgentId = agentId;
-        AssignedAt = assignedAtUtc;
-        UpdatedAt = assignedAtUtc;
 
         _assignments.Add(new AgentAssignment
         {
@@ -162,22 +144,36 @@ public class Order : BaseEntity
             CreatedAt = assignedAtUtc
         });
 
-        _statusHistory.Add(new OrderStatusHistory
-        {
-            OrderId = Id,
-            PreviousStatus = previousStatus,
-            NewStatus = OrderStatus.Assigned,
-            ActorType = OrderLogActorType.Admin,
-            ActorId = adminId,
-            ChangedByUserId = adminId,
-            Note = statusNote,
-            CreatedAt = assignedAtUtc
-        });
+        ApplyTransition(
+            OrderStatus.Assigned,
+            assignedAtUtc,
+            OrderLogActorType.Admin,
+            adminId,
+            adminId,
+            statusNote);
     }
 
     public void StartProcessing(Guid agentId, string? note = null)
     {
         TransitionByAgent(agentId, OrderStatus.Processing, note);
+    }
+
+    public void StartInventoryFulfillment(Guid systemActorId, string? note = null)
+    {
+        TransitionForInventoryFulfillment(
+            OrderStatus.Paid,
+            OrderStatus.Processing,
+            systemActorId,
+            note);
+    }
+
+    public void CompleteInventoryFulfillment(Guid systemActorId, string? note = null)
+    {
+        TransitionForInventoryFulfillment(
+            OrderStatus.Processing,
+            OrderStatus.Completed,
+            systemActorId,
+            note);
     }
 
     public void RequestCustomerAction(Guid agentId, string note)
@@ -336,6 +332,52 @@ public class Order : BaseEntity
         });
     }
 
+    private bool CanApplyTransition(OrderStatus newStatus)
+    {
+        return OrderStatusTransitions.CanTransition(Status, newStatus);
+    }
+
+    private void ApplyTransition(
+        OrderStatus newStatus,
+        DateTime changedAtUtc,
+        OrderLogActorType actorType,
+        Guid actorId,
+        Guid? changedByUserId,
+        string? note)
+    {
+        var previousStatus = Status;
+        Status = newStatus;
+        UpdatedAt = changedAtUtc;
+
+        switch (newStatus)
+        {
+            case OrderStatus.Paid:
+                PaidAt = changedAtUtc;
+                break;
+            case OrderStatus.Assigned:
+                AssignedAt = changedAtUtc;
+                break;
+            case OrderStatus.Completed:
+                CompletedAt = changedAtUtc;
+                break;
+            case OrderStatus.Cancelled:
+                CancelledAt = changedAtUtc;
+                break;
+        }
+
+        _statusHistory.Add(new OrderStatusHistory
+        {
+            OrderId = Id,
+            PreviousStatus = previousStatus,
+            NewStatus = newStatus,
+            ActorType = actorType,
+            ActorId = actorId,
+            ChangedByUserId = changedByUserId,
+            Note = note,
+            CreatedAt = changedAtUtc
+        });
+    }
+
     private void TransitionByAgent(
         Guid agentId,
         OrderStatus newStatus,
@@ -366,6 +408,41 @@ public class Order : BaseEntity
             ActorType = OrderLogActorType.Agent,
             ActorId = agentId,
             ChangedByUserId = agentId,
+            Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+            CreatedAt = changedAtUtc
+        });
+    }
+
+    private void TransitionForInventoryFulfillment(
+        OrderStatus requiredCurrentStatus,
+        OrderStatus newStatus,
+        Guid systemActorId,
+        string? note)
+    {
+        if (ServiceFulfillmentModeSnapshot != ServiceFulfillmentMode.InventoryCode ||
+            Status != requiredCurrentStatus)
+        {
+            throw new InvalidOrderTransitionException(Status, newStatus);
+        }
+
+        var changedAtUtc = DateTime.UtcNow;
+        var previousStatus = Status;
+        Status = newStatus;
+        UpdatedAt = changedAtUtc;
+
+        if (newStatus == OrderStatus.Completed)
+        {
+            CompletedAt = changedAtUtc;
+        }
+
+        _statusHistory.Add(new OrderStatusHistory
+        {
+            OrderId = Id,
+            PreviousStatus = previousStatus,
+            NewStatus = newStatus,
+            ActorType = OrderLogActorType.System,
+            ActorId = systemActorId,
+            ChangedByUserId = null,
             Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
             CreatedAt = changedAtUtc
         });

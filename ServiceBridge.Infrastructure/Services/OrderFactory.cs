@@ -33,6 +33,7 @@ public class OrderFactory : IOrderFactory
             ServiceVariantId = context.Service.ServiceVariantId,
             OrderType = context.Request.OrderType,
             FulfillmentMode = context.Request.FulfillmentMode,
+            ServiceFulfillmentModeSnapshot = context.Service.ServiceFulfillmentMode,
             Status = OrderStatus.Created,
             ForeignPrice = context.Pricing.ForeignPrice,
             CurrencyCode = context.Service.CurrencyCode,

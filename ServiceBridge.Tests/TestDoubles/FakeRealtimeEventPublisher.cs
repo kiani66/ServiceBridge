@@ -11,6 +11,7 @@ internal sealed class FakeRealtimeEventPublisher : IRealtimeEventPublisher
     public List<CustomerActionChangedRealtimeEvent> CustomerActionChanges { get; } = new();
     public List<TicketUpdatedRealtimeEvent> TicketUpdates { get; } = new();
     public bool ThrowOnOrderUpdate { get; set; }
+    public IList<string>? Operations { get; set; }
 
     public Task PublishNotificationReceivedAsync(
         Guid userId,
@@ -25,6 +26,7 @@ internal sealed class FakeRealtimeEventPublisher : IRealtimeEventPublisher
         OrderUpdatedRealtimeEvent orderUpdated,
         CancellationToken cancellationToken = default)
     {
+        Operations?.Add("realtime.order.publish");
         if (ThrowOnOrderUpdate)
         {
             throw new InvalidOperationException("Realtime notification failed.");

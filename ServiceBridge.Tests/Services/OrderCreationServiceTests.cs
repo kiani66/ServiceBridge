@@ -49,6 +49,27 @@ public class OrderCreationServiceTests
         Assert.Equal(OrderStatus.Created, history[1].PreviousStatus);
         Assert.Equal(OrderStatus.WaitingForPayment, history[1].NewStatus);
         Assert.All(history, item => Assert.Equal(userId, item.ChangedByUserId));
+        Assert.Equal(FulfillmentMode.ManualAgent, order.ServiceFulfillmentModeSnapshot);
+    }
+
+    [Fact]
+    public async Task CreateAsync_SnapshotsSelectedServiceVariantFulfillmentMode()
+    {
+        var setup = CreateSetup();
+        setup.OrderRepository.ServiceDefinition!.ServiceFulfillmentMode =
+            FulfillmentMode.InventoryCode;
+
+        var result = await setup.Service.CreateAsync(Guid.NewGuid(), ValidRequest(setup));
+
+        Assert.True(result.Success);
+        var order = Assert.IsType<Domain.Entities.Order>(
+            setup.OrderRepository.AddedOrder);
+        Assert.Equal(FulfillmentMode.InventoryCode, order.ServiceFulfillmentModeSnapshot);
+
+        setup.OrderRepository.ServiceDefinition.ServiceFulfillmentMode =
+            FulfillmentMode.ManualAgent;
+
+        Assert.Equal(FulfillmentMode.InventoryCode, order.ServiceFulfillmentModeSnapshot);
     }
 
     [Fact]

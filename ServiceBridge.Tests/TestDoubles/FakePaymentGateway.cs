@@ -14,6 +14,7 @@ internal sealed class FakePaymentGateway : IPaymentGateway
     public int InitiateCallCount { get; private set; }
     public int VerifyCallCount { get; private set; }
     public PaymentGatewayInitiateRequest? LastInitiateRequest { get; private set; }
+    public IList<string>? Operations { get; set; }
 
     public Task<ServiceResult<PaymentGatewayInitiateResult>> InitiateAsync(
         PaymentGatewayInitiateRequest request,
@@ -37,6 +38,7 @@ internal sealed class FakePaymentGateway : IPaymentGateway
         CancellationToken cancellationToken = default)
     {
         VerifyCallCount++;
+        Operations?.Add("gateway.verify");
 
         return Task.FromResult(ServiceResult<PaymentGatewayVerifyResult>.Ok(
             VerifyResult ??

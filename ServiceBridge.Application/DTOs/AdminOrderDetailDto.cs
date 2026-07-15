@@ -9,6 +9,10 @@ public class AdminOrderDetailDto
     public string ServiceName { get; set; } = string.Empty;
     public string Provider { get; set; } = string.Empty;
     public string FulfillmentMode { get; set; } = string.Empty;
+    public string ServiceFulfillmentMode { get; set; } = string.Empty;
+    public AdminInventoryFulfillmentState InventoryFulfillmentState { get; set; }
+    public string? InventoryAllocationStatus { get; set; }
+    public bool CanRetryInventoryFulfillment { get; set; }
     public Guid? ServiceVariantId { get; set; }
     public string? PlanName { get; set; }
     public int? PlanDurationDays { get; set; }

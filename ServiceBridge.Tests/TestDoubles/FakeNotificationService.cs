@@ -7,6 +7,9 @@ namespace ServiceBridge.Tests.TestDoubles;
 internal class FakeNotificationService : INotificationService
 {
     public List<string> QueuedTypes { get; } = new();
+    public List<FakeQueuedOrderCompletedNotification> QueuedOrderCompletions { get; } = new();
+    public IList<string>? Operations { get; set; }
+    public bool ThrowOnPublishQueuedRealtime { get; set; }
 
     public Task<ServiceResult<PagedResultDto<NotificationDto>>> GetForUserAsync(
         Guid userId,
@@ -38,6 +41,12 @@ internal class FakeNotificationService : INotificationService
     public Task PublishQueuedRealtimeAsync(CancellationToken cancellationToken = default)
     {
         QueuedTypes.Add(nameof(PublishQueuedRealtimeAsync));
+        Operations?.Add("notification.publish");
+        if (ThrowOnPublishQueuedRealtime)
+        {
+            throw new InvalidOperationException("Notification realtime failed.");
+        }
+
         return Task.CompletedTask;
     }
 
@@ -56,6 +65,7 @@ internal class FakeNotificationService : INotificationService
         string orderNumber)
     {
         QueuedTypes.Add(nameof(QueuePaymentCompletedAsync));
+        Operations?.Add("notification.payment.queued");
         return Task.CompletedTask;
     }
 
@@ -64,6 +74,7 @@ internal class FakeNotificationService : INotificationService
         string orderNumber)
     {
         QueuedTypes.Add(nameof(QueueOrderReadyForAssignmentAsync));
+        Operations?.Add("notification.assignment.queued");
         return Task.CompletedTask;
     }
 
@@ -92,6 +103,8 @@ internal class FakeNotificationService : INotificationService
         string orderNumber)
     {
         QueuedTypes.Add(nameof(QueueOrderCompletedAsync));
+        Operations?.Add("notification.completed.queued");
+        QueuedOrderCompletions.Add(new(userId, orderId, orderNumber));
         return Task.CompletedTask;
     }
 
@@ -182,3 +195,8 @@ internal class FakeNotificationService : INotificationService
         return Task.CompletedTask;
     }
 }
+
+internal sealed record FakeQueuedOrderCompletedNotification(
+    Guid UserId,
+    Guid OrderId,
+    string OrderNumber);

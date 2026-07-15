@@ -180,6 +180,37 @@ public class AdminOrderAssignmentTests
         Assert.Equal(0, repository.SaveCount);
     }
 
+    [Fact]
+    public async Task AssignAsync_WhenInventoryCodeOrder_ReturnsConflictWithoutSideEffects()
+    {
+        var order = CreateOrder(OrderStatus.Paid);
+        order.ServiceFulfillmentModeSnapshot = FulfillmentMode.InventoryCode;
+        var repository = new FakeAdminOrderCommandRepository { Order = order };
+        var notificationService = new FakeNotificationService();
+        var realtimePublisher = new FakeRealtimeEventPublisher();
+        var auditLogWriter = new FakeAuditLogWriter();
+        var service = new AdminOrderAssignmentService(
+            repository,
+            notificationService,
+            realtimePublisher,
+            auditLogWriter);
+
+        var result = await service.AssignAsync(
+            Guid.NewGuid(),
+            order.Id,
+            new AssignOrderRequest { AgentId = Guid.NewGuid() });
+
+        Assert.False(result.Success);
+        Assert.Equal(409, result.StatusCode);
+        Assert.Equal(AppConstants.ErrorCodes.Conflict, result.ErrorCode);
+        Assert.Equal(0, repository.SaveCount);
+        Assert.Empty(notificationService.QueuedTypes);
+        Assert.Empty(auditLogWriter.Entries);
+        Assert.Empty(auditLogWriter.QueuedEntries);
+        Assert.Empty(realtimePublisher.OrderUpdates);
+        Assert.Empty(realtimePublisher.OrderAssignments);
+    }
+
     private static Order CreateOrder(OrderStatus status)
     {
         return new Order

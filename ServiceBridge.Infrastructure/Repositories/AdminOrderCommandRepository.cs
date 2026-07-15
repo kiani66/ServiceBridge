@@ -23,6 +23,26 @@ public class AdminOrderCommandRepository : IAdminOrderCommandRepository
             .FirstOrDefaultAsync(x => x.Id == orderId);
     }
 
+    public Task<Order?> LockOrderForInventoryFulfillmentAsync(
+        Guid orderId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_context.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException(
+                "Inventory code fulfillment requires an active database transaction.");
+        }
+
+        return _context.Orders
+            .FromSqlInterpolated($"""
+                SELECT *
+                FROM [Orders] WITH (UPDLOCK, ROWLOCK)
+                WHERE [Id] = {orderId}
+                """)
+            .Include(x => x.PaymentRecords)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
     public Task<bool> ActiveAgentExistsAsync(Guid agentId)
     {
         return _context.Users.AnyAsync(x =>
