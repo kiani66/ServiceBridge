@@ -141,8 +141,12 @@ public class Order : BaseEntity
         string? assignmentNotes,
         string statusNote)
     {
-        if (ServiceFulfillmentModeSnapshot != ServiceFulfillmentMode.ManualAgent ||
-            Status != OrderStatus.Paid ||
+        if (ServiceFulfillmentModeSnapshot != ServiceFulfillmentMode.ManualAgent)
+        {
+            throw new InvalidOrderFulfillmentOperationException();
+        }
+
+        if (Status != OrderStatus.Paid ||
             AssignedAgentId.HasValue)
         {
             throw new InvalidOrderTransitionException(Status, OrderStatus.Assigned);

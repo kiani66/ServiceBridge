@@ -113,6 +113,35 @@ public class OrderInventoryFulfillmentTests
         var assignmentCount = order.Assignments.Count;
         var historyCount = order.StatusHistory.Count;
 
+        Assert.Throws<InvalidOrderFulfillmentOperationException>(() => order.AssignToAgent(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Assignment notes",
+            "Assigned."));
+
+        Assert.Equal(status, order.Status);
+        Assert.Equal(assignedAgentId, order.AssignedAgentId);
+        Assert.Equal(assignedAt, order.AssignedAt);
+        Assert.Equal(updatedAt, order.UpdatedAt);
+        Assert.Equal(assignmentCount, order.Assignments.Count);
+        Assert.Equal(historyCount, order.StatusHistory.Count);
+    }
+
+    [Fact]
+    public void Assignment_WhenManualAgentOrderIsNotPaid_RejectsWithoutMutation()
+    {
+        var order = new Order
+        {
+            ServiceFulfillmentModeSnapshot = FulfillmentMode.ManualAgent,
+            Status = OrderStatus.WaitingForPayment
+        };
+        var status = order.Status;
+        var assignedAgentId = order.AssignedAgentId;
+        var assignedAt = order.AssignedAt;
+        var updatedAt = order.UpdatedAt;
+        var assignmentCount = order.Assignments.Count;
+        var historyCount = order.StatusHistory.Count;
+
         Assert.Throws<InvalidOrderTransitionException>(() => order.AssignToAgent(
             Guid.NewGuid(),
             Guid.NewGuid(),
