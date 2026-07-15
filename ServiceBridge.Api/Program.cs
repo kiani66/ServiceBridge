@@ -94,6 +94,9 @@ builder.Services.AddScoped<IAdminInventoryCommandRepository, AdminInventoryComma
 builder.Services.AddScoped<IAdminInventoryQueryRepository, AdminInventoryQueryRepository>();
 builder.Services.AddScoped<IAdminInventoryQueryService, AdminInventoryQueryService>();
 builder.Services.AddScoped<IInventoryCodeFulfillmentRepository, InventoryCodeFulfillmentRepository>();
+builder.Services.AddScoped<
+    IInventoryCodeFulfillmentTransactionManager,
+    InventoryCodeFulfillmentTransactionManager>();
 builder.Services.AddScoped<FulfillInventoryCodeOrderCommand>();
 builder.Services.AddScoped<CreateInventoryItemsCommand>();
 builder.Services.AddScoped<DisableInventoryItemCommand>();
@@ -134,6 +137,9 @@ builder.Services.AddScoped<IAdminOrderQueryRepository, AdminOrderQueryRepository
 builder.Services.AddScoped<IAdminOrderCommandRepository, AdminOrderCommandRepository>();
 builder.Services.AddScoped<IAdminOrderQueryService, AdminOrderQueryService>();
 builder.Services.AddScoped<IAdminOrderAssignmentService, AdminOrderAssignmentService>();
+builder.Services.AddScoped<
+    IAdminInventoryCodeFulfillmentService,
+    AdminInventoryCodeFulfillmentService>();
 builder.Services.AddScoped<IAdminFinancialReportRepository, AdminFinancialReportRepository>();
 builder.Services.AddScoped<IAdminFinancialReportService, AdminFinancialReportService>();
 builder.Services.AddScoped<IAgentOrderQueryRepository, AgentOrderQueryRepository>();

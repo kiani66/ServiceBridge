@@ -9,9 +9,20 @@ internal class FakeAdminOrderCommandRepository : IAdminOrderCommandRepository
     public bool AgentExists { get; set; } = true;
     public bool SaveSucceeds { get; set; } = true;
     public int SaveCount { get; private set; }
+    public int LockCount { get; private set; }
+    public IList<string>? Operations { get; set; }
 
     public Task<Order?> GetOrderForAssignmentAsync(Guid orderId)
     {
+        return Task.FromResult(Order?.Id == orderId ? Order : null);
+    }
+
+    public Task<Order?> LockOrderForInventoryFulfillmentAsync(
+        Guid orderId,
+        CancellationToken cancellationToken = default)
+    {
+        LockCount++;
+        Operations?.Add("order.lock");
         return Task.FromResult(Order?.Id == orderId ? Order : null);
     }
 
@@ -23,6 +34,7 @@ internal class FakeAdminOrderCommandRepository : IAdminOrderCommandRepository
     public Task<bool> SaveChangesAsync()
     {
         SaveCount++;
+        Operations?.Add("order.save");
         return Task.FromResult(SaveSucceeds);
     }
 }

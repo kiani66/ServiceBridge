@@ -11,5 +11,6 @@ public class AuditActionTypeStabilityTests
         Assert.Equal(13, (int)AuditActionType.TicketClosed);
         Assert.Equal(14, (int)AuditActionType.InventoryItemCreated);
         Assert.Equal(15, (int)AuditActionType.InventoryItemDisabled);
+        Assert.Equal(16, (int)AuditActionType.InventoryFulfillmentRetried);
     }
 }
