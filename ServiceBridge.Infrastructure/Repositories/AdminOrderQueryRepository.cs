@@ -159,7 +159,8 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
             .AsNoTracking()
             .Where(x =>
                 x.Status == OrderStatus.Paid &&
-                x.AssignedAgentId == null);
+                x.AssignedAgentId == null &&
+                x.ServiceFulfillmentModeSnapshot == FulfillmentMode.ManualAgent);
 
         var totalCount = await query.CountAsync();
         var items = await query
@@ -228,7 +229,8 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
             .AsNoTracking()
             .CountAsync(x =>
                 x.Status == OrderStatus.Paid &&
-                x.AssignedAgentId == null);
+                x.AssignedAgentId == null &&
+                x.ServiceFulfillmentModeSnapshot == FulfillmentMode.ManualAgent);
 
         return new AdminOrderDashboardSummaryDto
         {

@@ -51,8 +51,11 @@ public class OrderInventoryFulfillmentTests
             ServiceFulfillmentModeSnapshot = FulfillmentMode.InventoryCode,
             Status = OrderStatus.Created
         };
-        var inventoryAssignedOrder = CreatePaidOrder(FulfillmentMode.InventoryCode);
-        inventoryAssignedOrder.AssignToAgent(Guid.NewGuid(), Guid.NewGuid(), null, "Assigned.");
+        var inventoryAssignedOrder = new Order
+        {
+            ServiceFulfillmentModeSnapshot = FulfillmentMode.InventoryCode,
+            Status = OrderStatus.Assigned
+        };
         var inventoryPaidOrder = CreatePaidOrder(FulfillmentMode.InventoryCode);
         var inventoryCompletedOrder = CreatePaidOrder(FulfillmentMode.InventoryCode);
         inventoryCompletedOrder.StartInventoryFulfillment(Guid.NewGuid());
@@ -97,6 +100,31 @@ public class OrderInventoryFulfillmentTests
         order.Complete(assignedAgentId);
 
         Assert.Equal(OrderStatus.Completed, order.Status);
+    }
+
+    [Fact]
+    public void Assignment_WhenInventoryCodeOrder_RejectsWithoutMutation()
+    {
+        var order = CreatePaidOrder(FulfillmentMode.InventoryCode);
+        var status = order.Status;
+        var assignedAgentId = order.AssignedAgentId;
+        var assignedAt = order.AssignedAt;
+        var updatedAt = order.UpdatedAt;
+        var assignmentCount = order.Assignments.Count;
+        var historyCount = order.StatusHistory.Count;
+
+        Assert.Throws<InvalidOrderTransitionException>(() => order.AssignToAgent(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Assignment notes",
+            "Assigned."));
+
+        Assert.Equal(status, order.Status);
+        Assert.Equal(assignedAgentId, order.AssignedAgentId);
+        Assert.Equal(assignedAt, order.AssignedAt);
+        Assert.Equal(updatedAt, order.UpdatedAt);
+        Assert.Equal(assignmentCount, order.Assignments.Count);
+        Assert.Equal(historyCount, order.StatusHistory.Count);
     }
 
     private static Order CreatePaidOrder(FulfillmentMode serviceFulfillmentMode)
