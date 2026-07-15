@@ -24,7 +24,7 @@ public class PendingInventoryFulfillmentTests
 
         var result = await repository.GetPendingInventoryFulfillmentAsync(1, 20);
 
-        Assert.Equal(3, result.TotalCount);
+        Assert.Equal(5, result.TotalCount);
         Assert.DoesNotContain(result.Items, x => x.OrderId == setup.ManualOrder.Id);
         Assert.DoesNotContain(result.Items, x => x.OrderId == setup.FulfilledOrder.Id);
 
@@ -42,13 +42,27 @@ public class PendingInventoryFulfillmentTests
         Assert.Equal(nameof(InventoryItemStatus.Reserved),
             recoverable.InventoryAllocationStatus);
 
+        var deliveredPaid = Assert.Single(result.Items,
+            x => x.OrderId == setup.DeliveredPaidOrder.Id);
+        Assert.Equal(AdminInventoryFulfillmentState.RecoverableAllocation,
+            deliveredPaid.InventoryFulfillmentState);
+        Assert.True(deliveredPaid.CanRetryInventoryFulfillment);
+        Assert.Equal(nameof(InventoryItemStatus.Delivered),
+            deliveredPaid.InventoryAllocationStatus);
+
+        var deliveredProcessing = Assert.Single(result.Items,
+            x => x.OrderId == setup.DeliveredProcessingOrder.Id);
+        Assert.Equal(AdminInventoryFulfillmentState.RecoverableAllocation,
+            deliveredProcessing.InventoryFulfillmentState);
+        Assert.True(deliveredProcessing.CanRetryInventoryFulfillment);
+
         var inconsistent = Assert.Single(result.Items,
             x => x.OrderId == setup.InconsistentOrder.Id);
         Assert.Equal(AdminInventoryFulfillmentState.Inconsistent,
             inconsistent.InventoryFulfillmentState);
         Assert.False(inconsistent.CanRetryInventoryFulfillment);
-        Assert.Equal(nameof(InventoryItemStatus.Delivered),
-            inconsistent.InventoryAllocationStatus);
+        Assert.Null(inconsistent.InventoryAllocationStatus);
+        Assert.DoesNotContain(result.Items, x => x.OrderId == setup.NonCompletedPaymentOrder.Id);
     }
 
     [Fact]
@@ -77,8 +91,10 @@ public class PendingInventoryFulfillmentTests
 
         Assert.DoesNotContain(result.Items, x => x.OrderId == setup.AwaitingOrder.Id);
         Assert.DoesNotContain(result.Items, x => x.OrderId == setup.RecoverableOrder.Id);
-        Assert.Equal(1, result.TotalCount);
-        Assert.Equal(setup.InconsistentOrder.Id, Assert.Single(result.Items).OrderId);
+        Assert.Equal(3, result.TotalCount);
+        Assert.Contains(result.Items, x => x.OrderId == setup.DeliveredPaidOrder.Id);
+        Assert.Contains(result.Items, x => x.OrderId == setup.DeliveredProcessingOrder.Id);
+        Assert.Contains(result.Items, x => x.OrderId == setup.InconsistentOrder.Id);
     }
 
     [Fact]
@@ -91,11 +107,13 @@ public class PendingInventoryFulfillmentTests
         var firstPage = await repository.GetPendingInventoryFulfillmentAsync(1, 2);
         var secondPage = await repository.GetPendingInventoryFulfillmentAsync(2, 2);
 
-        Assert.Equal(3, firstPage.TotalCount);
+        Assert.Equal(5, firstPage.TotalCount);
         Assert.Equal(
             [setup.AwaitingOrder.Id, setup.RecoverableOrder.Id],
             firstPage.Items.Select(x => x.OrderId));
-        Assert.Equal(setup.InconsistentOrder.Id, Assert.Single(secondPage.Items).OrderId);
+        Assert.Equal(
+            [setup.DeliveredPaidOrder.Id, setup.DeliveredProcessingOrder.Id],
+            secondPage.Items.Select(x => x.OrderId));
         Assert.DoesNotContain(context.ChangeTracker.Entries(),
             entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
     }
@@ -111,6 +129,14 @@ public class PendingInventoryFulfillmentTests
             setup.RecoverableOrder.Id);
         var manualDetail = await repository.GetOrderDetailAsync(Guid.NewGuid(),
             setup.ManualOrder.Id);
+        var deliveredPaidDetail = await repository.GetOrderDetailAsync(Guid.NewGuid(),
+            setup.DeliveredPaidOrder.Id);
+        var deliveredProcessingDetail = await repository.GetOrderDetailAsync(Guid.NewGuid(),
+            setup.DeliveredProcessingOrder.Id);
+        var fulfilledDetail = await repository.GetOrderDetailAsync(Guid.NewGuid(),
+            setup.FulfilledOrder.Id);
+        var nonCompletedPaymentDetail = await repository.GetOrderDetailAsync(Guid.NewGuid(),
+            setup.NonCompletedPaymentOrder.Id);
 
         Assert.NotNull(inventoryDetail);
         Assert.Equal(setup.RecoverableOrder.OrderNumber, inventoryDetail.OrderNumber);
@@ -121,6 +147,26 @@ public class PendingInventoryFulfillmentTests
         Assert.Equal(nameof(InventoryItemStatus.Reserved),
             inventoryDetail.InventoryAllocationStatus);
         Assert.True(inventoryDetail.CanRetryInventoryFulfillment);
+
+        Assert.NotNull(deliveredPaidDetail);
+        Assert.Equal(AdminInventoryFulfillmentState.RecoverableAllocation,
+            deliveredPaidDetail.InventoryFulfillmentState);
+        Assert.True(deliveredPaidDetail.CanRetryInventoryFulfillment);
+
+        Assert.NotNull(deliveredProcessingDetail);
+        Assert.Equal(AdminInventoryFulfillmentState.RecoverableAllocation,
+            deliveredProcessingDetail.InventoryFulfillmentState);
+        Assert.True(deliveredProcessingDetail.CanRetryInventoryFulfillment);
+
+        Assert.NotNull(fulfilledDetail);
+        Assert.Equal(AdminInventoryFulfillmentState.Fulfilled,
+            fulfilledDetail.InventoryFulfillmentState);
+        Assert.False(fulfilledDetail.CanRetryInventoryFulfillment);
+
+        Assert.NotNull(nonCompletedPaymentDetail);
+        Assert.Equal(AdminInventoryFulfillmentState.Inconsistent,
+            nonCompletedPaymentDetail.InventoryFulfillmentState);
+        Assert.False(nonCompletedPaymentDetail.CanRetryInventoryFulfillment);
 
         Assert.NotNull(manualDetail);
         Assert.Equal(nameof(FulfillmentMode.ManualAgent),
@@ -201,7 +247,13 @@ public class PendingInventoryFulfillmentTests
         var fulfilledOrder = CreateOrder(user, service, variant, "FULFILLED", FulfillmentMode.InventoryCode,
             OrderStatus.Completed, now.AddMinutes(-2));
         var inconsistentOrder = CreateOrder(user, service, variant, "INCONSISTENT", FulfillmentMode.InventoryCode,
+            OrderStatus.Processing, now.AddMinutes(1));
+        var deliveredPaidOrder = CreateOrder(user, service, variant, "DELIVERED-PAID", FulfillmentMode.InventoryCode,
             OrderStatus.Paid, now.AddMinutes(-1));
+        var deliveredProcessingOrder = CreateOrder(user, service, variant, "DELIVERED-PROCESSING", FulfillmentMode.InventoryCode,
+            OrderStatus.Processing, now);
+        var nonCompletedPaymentOrder = CreateOrder(user, service, variant, "NON-COMPLETED-PAYMENT", FulfillmentMode.InventoryCode,
+            OrderStatus.Paid, now.AddMinutes(2));
 
         context.AddRange(user, provider, service, variant);
         context.Orders.AddRange(
@@ -209,7 +261,10 @@ public class PendingInventoryFulfillmentTests
             awaitingOrder,
             recoverableOrder,
             fulfilledOrder,
-            inconsistentOrder);
+            inconsistentOrder,
+            deliveredPaidOrder,
+            deliveredProcessingOrder,
+            nonCompletedPaymentOrder);
         await AddPaymentAsync(context, manualOrder, PaymentStatus.Completed, now,
             Guid.Parse("00000000-0000-0000-0000-000000000001"));
         await AddPaymentAsync(context, awaitingOrder, PaymentStatus.Completed, now,
@@ -220,17 +275,31 @@ public class PendingInventoryFulfillmentTests
             Guid.Parse("00000000-0000-0000-0000-000000000004"));
         await AddPaymentAsync(context, inconsistentOrder, PaymentStatus.Completed, now,
             Guid.Parse("00000000-0000-0000-0000-000000000005"));
+        await AddPaymentAsync(context, deliveredPaidOrder, PaymentStatus.Completed, now,
+            Guid.Parse("00000000-0000-0000-0000-000000000006"));
+        await AddPaymentAsync(context, deliveredProcessingOrder, PaymentStatus.Completed, now,
+            Guid.Parse("00000000-0000-0000-0000-000000000007"));
+        await AddPaymentAsync(context, nonCompletedPaymentOrder, PaymentStatus.Completed,
+            now.AddMinutes(-1),
+            Guid.Parse("00000000-0000-0000-0000-000000000008"));
+        await AddPaymentAsync(context, nonCompletedPaymentOrder, PaymentStatus.Pending, now,
+            Guid.Parse("00000000-0000-0000-0000-000000000009"));
         context.InventoryItems.Add(CreateAllocation(variant.Id, recoverableOrder.Id,
             now, delivered: false));
         context.InventoryItems.Add(CreateAllocation(variant.Id, fulfilledOrder.Id,
             now, delivered: true));
-        context.InventoryItems.Add(CreateAllocation(variant.Id, inconsistentOrder.Id,
+        context.InventoryItems.Add(CreateAllocation(variant.Id, deliveredPaidOrder.Id,
+            now, delivered: true));
+        context.InventoryItems.Add(CreateAllocation(variant.Id, deliveredProcessingOrder.Id,
+            now, delivered: true));
+        context.InventoryItems.Add(CreateAllocation(variant.Id, nonCompletedPaymentOrder.Id,
             now, delivered: true));
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
         return new Scenario(now, manualOrder, awaitingOrder, recoverableOrder,
-            fulfilledOrder, inconsistentOrder);
+            fulfilledOrder, inconsistentOrder, deliveredPaidOrder,
+            deliveredProcessingOrder, nonCompletedPaymentOrder);
     }
 
     private static Order CreateOrder(
@@ -308,7 +377,10 @@ public class PendingInventoryFulfillmentTests
         Order AwaitingOrder,
         Order RecoverableOrder,
         Order FulfilledOrder,
-        Order InconsistentOrder);
+        Order InconsistentOrder,
+        Order DeliveredPaidOrder,
+        Order DeliveredProcessingOrder,
+        Order NonCompletedPaymentOrder);
 
     private sealed class FakeQueryService : IAdminOrderQueryService
     {

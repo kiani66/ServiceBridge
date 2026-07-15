@@ -236,7 +236,8 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
                 InventoryFulfillmentState = x.AllocationStatus == null &&
                     x.Order.Status == OrderStatus.Paid
                     ? AdminInventoryFulfillmentState.AwaitingStock
-                    : x.AllocationStatus == InventoryItemStatus.Reserved &&
+                    : (x.AllocationStatus == InventoryItemStatus.Reserved ||
+                       x.AllocationStatus == InventoryItemStatus.Delivered) &&
                       (x.Order.Status == OrderStatus.Paid ||
                        x.Order.Status == OrderStatus.Processing)
                         ? AdminInventoryFulfillmentState.RecoverableAllocation
@@ -249,7 +250,8 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
                 CanRetryInventoryFulfillment =
                     (x.AllocationStatus == null &&
                      x.Order.Status == OrderStatus.Paid) ||
-                    (x.AllocationStatus == InventoryItemStatus.Reserved &&
+                    ((x.AllocationStatus == InventoryItemStatus.Reserved ||
+                      x.AllocationStatus == InventoryItemStatus.Delivered) &&
                      (x.Order.Status == OrderStatus.Paid ||
                       x.Order.Status == OrderStatus.Processing))
             })
@@ -362,7 +364,8 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
                           x.Order.Status == OrderStatus.Paid
                             ? AdminInventoryFulfillmentState.AwaitingStock
                             : x.LatestPaymentStatus == PaymentStatus.Completed &&
-                              x.AllocationStatus == InventoryItemStatus.Reserved &&
+                              (x.AllocationStatus == InventoryItemStatus.Reserved ||
+                               x.AllocationStatus == InventoryItemStatus.Delivered) &&
                               (x.Order.Status == OrderStatus.Paid ||
                                x.Order.Status == OrderStatus.Processing)
                                 ? AdminInventoryFulfillmentState.RecoverableAllocation
@@ -381,7 +384,8 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
                     x.LatestPaymentStatus == PaymentStatus.Completed &&
                     ((x.AllocationStatus == null &&
                       x.Order.Status == OrderStatus.Paid) ||
-                     (x.AllocationStatus == InventoryItemStatus.Reserved &&
+                     ((x.AllocationStatus == InventoryItemStatus.Reserved ||
+                       x.AllocationStatus == InventoryItemStatus.Delivered) &&
                       (x.Order.Status == OrderStatus.Paid ||
                        x.Order.Status == OrderStatus.Processing))),
                 ServiceVariantId = x.Order.ServiceVariantId,
