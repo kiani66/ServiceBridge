@@ -52,6 +52,19 @@ public class AdminOrderQueryService : IAdminOrderQueryService
         return ServiceResult<PagedResultDto<AdminAssignableOrderDto>>.Ok(orders);
     }
 
+    public async Task<ServiceResult<PagedResultDto<AdminPendingInventoryFulfillmentDto>>>
+        GetPendingInventoryFulfillmentAsync(int page, int pageSize)
+    {
+        page = Math.Max(page, 1);
+        pageSize = NormalizePageSize(pageSize);
+
+        var orders = await _repository.GetPendingInventoryFulfillmentAsync(
+            page,
+            pageSize);
+        return ServiceResult<PagedResultDto<AdminPendingInventoryFulfillmentDto>>.Ok(
+            orders);
+    }
+
     public async Task<ServiceResult<IReadOnlyCollection<AgentSummaryDto>>>
         GetActiveAgentsAsync()
     {

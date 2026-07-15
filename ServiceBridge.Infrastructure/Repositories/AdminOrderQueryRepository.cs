@@ -192,6 +192,78 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
         };
     }
 
+    public async Task<PagedResultDto<AdminPendingInventoryFulfillmentDto>>
+        GetPendingInventoryFulfillmentAsync(int page, int pageSize)
+    {
+        var query = _context.Orders
+            .AsNoTracking()
+            .Select(order => new
+            {
+                Order = order,
+                LatestPaymentStatus = _context.Payments
+                    .Where(payment => payment.OrderId == order.Id)
+                    .OrderByDescending(payment => payment.CreatedAt)
+                    .ThenByDescending(payment => payment.Id)
+                    .Select(payment => (PaymentStatus?)payment.Status)
+                    .FirstOrDefault(),
+                AllocationStatus = _context.InventoryItems
+                    .Where(item => item.ReservedForOrderId == order.Id)
+                    .Select(item => (InventoryItemStatus?)item.Status)
+                    .FirstOrDefault()
+            })
+            .Where(x =>
+                x.Order.ServiceFulfillmentModeSnapshot == FulfillmentMode.InventoryCode &&
+                x.LatestPaymentStatus == PaymentStatus.Completed &&
+                !(x.Order.Status == OrderStatus.Completed &&
+                    x.AllocationStatus == InventoryItemStatus.Delivered));
+
+        var totalCount = await query.CountAsync();
+        var items = await query
+            .OrderBy(x => x.Order.CreatedAt)
+            .ThenBy(x => x.Order.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new AdminPendingInventoryFulfillmentDto
+            {
+                OrderId = x.Order.Id,
+                OrderNumber = x.Order.OrderNumber,
+                UserName = x.Order.User.FullName,
+                ServiceName = x.Order.Service.Name,
+                VariantName = x.Order.ServiceVariant == null
+                    ? null
+                    : x.Order.ServiceVariant.Name,
+                OrderStatus = x.Order.Status.ToString(),
+                InventoryFulfillmentState = x.AllocationStatus == null &&
+                    x.Order.Status == OrderStatus.Paid
+                    ? AdminInventoryFulfillmentState.AwaitingStock
+                    : x.AllocationStatus == InventoryItemStatus.Reserved &&
+                      (x.Order.Status == OrderStatus.Paid ||
+                       x.Order.Status == OrderStatus.Processing)
+                        ? AdminInventoryFulfillmentState.RecoverableAllocation
+                        : AdminInventoryFulfillmentState.Inconsistent,
+                InventoryAllocationStatus = x.AllocationStatus == null
+                    ? null
+                    : x.AllocationStatus.Value.ToString(),
+                PaidAt = x.Order.PaidAt,
+                CreatedAt = x.Order.CreatedAt,
+                CanRetryInventoryFulfillment =
+                    (x.AllocationStatus == null &&
+                     x.Order.Status == OrderStatus.Paid) ||
+                    (x.AllocationStatus == InventoryItemStatus.Reserved &&
+                     (x.Order.Status == OrderStatus.Paid ||
+                      x.Order.Status == OrderStatus.Processing))
+            })
+            .ToListAsync();
+
+        return new PagedResultDto<AdminPendingInventoryFulfillmentDto>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
+    }
+
     public async Task<IReadOnlyCollection<AgentSummaryDto>> GetActiveAgentsAsync()
     {
         return await _context.Users
@@ -258,31 +330,76 @@ public class AdminOrderQueryRepository : IAdminOrderQueryRepository
         var order = await _context.Orders
             .AsNoTracking()
             .Where(x => x.Id == orderId)
+            .Select(x => new
+            {
+                Order = x,
+                LatestPaymentStatus = _context.Payments
+                    .Where(payment => payment.OrderId == x.Id)
+                    .OrderByDescending(payment => payment.CreatedAt)
+                    .ThenByDescending(payment => payment.Id)
+                    .Select(payment => (PaymentStatus?)payment.Status)
+                    .FirstOrDefault(),
+                AllocationStatus = _context.InventoryItems
+                    .Where(item => item.ReservedForOrderId == x.Id)
+                    .Select(item => (InventoryItemStatus?)item.Status)
+                    .FirstOrDefault()
+            })
             .Select(x => new AdminOrderDetailDto
             {
-                OrderId = x.Id,
-                OrderNumber = x.OrderNumber,
-                CustomerName = x.User.FullName,
-                CustomerEmail = x.User.Email,
-                ServiceName = x.Service.Name,
-                Provider = x.Service.Provider.Name,
-                FulfillmentMode = x.FulfillmentMode.ToString(),
-                ServiceVariantId = x.ServiceVariantId,
-                PlanName = x.VariantNameSnapshot,
-                PlanDurationDays = x.VariantDurationDaysSnapshot,
-                PlanRegionCode = x.VariantRegionCodeSnapshot,
-                Status = x.Status.ToString(),
-                AssignedAgentName = x.AssignedAgent == null
+                OrderId = x.Order.Id,
+                OrderNumber = x.Order.OrderNumber,
+                CustomerName = x.Order.User.FullName,
+                CustomerEmail = x.Order.User.Email,
+                ServiceName = x.Order.Service.Name,
+                Provider = x.Order.Service.Provider.Name,
+                FulfillmentMode = x.Order.FulfillmentMode.ToString(),
+                ServiceFulfillmentMode = x.Order.ServiceFulfillmentModeSnapshot.ToString(),
+                InventoryFulfillmentState =
+                    x.Order.ServiceFulfillmentModeSnapshot != FulfillmentMode.InventoryCode
+                        ? AdminInventoryFulfillmentState.NotApplicable
+                        : x.LatestPaymentStatus == PaymentStatus.Completed &&
+                          x.AllocationStatus == null &&
+                          x.Order.Status == OrderStatus.Paid
+                            ? AdminInventoryFulfillmentState.AwaitingStock
+                            : x.LatestPaymentStatus == PaymentStatus.Completed &&
+                              x.AllocationStatus == InventoryItemStatus.Reserved &&
+                              (x.Order.Status == OrderStatus.Paid ||
+                               x.Order.Status == OrderStatus.Processing)
+                                ? AdminInventoryFulfillmentState.RecoverableAllocation
+                                : x.LatestPaymentStatus == PaymentStatus.Completed &&
+                                  x.AllocationStatus == InventoryItemStatus.Delivered &&
+                                  x.Order.Status == OrderStatus.Completed
+                                    ? AdminInventoryFulfillmentState.Fulfilled
+                                    : AdminInventoryFulfillmentState.Inconsistent,
+                InventoryAllocationStatus =
+                    x.Order.ServiceFulfillmentModeSnapshot != FulfillmentMode.InventoryCode ||
+                    x.AllocationStatus == null
+                        ? null
+                        : x.AllocationStatus.Value.ToString(),
+                CanRetryInventoryFulfillment =
+                    x.Order.ServiceFulfillmentModeSnapshot == FulfillmentMode.InventoryCode &&
+                    x.LatestPaymentStatus == PaymentStatus.Completed &&
+                    ((x.AllocationStatus == null &&
+                      x.Order.Status == OrderStatus.Paid) ||
+                     (x.AllocationStatus == InventoryItemStatus.Reserved &&
+                      (x.Order.Status == OrderStatus.Paid ||
+                       x.Order.Status == OrderStatus.Processing))),
+                ServiceVariantId = x.Order.ServiceVariantId,
+                PlanName = x.Order.VariantNameSnapshot,
+                PlanDurationDays = x.Order.VariantDurationDaysSnapshot,
+                PlanRegionCode = x.Order.VariantRegionCodeSnapshot,
+                Status = x.Order.Status.ToString(),
+                AssignedAgentName = x.Order.AssignedAgent == null
                     ? null
-                    : x.AssignedAgent.FullName,
-                BasePriceUsdSnapshot = x.ForeignPrice,
-                ExchangeRateSnapshot = x.ExchangeRateSnapshot,
-                MarginSnapshot = x.MarginPercentSnapshot,
-                FinalPriceIrr = x.FinalAmountIrr,
-                CreatedAt = x.CreatedAt,
-                PaidAt = x.PaidAt,
-                AssignedAt = x.AssignedAt,
-                CompletedAt = x.CompletedAt
+                    : x.Order.AssignedAgent.FullName,
+                BasePriceUsdSnapshot = x.Order.ForeignPrice,
+                ExchangeRateSnapshot = x.Order.ExchangeRateSnapshot,
+                MarginSnapshot = x.Order.MarginPercentSnapshot,
+                FinalPriceIrr = x.Order.FinalAmountIrr,
+                CreatedAt = x.Order.CreatedAt,
+                PaidAt = x.Order.PaidAt,
+                AssignedAt = x.Order.AssignedAt,
+                CompletedAt = x.Order.CompletedAt
             })
             .FirstOrDefaultAsync();
 

@@ -51,6 +51,15 @@ public class AdminOrdersController : BaseApiController
             await _queryService.GetPaidUnassignedOrdersAsync(page, pageSize));
     }
 
+    [HttpGet("inventory-fulfillment/pending")]
+    public async Task<IActionResult> GetPendingInventoryFulfillment(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = IAdminOrderQueryService.DefaultPageSize)
+    {
+        return ToActionResult(
+            await _queryService.GetPendingInventoryFulfillmentAsync(page, pageSize));
+    }
+
     [HttpGet("agents")]
     public async Task<IActionResult> GetActiveAgents()
     {
