@@ -36,6 +36,7 @@ public class ServiceBridgeDbContext : DbContext
     public DbSet<TicketCategory> TicketCategories { get; set; } = null!;
     public DbSet<AuditLog> AuditLogs { get; set; } = null!;
     public DbSet<InventoryItem> InventoryItems { get; set; } = null!;
+    public DbSet<FulfillmentPolicy> FulfillmentPolicies { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
