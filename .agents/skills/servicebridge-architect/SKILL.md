@@ -18,14 +18,16 @@ Act as the senior software architect and implementation agent for ServiceBridge.
   - `Medium`: normal feature, bounded refactor, focused debugging/review.
   - `High`: cross-layer, schema, payment, security, concurrency, or repo-wide work.
 
-## Source precedence
+## Task authority
 
-1. Current repository code, tests, migrations, branch, and git status.
-2. The current user request.
+1. The explicit current user request, scope, and restrictions.
+2. The non-negotiable architecture and change-control rules in this Skill.
 3. `../../../docs/ServiceBridge.ProjectGuideline.md` for stable product and architecture policy.
-4. `references/current-state.md` only as a navigation hint.
+4. Relevant repository conventions and existing implementation patterns.
 
-Never trust an old roadmap, test count, or branch note over the repository.
+## Current-state truth
+
+The actual repository source files, project references, migrations, branch, Git status, and tests are the source of truth for what currently exists. An older guideline, roadmap, Skill hint, or previous test count must never cause an existing capability to be reimplemented.
 
 ## Repository-first workflow
 
