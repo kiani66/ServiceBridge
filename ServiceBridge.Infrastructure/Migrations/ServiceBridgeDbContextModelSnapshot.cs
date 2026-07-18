@@ -273,6 +273,49 @@ namespace ServiceBridge.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.FulfillmentPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DeliveryArtifactType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FulfillmentMode")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProcurementStrategy")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ServiceVariantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ServiceVariantId", "Version" }, "UX_FulfillmentPolicies_ServiceVariantId_Version")
+                        .IsUnique();
+
+                    b.ToTable("FulfillmentPolicies", t =>
+                        {
+                            t.HasCheckConstraint("CK_FulfillmentPolicies_DeliveryArtifactType_Valid", "[DeliveryArtifactType] IN (1, 2, 3, 4)");
+
+                            t.HasCheckConstraint("CK_FulfillmentPolicies_FulfillmentMode_Valid", "[FulfillmentMode] IN (1, 2, 3, 4)");
+
+                            t.HasCheckConstraint("CK_FulfillmentPolicies_ProcurementStrategy_Valid", "[ProcurementStrategy] IN (1, 2, 3, 4, 5)");
+
+                            t.HasCheckConstraint("CK_FulfillmentPolicies_Version_Positive", "[Version] > 0");
+                        });
+                });
+
             modelBuilder.Entity("ServiceBridge.Domain.Entities.InventoryItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1495,6 +1538,17 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("Provider");
+                });
+
+            modelBuilder.Entity("ServiceBridge.Domain.Entities.FulfillmentPolicy", b =>
+                {
+                    b.HasOne("ServiceBridge.Domain.Entities.ServiceVariant", "ServiceVariant")
+                        .WithMany()
+                        .HasForeignKey("ServiceVariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ServiceVariant");
                 });
 
             modelBuilder.Entity("ServiceBridge.Domain.Entities.InventoryItem", b =>
