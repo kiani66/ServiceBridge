@@ -23,7 +23,8 @@ public class AdminOrderAssignmentTests
             repository,
             new FakeNotificationService(),
             realtimePublisher,
-            auditLogWriter);
+            auditLogWriter,
+            new FakeFulfillmentCoordinator());
 
         var result = await service.AssignAsync(
             adminId,
@@ -65,7 +66,8 @@ public class AdminOrderAssignmentTests
             new FakeAdminOrderCommandRepository(),
             new FakeNotificationService(),
             new FakeRealtimeEventPublisher(),
-            new FakeAuditLogWriter());
+            new FakeAuditLogWriter(),
+            new FakeFulfillmentCoordinator());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -89,7 +91,8 @@ public class AdminOrderAssignmentTests
             repository,
             new FakeNotificationService(),
             new FakeRealtimeEventPublisher(),
-            new FakeAuditLogWriter());
+            new FakeAuditLogWriter(),
+            new FakeFulfillmentCoordinator());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -115,7 +118,8 @@ public class AdminOrderAssignmentTests
             repository,
             new FakeNotificationService(),
             new FakeRealtimeEventPublisher(),
-            new FakeAuditLogWriter());
+            new FakeAuditLogWriter(),
+            new FakeFulfillmentCoordinator());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -143,7 +147,8 @@ public class AdminOrderAssignmentTests
             repository,
             new FakeNotificationService(),
             realtimePublisher,
-            auditLogWriter);
+            auditLogWriter,
+            new FakeFulfillmentCoordinator());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -168,7 +173,8 @@ public class AdminOrderAssignmentTests
             repository,
             new FakeNotificationService(),
             new FakeRealtimeEventPublisher(),
-            new FakeAuditLogWriter());
+            new FakeAuditLogWriter(),
+            new FakeFulfillmentCoordinator());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),
@@ -194,7 +200,8 @@ public class AdminOrderAssignmentTests
             repository,
             notificationService,
             realtimePublisher,
-            auditLogWriter);
+            auditLogWriter,
+            new FakeFulfillmentCoordinator());
 
         var result = await service.AssignAsync(
             Guid.NewGuid(),

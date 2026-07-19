@@ -14,17 +14,20 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
     private readonly IOrderFieldProtector _fieldProtector;
     private readonly INotificationService _notificationService;
     private readonly IRealtimeEventPublisher _realtimeEventPublisher;
+    private readonly IFulfillmentCoordinator _fulfillmentCoordinator;
 
     public AgentOrderProcessingService(
         IAgentOrderCommandRepository repository,
         IOrderFieldProtector fieldProtector,
         INotificationService notificationService,
-        IRealtimeEventPublisher realtimeEventPublisher)
+        IRealtimeEventPublisher realtimeEventPublisher,
+        IFulfillmentCoordinator fulfillmentCoordinator)
     {
         _repository = repository;
         _fieldProtector = fieldProtector;
         _notificationService = notificationService;
         _realtimeEventPublisher = realtimeEventPublisher;
+        _fulfillmentCoordinator = fulfillmentCoordinator;
     }
 
     public Task<ServiceResult> StartProcessingAsync(
@@ -40,7 +43,9 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
                 order.UserId,
                 order.Id,
                 order.OrderNumber),
-            AppMessages.OrderProcessingStarted);
+            AppMessages.OrderProcessingStarted,
+            coordinate: order =>
+                _fulfillmentCoordinator.StartManualAttemptAsync(order));
     }
 
     public Task<ServiceResult> RequestCustomerActionAsync(
@@ -167,7 +172,9 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
                 order.UserId,
                 order.Id,
                 order.OrderNumber),
-            AppMessages.OrderFailed);
+            AppMessages.OrderFailed,
+            coordinate: order =>
+                _fulfillmentCoordinator.FailManualAttemptAsync(order));
     }
 
     public async Task<ServiceResult> AddNoteAsync(
@@ -204,7 +211,8 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
         Action<Order> transition,
         Func<Order, Task>? queueNotification,
         string successMessage,
-        Func<Order, Task>? publishAfterSave = null)
+        Func<Order, Task>? publishAfterSave = null,
+        Func<Order, Task<ServiceResult>>? coordinate = null)
     {
         var order = await _repository.GetAssignedOrderForUpdateAsync(
             agentId,
@@ -218,6 +226,15 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
         {
             var previousStatus = order.Status;
             transition(order);
+            if (coordinate is not null)
+            {
+                var coordination = await coordinate(order);
+                if (!coordination.Success)
+                {
+                    return coordination;
+                }
+            }
+
             if (queueNotification is not null)
             {
                 await queueNotification(order);
@@ -277,6 +294,13 @@ public class AgentOrderProcessingService : IAgentOrderProcessingService
         try
         {
             order.Complete(agentId, request.Note);
+            var coordination = await _fulfillmentCoordinator
+                .CompleteManualAttemptAsync(order);
+            if (!coordination.Success)
+            {
+                return coordination;
+            }
+
             await _notificationService.QueueOrderCompletedAsync(
                 order.UserId,
                 order.Id,

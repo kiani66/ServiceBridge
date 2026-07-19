@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ServiceBridge.Application.DTOs;
+using ServiceBridge.Application.Fulfillment;
 using ServiceBridge.Application.Inventory;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Application.Payments;
@@ -20,6 +21,7 @@ public class PaymentService : IPaymentService
     private readonly IRealtimeEventPublisher _realtimeEventPublisher;
     private readonly FulfillInventoryCodeOrderCommand _fulfillInventoryCodeOrder;
     private readonly IPaymentConfirmationTransactionManager _transactionManager;
+    private readonly IFulfillmentCoordinator _fulfillmentCoordinator;
     private readonly ILogger<PaymentService> _logger;
 
     public PaymentService(
@@ -30,6 +32,7 @@ public class PaymentService : IPaymentService
         IRealtimeEventPublisher realtimeEventPublisher,
         FulfillInventoryCodeOrderCommand fulfillInventoryCodeOrder,
         IPaymentConfirmationTransactionManager transactionManager,
+        IFulfillmentCoordinator fulfillmentCoordinator,
         ILogger<PaymentService> logger)
     {
         _repository = repository;
@@ -39,6 +42,7 @@ public class PaymentService : IPaymentService
         _realtimeEventPublisher = realtimeEventPublisher;
         _fulfillInventoryCodeOrder = fulfillInventoryCodeOrder;
         _transactionManager = transactionManager;
+        _fulfillmentCoordinator = fulfillmentCoordinator;
         _logger = logger;
     }
 
@@ -277,23 +281,42 @@ public class PaymentService : IPaymentService
         {
             if (IsIdempotentConfirmation(payment.Status, request.Status))
             {
-                if (request.Status == PaymentStatus.Completed &&
-                    payment.Order.ServiceFulfillmentModeSnapshot ==
-                    FulfillmentMode.InventoryCode)
+                if (request.Status == PaymentStatus.Completed)
                 {
-                    var fulfillment = await FulfillInventoryOrderAsync(
-                        payment,
-                        DateTime.UtcNow);
-                    if (!fulfillment.Success)
+                    var initialization = await _fulfillmentCoordinator
+                        .EnsureForPaidOrderAsync(payment.Order);
+                    if (!initialization.Success)
                     {
-                        return fulfillment.Result;
+                        return ToFailure(initialization);
                     }
 
-                    return await SaveCommitAndPublishAsync(
-                        transaction,
-                        payment,
-                        AppMessages.PaymentConfirmed,
-                        fulfillment.OrderChanged);
+                    if (payment.Order.ServiceFulfillmentModeSnapshot ==
+                        FulfillmentMode.InventoryCode)
+                    {
+                        var fulfillment = await FulfillInventoryOrderAsync(
+                            payment,
+                            DateTime.UtcNow);
+                        if (!fulfillment.Success)
+                        {
+                            return fulfillment.Result;
+                        }
+
+                        return await SaveCommitAndPublishAsync(
+                            transaction,
+                            payment,
+                            AppMessages.PaymentConfirmed,
+                            fulfillment.OrderChanged);
+                    }
+
+                    if (initialization.Data ==
+                        FulfillmentInitializationOutcome.Created)
+                    {
+                        return await SaveCommitAndPublishAsync(
+                            transaction,
+                            payment,
+                            AppMessages.PaymentConfirmed,
+                            publishRealtime: false);
+                    }
                 }
 
                 return ServiceResult.Ok(
@@ -321,6 +344,14 @@ public class PaymentService : IPaymentService
                     request.GatewayReference,
                     sanitizedCallbackPayload,
                     confirmedAtUtc);
+
+                var initialization = await _fulfillmentCoordinator
+                    .EnsureForPaidOrderAsync(payment.Order);
+                if (!initialization.Success)
+                {
+                    return ToFailure(initialization);
+                }
+
                 await _notificationService.QueuePaymentCompletedAsync(
                     payment.Order.UserId,
                     payment.Order.Id,

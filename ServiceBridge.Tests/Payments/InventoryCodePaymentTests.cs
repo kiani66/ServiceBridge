@@ -312,6 +312,7 @@ public sealed class InventoryCodePaymentTests
             realtime,
             fulfillment,
             transaction,
+            new FakeFulfillmentCoordinator(),
             NullLogger<PaymentService>.Instance);
 
         return new PaymentSetup(

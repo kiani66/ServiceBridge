@@ -274,6 +274,7 @@ public sealed class InventoryCodeFulfillmentSqlServerTests :
             realtimeEventPublisher,
             fulfillment,
             new PaymentConfirmationTransactionManager(context),
+            new FakeFulfillmentCoordinator(),
             NullLogger<PaymentService>.Instance);
     }
 

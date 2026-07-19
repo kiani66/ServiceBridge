@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Domain.Entities;
 using ServiceBridge.Infrastructure.Data;
@@ -36,6 +37,11 @@ public class AgentOrderCommandRepository : IAgentOrderCommandRepository
             return true;
         }
         catch (DbUpdateConcurrencyException)
+        {
+            return false;
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is SqlException { Number: 2601 or 2627 })
         {
             return false;
         }

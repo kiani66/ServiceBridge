@@ -533,7 +533,8 @@ public class PaymentServiceTests
         FakePaymentRepository repository,
         FakeMockPaymentGateway? gateway = null,
         FakePaymentGateway? paymentGateway = null,
-        FakeRealtimeEventPublisher? realtimePublisher = null)
+        FakeRealtimeEventPublisher? realtimePublisher = null,
+        FakeFulfillmentCoordinator? fulfillmentCoordinator = null)
     {
         paymentGateway ??= new FakePaymentGateway();
         realtimePublisher ??= new FakeRealtimeEventPublisher();
@@ -550,6 +551,7 @@ public class PaymentServiceTests
                 inventoryRepository,
                 notifications),
             new FakePaymentConfirmationTransactionManager(),
+            fulfillmentCoordinator ?? new FakeFulfillmentCoordinator(),
             NullLogger<PaymentService>.Instance);
     }
 }
