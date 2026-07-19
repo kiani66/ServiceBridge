@@ -40,6 +40,7 @@ public class ServiceBridgeDbContext : DbContext
     public DbSet<FulfillmentPolicy> FulfillmentPolicies { get; set; } = null!;
     public DbSet<FulfillmentExecution> FulfillmentExecutions { get; set; } = null!;
     public DbSet<FulfillmentAttempt> FulfillmentAttempts { get; set; } = null!;
+    public DbSet<DeliveryArtifact> DeliveryArtifacts { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -53,6 +54,7 @@ public class ServiceBridgeDbContext : DbContext
         EnsureTicketMessagesAreAppendOnly();
         EnsureAuditRecordsAreAppendOnly();
         EnsureFulfillmentAttemptsAreAppendPreserved();
+        EnsureDeliveryArtifactsAreAppendOnly();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
@@ -64,6 +66,7 @@ public class ServiceBridgeDbContext : DbContext
         EnsureTicketMessagesAreAppendOnly();
         EnsureAuditRecordsAreAppendOnly();
         EnsureFulfillmentAttemptsAreAppendPreserved();
+        EnsureDeliveryArtifactsAreAppendOnly();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
@@ -134,6 +137,20 @@ public class ServiceBridgeDbContext : DbContext
         {
             throw new InvalidOperationException(
                 "Fulfillment attempts cannot be deleted or changed after completion.");
+        }
+    }
+
+    private void EnsureDeliveryArtifactsAreAppendOnly()
+    {
+        var invalidEntryExists = ChangeTracker
+            .Entries<DeliveryArtifact>()
+            .Any(entry =>
+                entry.State is EntityState.Modified or EntityState.Deleted);
+
+        if (invalidEntryExists)
+        {
+            throw new InvalidOperationException(
+                "Delivery artifacts are append-only.");
         }
     }
 }
