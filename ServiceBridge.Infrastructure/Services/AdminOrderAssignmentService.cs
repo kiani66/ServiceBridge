@@ -15,17 +15,20 @@ public class AdminOrderAssignmentService : IAdminOrderAssignmentService
     private readonly INotificationService _notificationService;
     private readonly IRealtimeEventPublisher _realtimeEventPublisher;
     private readonly IAuditLogWriter _auditLogWriter;
+    private readonly IFulfillmentCoordinator _fulfillmentCoordinator;
 
     public AdminOrderAssignmentService(
         IAdminOrderCommandRepository repository,
         INotificationService notificationService,
         IRealtimeEventPublisher realtimeEventPublisher,
-        IAuditLogWriter auditLogWriter)
+        IAuditLogWriter auditLogWriter,
+        IFulfillmentCoordinator fulfillmentCoordinator)
     {
         _repository = repository;
         _notificationService = notificationService;
         _realtimeEventPublisher = realtimeEventPublisher;
         _auditLogWriter = auditLogWriter;
+        _fulfillmentCoordinator = fulfillmentCoordinator;
     }
 
     public async Task<ServiceResult> AssignAsync(
@@ -48,6 +51,13 @@ public class AdminOrderAssignmentService : IAdminOrderAssignmentService
                 AppMessages.AgentNotFound,
                 AppConstants.ErrorCodes.NotFound,
                 404);
+        }
+
+        var initialization = await _fulfillmentCoordinator
+            .EnsureForManualAssignmentAsync(order);
+        if (!initialization.Success)
+        {
+            return initialization;
         }
 
         var previousAgentId = order.AssignedAgentId;

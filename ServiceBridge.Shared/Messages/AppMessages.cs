@@ -45,6 +45,12 @@ public static class AppMessages
     public const string OrderNumberGenerationFailed = "Unable to generate a unique order number.";
     public const string FulfillmentPolicyRequired =
         "A fulfillment policy is required before this service variant can be purchased.";
+    public const string FulfillmentExecutionMissing =
+        "The fulfillment execution required for this order is missing.";
+    public const string FulfillmentExecutionConflict =
+        "The fulfillment execution cannot perform this operation in its current state.";
+    public const string FulfillmentModeMigrationMismatch =
+        "The order fulfillment snapshots are not compatible with the current migration.";
     public const string OrderNotFound = "Order not found.";
     public const string OrderCancelled = "Order cancelled successfully.";
     public const string OrderCancelledByUser = "Cancelled by customer.";

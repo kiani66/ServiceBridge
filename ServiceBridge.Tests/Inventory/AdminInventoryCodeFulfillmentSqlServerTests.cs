@@ -511,6 +511,7 @@ public sealed class AdminInventoryCodeFulfillmentSqlServerTests :
             realtimeEventPublisher,
             fulfillment,
             new PaymentConfirmationTransactionManager(context),
+            new FakeFulfillmentCoordinator(),
             NullLogger<PaymentService>.Instance);
     }
 

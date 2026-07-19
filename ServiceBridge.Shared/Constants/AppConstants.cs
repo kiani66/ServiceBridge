@@ -33,6 +33,10 @@ public static class AppConstants
         public const string NotFound = "NotFound";
         public const string Conflict = "Conflict";
         public const string FulfillmentPolicyRequired = "FulfillmentPolicyRequired";
+        public const string FulfillmentExecutionMissing = "FulfillmentExecutionMissing";
+        public const string FulfillmentExecutionConflict = "FulfillmentExecutionConflict";
+        public const string FulfillmentModeMigrationMismatch =
+            "FulfillmentModeMigrationMismatch";
         public const string PaymentGatewayUnavailable = "PaymentGatewayUnavailable";
         public const string UnexpectedError = "UnexpectedError";
     }
