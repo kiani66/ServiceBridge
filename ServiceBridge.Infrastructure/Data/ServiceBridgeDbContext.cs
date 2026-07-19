@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ServiceBridge.Domain.Entities;
+using ServiceBridge.Domain.Enums;
 
 namespace ServiceBridge.Infrastructure.Data;
 
@@ -37,6 +38,8 @@ public class ServiceBridgeDbContext : DbContext
     public DbSet<AuditLog> AuditLogs { get; set; } = null!;
     public DbSet<InventoryItem> InventoryItems { get; set; } = null!;
     public DbSet<FulfillmentPolicy> FulfillmentPolicies { get; set; } = null!;
+    public DbSet<FulfillmentExecution> FulfillmentExecutions { get; set; } = null!;
+    public DbSet<FulfillmentAttempt> FulfillmentAttempts { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,6 +52,7 @@ public class ServiceBridgeDbContext : DbContext
         EnsureOrderHistoryIsAppendOnly();
         EnsureTicketMessagesAreAppendOnly();
         EnsureAuditRecordsAreAppendOnly();
+        EnsureFulfillmentAttemptsAreAppendPreserved();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
@@ -59,6 +63,7 @@ public class ServiceBridgeDbContext : DbContext
         EnsureOrderHistoryIsAppendOnly();
         EnsureTicketMessagesAreAppendOnly();
         EnsureAuditRecordsAreAppendOnly();
+        EnsureFulfillmentAttemptsAreAppendPreserved();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
@@ -111,6 +116,24 @@ public class ServiceBridgeDbContext : DbContext
         if (invalidEntries.Any())
         {
             throw new InvalidOperationException("Ticket messages are append-only.");
+        }
+    }
+
+    private void EnsureFulfillmentAttemptsAreAppendPreserved()
+    {
+        var invalidEntryExists = ChangeTracker
+            .Entries<FulfillmentAttempt>()
+            .Any(entry =>
+                entry.State == EntityState.Deleted ||
+                entry.State == EntityState.Modified &&
+                entry.OriginalValues.GetValue<FulfillmentAttemptStatus>(
+                    nameof(FulfillmentAttempt.Status)) !=
+                FulfillmentAttemptStatus.Processing);
+
+        if (invalidEntryExists)
+        {
+            throw new InvalidOperationException(
+                "Fulfillment attempts cannot be deleted or changed after completion.");
         }
     }
 }
