@@ -180,8 +180,7 @@ public sealed class AdminInventoryCodeFulfillmentServiceTests
     public async Task RetryAsync_ForManualAgentOrder_ReturnsConflictWithoutPersistence()
     {
         var operations = new List<string>();
-        var order = CreatePaidInventoryOrder();
-        order.ServiceFulfillmentModeSnapshot = FulfillmentMode.ManualAgent;
+        var order = CreatePaidInventoryOrder(FulfillmentMode.ManualAgent);
         var setup = CreateSetup(order, operations);
 
         var result = await setup.Service.RetryAsync(Guid.NewGuid(), order.Id);
@@ -302,17 +301,15 @@ public sealed class AdminInventoryCodeFulfillmentServiceTests
             audit);
     }
 
-    private static Order CreatePaidInventoryOrder()
+    private static Order CreatePaidInventoryOrder(
+        FulfillmentMode fulfillmentMode = FulfillmentMode.InventoryCode)
     {
-        var order = new Order
-        {
-            Id = Guid.NewGuid(),
-            OrderNumber = "ORD-RETRY",
-            UserId = Guid.NewGuid(),
-            ServiceVariantId = Guid.NewGuid(),
-            ServiceFulfillmentModeSnapshot = FulfillmentMode.InventoryCode,
-            Status = OrderStatus.Paid
-        };
+        var order = OrderTestFactory.Create(fulfillmentMode);
+        order.Id = Guid.NewGuid();
+        order.OrderNumber = "ORD-RETRY";
+        order.UserId = Guid.NewGuid();
+        order.ServiceVariantId = Guid.NewGuid();
+        order.Status = OrderStatus.Paid;
         var payment = new Payment
         {
             Id = Guid.NewGuid(),

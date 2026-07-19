@@ -2,6 +2,7 @@ using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Interfaces;
 using ServiceBridge.Domain.Entities;
 using ServiceBridge.Domain.Enums;
+using ServiceBridge.Tests.TestDoubles;
 using ServiceBridge.Infrastructure.Repositories;
 using ServiceBridge.Infrastructure.Services;
 using Xunit;
@@ -191,20 +192,19 @@ public class AdminFinancialReportServiceTests
 
     private static Order CreateOrder(string orderNumber, DateTime createdAt)
     {
-        return new Order
-        {
-            Id = Guid.NewGuid(),
-            OrderNumber = orderNumber,
-            UserId = Guid.NewGuid(),
-            Status = OrderStatus.WaitingForPayment,
-            ForeignPrice = 10m,
-            ExchangeRateSnapshot = 100_000m,
-            MarginPercentSnapshot = 10m,
-            BaseAmountIrr = 1_000_000m,
-            ProfitAmountIrr = 100_000m,
-            FinalAmountIrr = 1_100_000m,
-            CreatedAt = createdAt
-        };
+        var order = OrderTestFactory.Create();
+        order.Id = Guid.NewGuid();
+        order.OrderNumber = orderNumber;
+        order.UserId = Guid.NewGuid();
+        order.Status = OrderStatus.WaitingForPayment;
+        order.ForeignPrice = 10m;
+        order.ExchangeRateSnapshot = 100_000m;
+        order.MarginPercentSnapshot = 10m;
+        order.BaseAmountIrr = 1_000_000m;
+        order.ProfitAmountIrr = 100_000m;
+        order.FinalAmountIrr = 1_100_000m;
+        order.CreatedAt = createdAt;
+        return order;
     }
 
     private static Payment CreatePayment(

@@ -1,6 +1,7 @@
 using ServiceBridge.Domain.Entities;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Domain.Exceptions;
+using ServiceBridge.Tests.TestDoubles;
 using Xunit;
 
 namespace ServiceBridge.Tests.Orders;
@@ -46,16 +47,12 @@ public class OrderInventoryFulfillmentTests
     public void InventoryFulfillment_InvalidTransitions_ThrowInvalidOrderTransitionException()
     {
         var manualPaidOrder = CreatePaidOrder(FulfillmentMode.ManualAgent);
-        var inventoryCreatedOrder = new Order
-        {
-            ServiceFulfillmentModeSnapshot = FulfillmentMode.InventoryCode,
-            Status = OrderStatus.Created
-        };
-        var inventoryAssignedOrder = new Order
-        {
-            ServiceFulfillmentModeSnapshot = FulfillmentMode.InventoryCode,
-            Status = OrderStatus.Assigned
-        };
+        var inventoryCreatedOrder =
+            OrderTestFactory.Create(FulfillmentMode.InventoryCode);
+        inventoryCreatedOrder.Status = OrderStatus.Created;
+        var inventoryAssignedOrder =
+            OrderTestFactory.Create(FulfillmentMode.InventoryCode);
+        inventoryAssignedOrder.Status = OrderStatus.Assigned;
         var inventoryPaidOrder = CreatePaidOrder(FulfillmentMode.InventoryCode);
         var inventoryCompletedOrder = CreatePaidOrder(FulfillmentMode.InventoryCode);
         inventoryCompletedOrder.StartInventoryFulfillment(Guid.NewGuid());
@@ -176,7 +173,8 @@ public class OrderInventoryFulfillmentTests
     [Fact]
     public void GenericNonAssignmentTransition_WhenAllowed_RemainsAvailable()
     {
-        var order = new Order { Status = OrderStatus.Created };
+        var order = OrderTestFactory.Create();
+        order.Status = OrderStatus.Created;
         var userId = Guid.NewGuid();
         var changedAtUtc = DateTime.UtcNow;
 
@@ -226,11 +224,8 @@ public class OrderInventoryFulfillmentTests
     [Fact]
     public void Assignment_WhenManualAgentOrderIsNotPaid_RejectsWithoutMutation()
     {
-        var order = new Order
-        {
-            ServiceFulfillmentModeSnapshot = FulfillmentMode.ManualAgent,
-            Status = OrderStatus.WaitingForPayment
-        };
+        var order = OrderTestFactory.Create(FulfillmentMode.ManualAgent);
+        order.Status = OrderStatus.WaitingForPayment;
         var status = order.Status;
         var assignedAgentId = order.AssignedAgentId;
         var assignedAt = order.AssignedAt;
@@ -254,11 +249,8 @@ public class OrderInventoryFulfillmentTests
 
     private static Order CreatePaidOrder(FulfillmentMode serviceFulfillmentMode)
     {
-        var order = new Order
-        {
-            ServiceFulfillmentModeSnapshot = serviceFulfillmentMode,
-            Status = OrderStatus.Created
-        };
+        var order = OrderTestFactory.Create(serviceFulfillmentMode);
+        order.Status = OrderStatus.Created;
 
         order.MoveToWaitingForPayment(Guid.NewGuid(), DateTime.UtcNow);
         order.MarkPaid(Guid.NewGuid(), "Payment confirmed.");

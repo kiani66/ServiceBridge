@@ -1,5 +1,6 @@
 using ServiceBridge.Domain.Entities;
 using ServiceBridge.Domain.Enums;
+using ServiceBridge.Tests.TestDoubles;
 using Xunit;
 
 namespace ServiceBridge.Tests.Payments;
@@ -10,11 +11,9 @@ public class OrderMarkPaidTests
     public void MarkPaid_WhenWaitingForPayment_TransitionsAndAppendsSystemLog()
     {
         var paymentId = Guid.NewGuid();
-        var order = new Order
-        {
-            Id = Guid.NewGuid(),
-            Status = OrderStatus.WaitingForPayment
-        };
+        var order = OrderTestFactory.Create();
+        order.Id = Guid.NewGuid();
+        order.Status = OrderStatus.WaitingForPayment;
 
         order.MarkPaid(paymentId, "Payment confirmed.");
 
@@ -32,11 +31,9 @@ public class OrderMarkPaidTests
     [Fact]
     public void MarkPaid_WhenOrderIsNotWaitingForPayment_Throws()
     {
-        var order = new Order
-        {
-            Id = Guid.NewGuid(),
-            Status = OrderStatus.Processing
-        };
+        var order = OrderTestFactory.Create();
+        order.Id = Guid.NewGuid();
+        order.Status = OrderStatus.Processing;
 
         Assert.Throws<ServiceBridge.Domain.Exceptions.InvalidOrderTransitionException>(
             () => order.MarkPaid(Guid.NewGuid(), "Payment confirmed."));

@@ -104,16 +104,14 @@ public class AdminOrderQueryRepositoryAssignmentTests
         string orderNumber,
         FulfillmentMode fulfillmentMode)
     {
-        return new Order
-        {
-            OrderNumber = orderNumber,
-            UserId = user.Id,
-            User = user,
-            ServiceId = service.Id,
-            Service = service,
-            Status = OrderStatus.Paid,
-            PaidAt = DateTime.UtcNow,
-            ServiceFulfillmentModeSnapshot = fulfillmentMode
-        };
+        var order = OrderTestFactory.Create(fulfillmentMode);
+        order.OrderNumber = orderNumber;
+        order.UserId = user.Id;
+        order.User = user;
+        order.ServiceId = service.Id;
+        order.Service = service;
+        order.Status = OrderStatus.Paid;
+        order.PaidAt = DateTime.UtcNow;
+        return order;
     }
 }

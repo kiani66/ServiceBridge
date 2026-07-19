@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ServiceBridge.Domain.Entities;
 using ServiceBridge.Domain.Enums;
 using ServiceBridge.Infrastructure.Repositories;
+using ServiceBridge.Tests.TestDoubles;
 using Xunit;
 
 namespace ServiceBridge.Tests.Inventory;
@@ -443,29 +444,27 @@ public sealed class InventoryCodeFulfillmentRepositorySqlServerTests :
         string orderNumber,
         DateTime createdAtUtc)
     {
-        return new Order
-        {
-            OrderNumber = orderNumber,
-            UserId = customer.Id,
-            User = customer,
-            ServiceId = service.Id,
-            Service = service,
-            ServiceVariantId = variant.Id,
-            ServiceVariant = variant,
-            OrderType = OrderType.Purchase,
-            FulfillmentMode = OrderFulfillmentMode.UseExistingAccount,
-            ServiceFulfillmentModeSnapshot = FulfillmentMode.InventoryCode,
-            Status = OrderStatus.Paid,
-            ForeignPrice = 1m,
-            CurrencyCode = "USD",
-            ExchangeRateSnapshot = 1m,
-            MarginPercentSnapshot = 0m,
-            BaseAmountIrr = 1m,
-            ProfitAmountIrr = 0m,
-            FinalAmountIrr = 1m,
-            PaidAt = createdAtUtc,
-            CreatedAt = createdAtUtc
-        };
+        var order = OrderTestFactory.Create(FulfillmentMode.InventoryCode);
+        order.OrderNumber = orderNumber;
+        order.UserId = customer.Id;
+        order.User = customer;
+        order.ServiceId = service.Id;
+        order.Service = service;
+        order.ServiceVariantId = variant.Id;
+        order.ServiceVariant = variant;
+        order.OrderType = OrderType.Purchase;
+        order.FulfillmentMode = OrderFulfillmentMode.UseExistingAccount;
+        order.Status = OrderStatus.Paid;
+        order.ForeignPrice = 1m;
+        order.CurrencyCode = "USD";
+        order.ExchangeRateSnapshot = 1m;
+        order.MarginPercentSnapshot = 0m;
+        order.BaseAmountIrr = 1m;
+        order.ProfitAmountIrr = 0m;
+        order.FinalAmountIrr = 1m;
+        order.PaidAt = createdAtUtc;
+        order.CreatedAt = createdAtUtc;
+        return order;
     }
 
     private sealed record ItemSeed(

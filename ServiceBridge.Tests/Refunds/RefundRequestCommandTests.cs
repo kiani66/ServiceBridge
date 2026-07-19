@@ -263,15 +263,14 @@ public class RefundRequestCommandTests
         var orderId = Guid.NewGuid();
         var payment = CreateCompletedPayment(orderId, paymentAmountIrr);
 
-        return new Order
-        {
-            Id = orderId,
-            UserId = userId,
-            OrderNumber = "SB-1001",
-            Status = status,
-            FinalAmountIrr = finalAmountIrr,
-            PaymentRecords = [payment]
-        };
+        var order = OrderTestFactory.Create();
+        order.Id = orderId;
+        order.UserId = userId;
+        order.OrderNumber = "SB-1001";
+        order.Status = status;
+        order.FinalAmountIrr = finalAmountIrr;
+        order.PaymentRecords = [payment];
+        return order;
     }
 
     private static Payment CreateCompletedPayment(Guid orderId, decimal amountIrr)
@@ -302,13 +301,11 @@ public class RefundRequestCommandTests
             payment.AmountIRR,
             "The service failed.",
             DateTime.UtcNow);
-        request.Order = new Order
-        {
-            Id = orderId,
-            UserId = userId,
-            OrderNumber = "SB-1001",
-            Status = OrderStatus.Failed
-        };
+        request.Order = OrderTestFactory.Create();
+        request.Order.Id = orderId;
+        request.Order.UserId = userId;
+        request.Order.OrderNumber = "SB-1001";
+        request.Order.Status = OrderStatus.Failed;
         request.Payment = payment;
 
         return request;

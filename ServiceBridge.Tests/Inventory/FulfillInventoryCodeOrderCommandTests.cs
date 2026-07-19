@@ -311,17 +311,15 @@ public sealed class FulfillInventoryCodeOrderCommandTests
         OrderStatus status,
         FulfillmentMode serviceFulfillmentMode = FulfillmentMode.InventoryCode)
     {
-        return new Order
-        {
-            Id = Guid.NewGuid(),
-            OrderNumber = $"INV-{Guid.NewGuid():N}",
-            UserId = Guid.NewGuid(),
-            ServiceId = Guid.NewGuid(),
-            ServiceVariantId = Guid.NewGuid(),
-            ServiceFulfillmentModeSnapshot = serviceFulfillmentMode,
-            Status = status,
-            CreatedAt = UtcNow.AddMinutes(-5)
-        };
+        var order = OrderTestFactory.Create(serviceFulfillmentMode);
+        order.Id = Guid.NewGuid();
+        order.OrderNumber = $"INV-{Guid.NewGuid():N}";
+        order.UserId = Guid.NewGuid();
+        order.ServiceId = Guid.NewGuid();
+        order.ServiceVariantId = Guid.NewGuid();
+        order.Status = status;
+        order.CreatedAt = UtcNow.AddMinutes(-5);
+        return order;
     }
 
     private static InventoryItem CreateAvailableItem(

@@ -503,18 +503,17 @@ public class PaymentServiceTests
 
     private static Order CreateOrder(Guid userId, OrderStatus status)
     {
-        return new Order
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            Status = status,
-            ForeignPrice = 20m,
-            ExchangeRateSnapshot = 150_000m,
-            MarginPercentSnapshot = 10m,
-            BaseAmountIrr = 3_000_000m,
-            ProfitAmountIrr = 300_000m,
-            FinalAmountIrr = 3_300_000m
-        };
+        var order = OrderTestFactory.Create();
+        order.Id = Guid.NewGuid();
+        order.UserId = userId;
+        order.Status = status;
+        order.ForeignPrice = 20m;
+        order.ExchangeRateSnapshot = 150_000m;
+        order.MarginPercentSnapshot = 10m;
+        order.BaseAmountIrr = 3_000_000m;
+        order.ProfitAmountIrr = 300_000m;
+        order.FinalAmountIrr = 3_300_000m;
+        return order;
     }
 
     private static Payment CreatePayment(Order order)

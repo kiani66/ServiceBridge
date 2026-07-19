@@ -354,17 +354,15 @@ public class AgentOrderProcessingTests
         CreateService(OrderStatus status)
     {
         var agentId = Guid.NewGuid();
-        var order = new Order
+        var order = OrderTestFactory.Create();
+        order.Id = Guid.NewGuid();
+        order.UserId = Guid.NewGuid();
+        order.AssignedAgentId = agentId;
+        order.Status = status;
+        order.Service = new DigitalService
         {
             Id = Guid.NewGuid(),
-            UserId = Guid.NewGuid(),
-            AssignedAgentId = agentId,
-            Status = status,
-            Service = new DigitalService
-            {
-                Id = Guid.NewGuid(),
-                SupportsUseExistingAccount = true
-            }
+            SupportsUseExistingAccount = true
         };
         var repository = new FakeAgentOrderCommandRepository { Order = order };
         var realtimePublisher = new FakeRealtimeEventPublisher();

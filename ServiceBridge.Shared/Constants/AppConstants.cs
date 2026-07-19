@@ -32,6 +32,7 @@ public static class AppConstants
         public const string UserInactive = "UserInactive";
         public const string NotFound = "NotFound";
         public const string Conflict = "Conflict";
+        public const string FulfillmentPolicyRequired = "FulfillmentPolicyRequired";
         public const string PaymentGatewayUnavailable = "PaymentGatewayUnavailable";
         public const string UnexpectedError = "UnexpectedError";
     }

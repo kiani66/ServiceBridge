@@ -43,6 +43,8 @@ public static class AppMessages
         "Specify a service variant, service or category, not more than one.";
     public const string OrderCreated = "Order created successfully.";
     public const string OrderNumberGenerationFailed = "Unable to generate a unique order number.";
+    public const string FulfillmentPolicyRequired =
+        "A fulfillment policy is required before this service variant can be purchased.";
     public const string OrderNotFound = "Order not found.";
     public const string OrderCancelled = "Order cancelled successfully.";
     public const string OrderCancelledByUser = "Cancelled by customer.";
