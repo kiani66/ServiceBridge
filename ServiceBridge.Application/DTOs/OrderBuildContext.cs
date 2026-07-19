@@ -1,3 +1,5 @@
+using ServiceBridge.Domain.Orders;
+
 namespace ServiceBridge.Application.DTOs;
 
 public class OrderBuildContext
@@ -6,6 +8,7 @@ public class OrderBuildContext
     public CreateOrderRequest Request { get; set; } = null!;
     public OrderServiceDefinition Service { get; set; } = null!;
     public PricingCalculation Pricing { get; set; } = null!;
+    public OrderFulfillmentPolicySnapshot FulfillmentPolicySnapshot { get; set; } = null!;
     public string OrderNumber { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
 }

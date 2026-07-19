@@ -25,28 +25,27 @@ public class OrderFactory : IOrderFactory
             x => x.FieldKey,
             StringComparer.OrdinalIgnoreCase);
 
-        var order = new Order
-        {
-            OrderNumber = context.OrderNumber,
-            UserId = context.UserId,
-            ServiceId = context.Service.ServiceId,
-            ServiceVariantId = context.Service.ServiceVariantId,
-            OrderType = context.Request.OrderType,
-            FulfillmentMode = context.Request.FulfillmentMode,
-            ServiceFulfillmentModeSnapshot = context.Service.ServiceFulfillmentMode,
-            Status = OrderStatus.Created,
-            ForeignPrice = context.Pricing.ForeignPrice,
-            CurrencyCode = context.Service.CurrencyCode,
-            ExchangeRateSnapshot = context.Pricing.ExchangeRate,
-            MarginPercentSnapshot = context.Pricing.MarginPercent,
-            BaseAmountIrr = context.Pricing.BaseAmountIrr,
-            ProfitAmountIrr = context.Pricing.ProfitAmountIrr,
-            FinalAmountIrr = context.Pricing.FinalAmountIrr,
-            VariantNameSnapshot = context.Service.VariantName,
-            VariantDurationDaysSnapshot = context.Service.VariantDurationDays,
-            VariantRegionCodeSnapshot = context.Service.VariantRegionCode,
-            CreatedAt = context.CreatedAtUtc
-        };
+        var order = Order.Create(
+            context.FulfillmentPolicySnapshot,
+            context.Service.ServiceFulfillmentMode);
+        order.OrderNumber = context.OrderNumber;
+        order.UserId = context.UserId;
+        order.ServiceId = context.Service.ServiceId;
+        order.ServiceVariantId = context.Service.ServiceVariantId;
+        order.OrderType = context.Request.OrderType;
+        order.FulfillmentMode = context.Request.FulfillmentMode;
+        order.Status = OrderStatus.Created;
+        order.ForeignPrice = context.Pricing.ForeignPrice;
+        order.CurrencyCode = context.Service.CurrencyCode;
+        order.ExchangeRateSnapshot = context.Pricing.ExchangeRate;
+        order.MarginPercentSnapshot = context.Pricing.MarginPercent;
+        order.BaseAmountIrr = context.Pricing.BaseAmountIrr;
+        order.ProfitAmountIrr = context.Pricing.ProfitAmountIrr;
+        order.FinalAmountIrr = context.Pricing.FinalAmountIrr;
+        order.VariantNameSnapshot = context.Service.VariantName;
+        order.VariantDurationDaysSnapshot = context.Service.VariantDurationDays;
+        order.VariantRegionCodeSnapshot = context.Service.VariantRegionCode;
+        order.CreatedAt = context.CreatedAtUtc;
 
         foreach (var input in OrderCreationService.GetCredentialInputs(context.Request))
         {

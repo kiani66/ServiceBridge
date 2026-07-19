@@ -13,6 +13,7 @@ public class OrderCreationService : IOrderCreationService
 
     private readonly IOrderCreationRepository _repository;
     private readonly IPricingResolver _pricingResolver;
+    private readonly IFulfillmentPolicyResolver _fulfillmentPolicyResolver;
     private readonly IOrderFieldValidator _fieldValidator;
     private readonly IOrderNumberGenerator _orderNumberGenerator;
     private readonly IOrderFactory _orderFactory;
@@ -21,6 +22,7 @@ public class OrderCreationService : IOrderCreationService
     public OrderCreationService(
         IOrderCreationRepository repository,
         IPricingResolver pricingResolver,
+        IFulfillmentPolicyResolver fulfillmentPolicyResolver,
         IOrderFieldValidator fieldValidator,
         IOrderNumberGenerator orderNumberGenerator,
         IOrderFactory orderFactory,
@@ -28,6 +30,7 @@ public class OrderCreationService : IOrderCreationService
     {
         _repository = repository;
         _pricingResolver = pricingResolver;
+        _fulfillmentPolicyResolver = fulfillmentPolicyResolver;
         _fieldValidator = fieldValidator;
         _orderNumberGenerator = orderNumberGenerator;
         _orderFactory = orderFactory;
@@ -131,6 +134,16 @@ public class OrderCreationService : IOrderCreationService
                 resolution.StatusCode);
         }
 
+        var fulfillmentPolicySnapshot =
+            await _fulfillmentPolicyResolver.ResolveLatestAsync(service.ServiceVariantId);
+        if (fulfillmentPolicySnapshot == null)
+        {
+            return ServiceResult<OrderCreatedResponse>.Fail(
+                AppMessages.FulfillmentPolicyRequired,
+                AppConstants.ErrorCodes.FulfillmentPolicyRequired,
+                409);
+        }
+
         var orderNumber = await GenerateUniqueOrderNumberAsync(now);
         if (orderNumber == null)
         {
@@ -154,6 +167,7 @@ public class OrderCreationService : IOrderCreationService
                 ProfitAmountIrr = resolution.Data.ProfitAmountIrr,
                 FinalAmountIrr = resolution.Data.FinalAmountIrr
             },
+            FulfillmentPolicySnapshot = fulfillmentPolicySnapshot,
             OrderNumber = orderNumber,
             CreatedAtUtc = now
         });

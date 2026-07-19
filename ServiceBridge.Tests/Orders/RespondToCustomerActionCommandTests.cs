@@ -163,13 +163,12 @@ public class RespondToCustomerActionCommandTests
 
     private static Order CreateProcessingOrder(Guid userId, Guid agentId)
     {
-        return new Order
-        {
-            Id = Guid.NewGuid(),
-            OrderNumber = "SB-1001",
-            UserId = userId,
-            AssignedAgentId = agentId,
-            Status = OrderStatus.Processing
-        };
+        var order = OrderTestFactory.Create();
+        order.Id = Guid.NewGuid();
+        order.OrderNumber = "SB-1001";
+        order.UserId = userId;
+        order.AssignedAgentId = agentId;
+        order.Status = OrderStatus.Processing;
+        return order;
     }
 }

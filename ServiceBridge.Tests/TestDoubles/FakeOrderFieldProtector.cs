@@ -4,8 +4,11 @@ namespace ServiceBridge.Tests.TestDoubles;
 
 internal class FakeOrderFieldProtector : IOrderFieldProtector
 {
+    public int ProtectCallCount { get; private set; }
+
     public string Protect(string value)
     {
+        ProtectCallCount++;
         return $"protected::{value}";
     }
 

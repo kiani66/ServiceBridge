@@ -546,6 +546,9 @@ namespace ServiceBridge.Infrastructure.Migrations
                         .HasColumnType("nchar(3)")
                         .IsFixedLength();
 
+                    b.Property<int?>("DeliveryArtifactTypeSnapshot")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("ExchangeRateSnapshot")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -559,6 +562,12 @@ namespace ServiceBridge.Infrastructure.Migrations
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<int>("FulfillmentMode")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("FulfillmentPolicyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("FulfillmentPolicyVersionSnapshot")
                         .HasColumnType("int");
 
                     b.Property<decimal>("MarginPercentSnapshot")
@@ -575,6 +584,12 @@ namespace ServiceBridge.Infrastructure.Migrations
 
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("ProcurementStrategySnapshot")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PolicyFulfillmentModeSnapshot")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("ProfitAmountIrr")
                         .HasPrecision(18)
@@ -617,6 +632,8 @@ namespace ServiceBridge.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("FulfillmentPolicyId");
+
                     b.HasIndex("OrderNumber")
                         .IsUnique();
 
@@ -633,6 +650,8 @@ namespace ServiceBridge.Infrastructure.Migrations
                     b.ToTable("Orders", t =>
                         {
                             t.HasCheckConstraint("CK_Orders_FinalAmount_Matches", "[FinalAmountIrr] = [BaseAmountIrr] + [ProfitAmountIrr]");
+
+                            t.HasCheckConstraint("CK_Orders_FulfillmentPolicySnapshot_Complete", "([FulfillmentPolicyId] IS NULL AND [FulfillmentPolicyVersionSnapshot] IS NULL AND [ProcurementStrategySnapshot] IS NULL AND [PolicyFulfillmentModeSnapshot] IS NULL AND [DeliveryArtifactTypeSnapshot] IS NULL) OR ([FulfillmentPolicyId] IS NOT NULL AND [FulfillmentPolicyVersionSnapshot] IS NOT NULL AND [FulfillmentPolicyVersionSnapshot] > 0 AND [ProcurementStrategySnapshot] IS NOT NULL AND [ProcurementStrategySnapshot] IN (1, 2, 3, 4, 5) AND [PolicyFulfillmentModeSnapshot] IS NOT NULL AND [PolicyFulfillmentModeSnapshot] IN (1, 2, 3, 4) AND [DeliveryArtifactTypeSnapshot] IS NOT NULL AND [DeliveryArtifactTypeSnapshot] IN (1, 2, 3, 4))");
 
                             t.HasCheckConstraint("CK_Orders_Pricing_NonNegative", "[ForeignPrice] >= 0 AND [ExchangeRateSnapshot] > 0 AND [MarginPercentSnapshot] >= 0 AND [MarginPercentSnapshot] <= 100 AND [BaseAmountIrr] >= 0 AND [ProfitAmountIrr] >= 0 AND [FinalAmountIrr] >= 0");
 
@@ -1612,6 +1631,11 @@ namespace ServiceBridge.Infrastructure.Migrations
                         .HasForeignKey("AssignedAgentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ServiceBridge.Domain.Entities.FulfillmentPolicy", "FulfillmentPolicy")
+                        .WithMany()
+                        .HasForeignKey("FulfillmentPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ServiceBridge.Domain.Entities.DigitalService", "Service")
                         .WithMany()
                         .HasForeignKey("ServiceId")
@@ -1630,6 +1654,8 @@ namespace ServiceBridge.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("AssignedAgent");
+
+                    b.Navigation("FulfillmentPolicy");
 
                     b.Navigation("Service");
 

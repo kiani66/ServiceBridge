@@ -576,28 +576,25 @@ public sealed class AdminInventoryCodeFulfillmentSqlServerTests :
             IsActive = true,
             CreatedAt = now.AddMinutes(-10)
         };
-        var order = new Order
-        {
-            OrderNumber = $"S3B1B-{suffix[..8]}",
-            UserId = customer.Id,
-            User = customer,
-            ServiceId = service.Id,
-            Service = service,
-            ServiceVariantId = variant.Id,
-            ServiceVariant = variant,
-            OrderType = OrderType.Purchase,
-            FulfillmentMode = OrderFulfillmentMode.UseExistingAccount,
-            ServiceFulfillmentModeSnapshot = FulfillmentMode.InventoryCode,
-            Status = OrderStatus.Created,
-            ForeignPrice = 1m,
-            CurrencyCode = "USD",
-            ExchangeRateSnapshot = 1m,
-            MarginPercentSnapshot = 0m,
-            BaseAmountIrr = 1m,
-            ProfitAmountIrr = 0m,
-            FinalAmountIrr = 1m,
-            CreatedAt = now.AddMinutes(-10)
-        };
+        var order = OrderTestFactory.Create(FulfillmentMode.InventoryCode);
+        order.OrderNumber = $"S3B1B-{suffix[..8]}";
+        order.UserId = customer.Id;
+        order.User = customer;
+        order.ServiceId = service.Id;
+        order.Service = service;
+        order.ServiceVariantId = variant.Id;
+        order.ServiceVariant = variant;
+        order.OrderType = OrderType.Purchase;
+        order.FulfillmentMode = OrderFulfillmentMode.UseExistingAccount;
+        order.Status = OrderStatus.Created;
+        order.ForeignPrice = 1m;
+        order.CurrencyCode = "USD";
+        order.ExchangeRateSnapshot = 1m;
+        order.MarginPercentSnapshot = 0m;
+        order.BaseAmountIrr = 1m;
+        order.ProfitAmountIrr = 0m;
+        order.FinalAmountIrr = 1m;
+        order.CreatedAt = now.AddMinutes(-10);
         order.MoveToWaitingForPayment(customer.Id, now.AddMinutes(-9));
 
         var paymentSeeds = payments ??

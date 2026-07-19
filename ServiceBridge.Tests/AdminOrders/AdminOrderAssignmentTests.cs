@@ -183,8 +183,9 @@ public class AdminOrderAssignmentTests
     [Fact]
     public async Task AssignAsync_WhenInventoryCodeOrder_ReturnsConflictWithoutSideEffects()
     {
-        var order = CreateOrder(OrderStatus.Paid);
-        order.ServiceFulfillmentModeSnapshot = FulfillmentMode.InventoryCode;
+        var order = CreateOrder(
+            OrderStatus.Paid,
+            FulfillmentMode.InventoryCode);
         var repository = new FakeAdminOrderCommandRepository { Order = order };
         var notificationService = new FakeNotificationService();
         var realtimePublisher = new FakeRealtimeEventPublisher();
@@ -211,13 +212,14 @@ public class AdminOrderAssignmentTests
         Assert.Empty(realtimePublisher.OrderAssignments);
     }
 
-    private static Order CreateOrder(OrderStatus status)
+    private static Order CreateOrder(
+        OrderStatus status,
+        FulfillmentMode fulfillmentMode = FulfillmentMode.ManualAgent)
     {
-        return new Order
-        {
-            Id = Guid.NewGuid(),
-            UserId = Guid.NewGuid(),
-            Status = status
-        };
+        var order = OrderTestFactory.Create(fulfillmentMode);
+        order.Id = Guid.NewGuid();
+        order.UserId = Guid.NewGuid();
+        order.Status = status;
+        return order;
     }
 }

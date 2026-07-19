@@ -93,11 +93,10 @@ public class CancelMyOrderCommandTests
 
     private static Order CreateOrder(Guid userId, OrderStatus status)
     {
-        return new Order
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            Status = status
-        };
+        var order = OrderTestFactory.Create();
+        order.Id = Guid.NewGuid();
+        order.UserId = userId;
+        order.Status = status;
+        return order;
     }
 }

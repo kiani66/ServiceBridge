@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ServiceBridge.Domain.Entities;
+using ServiceBridge.Domain.Enums;
 
 namespace ServiceBridge.Infrastructure.Data.Configurations;
 
@@ -29,6 +30,21 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         entity.Property(x => x.ServiceFulfillmentModeSnapshot)
             .HasConversion<int>()
             .IsRequired();
+
+        entity.Property(x => x.FulfillmentPolicyVersionSnapshot)
+            .IsRequired(false);
+
+        entity.Property(x => x.ProcurementStrategySnapshot)
+            .HasConversion<int?>()
+            .IsRequired(false);
+
+        entity.Property(x => x.PolicyFulfillmentModeSnapshot)
+            .HasConversion<int?>()
+            .IsRequired(false);
+
+        entity.Property(x => x.DeliveryArtifactTypeSnapshot)
+            .HasConversion<int?>()
+            .IsRequired(false);
 
         entity.Property(x => x.Status)
             .IsRequired();
@@ -96,6 +112,11 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .HasForeignKey(x => x.ServiceVariantId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        entity.HasOne(x => x.FulfillmentPolicy)
+            .WithMany()
+            .HasForeignKey(x => x.FulfillmentPolicyId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         entity.HasOne(x => x.AssignedAgent)
             .WithMany()
             .HasForeignKey(x => x.AssignedAgentId)
@@ -123,6 +144,33 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             table.HasCheckConstraint(
                 "CK_Orders_ServiceFulfillmentModeSnapshot_Valid",
                 "[ServiceFulfillmentModeSnapshot] IN (1, 2, 3, 4)");
+
+            table.HasCheckConstraint(
+                "CK_Orders_FulfillmentPolicySnapshot_Complete",
+                "([FulfillmentPolicyId] IS NULL " +
+                "AND [FulfillmentPolicyVersionSnapshot] IS NULL " +
+                "AND [ProcurementStrategySnapshot] IS NULL " +
+                "AND [PolicyFulfillmentModeSnapshot] IS NULL " +
+                "AND [DeliveryArtifactTypeSnapshot] IS NULL) OR " +
+                "([FulfillmentPolicyId] IS NOT NULL " +
+                "AND [FulfillmentPolicyVersionSnapshot] IS NOT NULL " +
+                "AND [FulfillmentPolicyVersionSnapshot] > 0 " +
+                "AND [ProcurementStrategySnapshot] IS NOT NULL " +
+                $"AND [ProcurementStrategySnapshot] IN ({(int)ProcurementStrategy.NotRequired}, " +
+                $"{(int)ProcurementStrategy.PreStockedInventory}, " +
+                $"{(int)ProcurementStrategy.OnDemandManual}, " +
+                $"{(int)ProcurementStrategy.OnDemandSupplierApi}, " +
+                $"{(int)ProcurementStrategy.PreferInventoryThenManual}) " +
+                "AND [PolicyFulfillmentModeSnapshot] IS NOT NULL " +
+                $"AND [PolicyFulfillmentModeSnapshot] IN ({(int)FulfillmentMode.ManualAgent}, " +
+                $"{(int)FulfillmentMode.InventoryCode}, " +
+                $"{(int)FulfillmentMode.ExternalAutomation}, " +
+                $"{(int)FulfillmentMode.InstructionOnly}) " +
+                "AND [DeliveryArtifactTypeSnapshot] IS NOT NULL " +
+                $"AND [DeliveryArtifactTypeSnapshot] IN ({(int)DeliveryArtifactType.DigitalCode}, " +
+                $"{(int)DeliveryArtifactType.GiftLink}, " +
+                $"{(int)DeliveryArtifactType.AccountAccess}, " +
+                $"{(int)DeliveryArtifactType.Instructions}))");
         });
     }
 }

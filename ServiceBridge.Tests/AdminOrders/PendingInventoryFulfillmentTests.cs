@@ -311,20 +311,18 @@ public class PendingInventoryFulfillmentTests
         OrderStatus status,
         DateTime createdAt)
     {
-        return new Order
-        {
-            OrderNumber = $"ORD-{suffix}",
-            UserId = user.Id,
-            User = user,
-            ServiceId = service.Id,
-            Service = service,
-            ServiceVariantId = variant.Id,
-            ServiceVariant = variant,
-            ServiceFulfillmentModeSnapshot = fulfillmentMode,
-            Status = status,
-            CreatedAt = createdAt,
-            PaidAt = createdAt
-        };
+        var order = OrderTestFactory.Create(fulfillmentMode);
+        order.OrderNumber = $"ORD-{suffix}";
+        order.UserId = user.Id;
+        order.User = user;
+        order.ServiceId = service.Id;
+        order.Service = service;
+        order.ServiceVariantId = variant.Id;
+        order.ServiceVariant = variant;
+        order.Status = status;
+        order.CreatedAt = createdAt;
+        order.PaidAt = createdAt;
+        return order;
     }
 
     private static async Task AddPaymentAsync(

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -103,6 +104,46 @@ public class OrderModelTests
     }
 
     [Fact]
+    public void Order_FulfillmentPolicySnapshot_UsesNullableColumnsAndRestrictedForeignKey()
+    {
+        var orderType = _context.Model.FindEntityType(typeof(Order))!;
+
+        Assert.True(orderType.FindProperty(nameof(Order.FulfillmentPolicyId))!.IsNullable);
+        Assert.True(orderType.FindProperty(nameof(Order.FulfillmentPolicyVersionSnapshot))!.IsNullable);
+        Assert.True(orderType.FindProperty(nameof(Order.ProcurementStrategySnapshot))!.IsNullable);
+        Assert.True(orderType.FindProperty(nameof(Order.PolicyFulfillmentModeSnapshot))!.IsNullable);
+        Assert.True(orderType.FindProperty(nameof(Order.DeliveryArtifactTypeSnapshot))!.IsNullable);
+        Assert.Contains(
+            orderType.GetForeignKeys(),
+            foreignKey => foreignKey.PrincipalEntityType.ClrType == typeof(FulfillmentPolicy) &&
+                          foreignKey.Properties.Select(x => x.Name)
+                              .SequenceEqual(new[] { nameof(Order.FulfillmentPolicyId) }) &&
+                          foreignKey.DeleteBehavior == DeleteBehavior.Restrict);
+    }
+
+    [Fact]
+    public void Order_FulfillmentPolicySnapshot_HasCompleteOrEmptyConstraint()
+    {
+        var orderType = _context.GetService<IDesignTimeModel>()
+            .Model.FindEntityType(typeof(Order))!;
+        var constraint = Assert.Single(
+            orderType.GetCheckConstraints(),
+            candidate => candidate.Name ==
+                "CK_Orders_FulfillmentPolicySnapshot_Complete");
+
+        Assert.Contains("[FulfillmentPolicyId] IS NULL", constraint.Sql);
+        Assert.Contains("[FulfillmentPolicyId] IS NOT NULL", constraint.Sql);
+        Assert.Contains("[FulfillmentPolicyVersionSnapshot] > 0", constraint.Sql);
+        Assert.Contains("[FulfillmentPolicyVersionSnapshot] IS NOT NULL", constraint.Sql);
+        Assert.Contains("[ProcurementStrategySnapshot] IS NOT NULL", constraint.Sql);
+        Assert.Contains("[ProcurementStrategySnapshot] IN (1, 2, 3, 4, 5)", constraint.Sql);
+        Assert.Contains("[PolicyFulfillmentModeSnapshot] IS NOT NULL", constraint.Sql);
+        Assert.Contains("[PolicyFulfillmentModeSnapshot] IN (1, 2, 3, 4)", constraint.Sql);
+        Assert.Contains("[DeliveryArtifactTypeSnapshot] IS NOT NULL", constraint.Sql);
+        Assert.Contains("[DeliveryArtifactTypeSnapshot] IN (1, 2, 3, 4)", constraint.Sql);
+    }
+
+    [Fact]
     public void Order_HasPricingIntegrityConstraints()
     {
         var designTimeModel = _context.GetService<IDesignTimeModel>().Model;
@@ -171,6 +212,11 @@ public class OrderModelTests
         {
             nameof(Order.Status),
             nameof(Order.ServiceFulfillmentModeSnapshot),
+            nameof(Order.FulfillmentPolicyId),
+            nameof(Order.FulfillmentPolicyVersionSnapshot),
+            nameof(Order.ProcurementStrategySnapshot),
+            nameof(Order.PolicyFulfillmentModeSnapshot),
+            nameof(Order.DeliveryArtifactTypeSnapshot),
             nameof(Order.ForeignPrice),
             nameof(Order.CurrencyCode),
             nameof(Order.ExchangeRateSnapshot),
@@ -188,6 +234,19 @@ public class OrderModelTests
             var setter = typeof(Order).GetProperty(propertyName)!.SetMethod!;
             Assert.False(setter.IsPublic);
         }
+    }
+
+    [Fact]
+    public void Order_ServiceFulfillmentModeSnapshot_IsInitOnly()
+    {
+        var setter = typeof(Order)
+            .GetProperty(nameof(Order.ServiceFulfillmentModeSnapshot))!
+            .SetMethod!;
+
+        Assert.True(setter.IsPrivate);
+        Assert.Contains(
+            typeof(IsExternalInit),
+            setter.ReturnParameter.GetRequiredCustomModifiers());
     }
 
     [Fact]

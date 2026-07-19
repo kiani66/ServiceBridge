@@ -87,6 +87,7 @@ builder.Services.AddScoped<IServiceCatalogQueryService, ServiceCatalogQueryServi
 builder.Services.AddScoped<IAdminCatalogService, AdminCatalogService>();
 builder.Services.AddScoped<IPricingRepository, PricingRepository>();
 builder.Services.AddScoped<IPricingResolver, PricingResolver>();
+builder.Services.AddScoped<IFulfillmentPolicyResolver, FulfillmentPolicyResolver>();
 builder.Services.AddScoped<IAdminPricingRepository, AdminPricingRepository>();
 builder.Services.AddScoped<IAdminPricingQueryService, AdminPricingQueryService>();
 builder.Services.AddScoped<IAdminPricingService, AdminPricingService>();

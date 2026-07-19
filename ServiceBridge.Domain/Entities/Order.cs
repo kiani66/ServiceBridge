@@ -11,6 +11,10 @@ public class Order : BaseEntity
     private readonly List<AgentAssignment> _assignments = new();
     private readonly List<CustomerActionRequest> _customerActionRequests = new();
 
+    private Order()
+    {
+    }
+
     public string OrderNumber { get; set; } = string.Empty;
     public Guid UserId { get; set; }
     public Guid ServiceId { get; set; }
@@ -19,8 +23,13 @@ public class Order : BaseEntity
     public OrderType OrderType { get; set; }
     public OrderFulfillmentMode FulfillmentMode { get; internal set; } =
         OrderFulfillmentMode.UseExistingAccount;
-    public ServiceFulfillmentMode ServiceFulfillmentModeSnapshot { get; internal set; } =
+    public ServiceFulfillmentMode ServiceFulfillmentModeSnapshot { get; private init; } =
         ServiceFulfillmentMode.ManualAgent;
+    public Guid? FulfillmentPolicyId { get; private set; }
+    public int? FulfillmentPolicyVersionSnapshot { get; private set; }
+    public ProcurementStrategy? ProcurementStrategySnapshot { get; private set; }
+    public ServiceFulfillmentMode? PolicyFulfillmentModeSnapshot { get; private set; }
+    public DeliveryArtifactType? DeliveryArtifactTypeSnapshot { get; private set; }
     public OrderStatus Status { get; internal set; }
     public decimal ForeignPrice { get; internal set; }
     public string CurrencyCode { get; internal set; } = string.Empty;
@@ -40,6 +49,7 @@ public class Order : BaseEntity
     public User User { get; set; } = null!;
     public DigitalService Service { get; set; } = null!;
     public ServiceVariant? ServiceVariant { get; set; }
+    public FulfillmentPolicy? FulfillmentPolicy { get; private set; }
     public User? AssignedAgent { get; set; }
     public ICollection<Payment> PaymentRecords { get; set; } = new List<Payment>();
     public ICollection<OrderFieldValue> FieldValues { get; set; } =
@@ -50,6 +60,30 @@ public class Order : BaseEntity
         _customerActionRequests.AsReadOnly();
     public ICollection<OrderNote> Notes { get; set; } = new List<OrderNote>();
     public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
+
+    public static Order Create(
+        OrderFulfillmentPolicySnapshot snapshot,
+        ServiceFulfillmentMode runtimeFulfillmentMode)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (!Enum.IsDefined(runtimeFulfillmentMode))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(runtimeFulfillmentMode),
+                runtimeFulfillmentMode,
+                "Unsupported FulfillmentMode value.");
+        }
+
+        return new Order
+        {
+            FulfillmentPolicyId = snapshot.PolicyId,
+            FulfillmentPolicyVersionSnapshot = snapshot.Version,
+            ProcurementStrategySnapshot = snapshot.ProcurementStrategy,
+            PolicyFulfillmentModeSnapshot = snapshot.FulfillmentMode,
+            ServiceFulfillmentModeSnapshot = runtimeFulfillmentMode,
+            DeliveryArtifactTypeSnapshot = snapshot.DeliveryArtifactType
+        };
+    }
 
     public bool CanTransitionTo(OrderStatus newStatus)
     {

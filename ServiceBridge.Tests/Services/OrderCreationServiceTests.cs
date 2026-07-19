@@ -1,6 +1,7 @@
 using ServiceBridge.Application.DTOs;
 using ServiceBridge.Application.Services;
 using ServiceBridge.Domain.Enums;
+using ServiceBridge.Domain.Orders;
 using ServiceBridge.Infrastructure.Services;
 using ServiceBridge.Shared.Constants;
 using ServiceBridge.Tests.TestDoubles;
@@ -50,26 +51,107 @@ public class OrderCreationServiceTests
         Assert.Equal(OrderStatus.WaitingForPayment, history[1].NewStatus);
         Assert.All(history, item => Assert.Equal(userId, item.ChangedByUserId));
         Assert.Equal(FulfillmentMode.ManualAgent, order.ServiceFulfillmentModeSnapshot);
+        Assert.Equal(FulfillmentMode.ManualAgent, order.PolicyFulfillmentModeSnapshot);
+        Assert.Equal(setup.FulfillmentPolicyResolver.Snapshot!.PolicyId, order.FulfillmentPolicyId);
+        Assert.Equal(2, order.FulfillmentPolicyVersionSnapshot);
+        Assert.Equal(ProcurementStrategy.OnDemandManual, order.ProcurementStrategySnapshot);
+        Assert.Equal(DeliveryArtifactType.AccountAccess, order.DeliveryArtifactTypeSnapshot);
     }
 
     [Fact]
-    public async Task CreateAsync_SnapshotsSelectedServiceVariantFulfillmentMode()
+    public async Task CreateAsync_SnapshotsResolvedFulfillmentPolicy()
     {
         var setup = CreateSetup();
-        setup.OrderRepository.ServiceDefinition!.ServiceFulfillmentMode =
-            FulfillmentMode.InventoryCode;
+        var policyId = Guid.NewGuid();
+        setup.FulfillmentPolicyResolver.Snapshot =
+            OrderFulfillmentPolicySnapshot.Create(
+                policyId,
+                3,
+                ProcurementStrategy.PreStockedInventory,
+                FulfillmentMode.InventoryCode,
+                DeliveryArtifactType.DigitalCode);
 
         var result = await setup.Service.CreateAsync(Guid.NewGuid(), ValidRequest(setup));
 
         Assert.True(result.Success);
         var order = Assert.IsType<Domain.Entities.Order>(
             setup.OrderRepository.AddedOrder);
-        Assert.Equal(FulfillmentMode.InventoryCode, order.ServiceFulfillmentModeSnapshot);
+        Assert.Equal(policyId, order.FulfillmentPolicyId);
+        Assert.Equal(3, order.FulfillmentPolicyVersionSnapshot);
+        Assert.Equal(ProcurementStrategy.PreStockedInventory, order.ProcurementStrategySnapshot);
+        Assert.Equal(FulfillmentMode.InventoryCode, order.PolicyFulfillmentModeSnapshot);
+        Assert.Equal(FulfillmentMode.ManualAgent, order.ServiceFulfillmentModeSnapshot);
+        Assert.Equal(DeliveryArtifactType.DigitalCode, order.DeliveryArtifactTypeSnapshot);
+        Assert.Equal(
+            setup.OrderRepository.ServiceDefinition!.ServiceVariantId,
+            setup.FulfillmentPolicyResolver.RequestedServiceVariantId);
 
-        setup.OrderRepository.ServiceDefinition.ServiceFulfillmentMode =
-            FulfillmentMode.ManualAgent;
+        setup.FulfillmentPolicyResolver.Snapshot = OrderFulfillmentPolicySnapshot.Create(
+            Guid.NewGuid(),
+            4,
+            ProcurementStrategy.OnDemandManual,
+            FulfillmentMode.ManualAgent,
+            DeliveryArtifactType.AccountAccess);
 
-        Assert.Equal(FulfillmentMode.InventoryCode, order.ServiceFulfillmentModeSnapshot);
+        Assert.Equal(FulfillmentMode.InventoryCode, order.PolicyFulfillmentModeSnapshot);
+        Assert.Equal(FulfillmentMode.ManualAgent, order.ServiceFulfillmentModeSnapshot);
+        Assert.Equal(3, order.FulfillmentPolicyVersionSnapshot);
+    }
+
+    [Theory]
+    [InlineData(
+        ProcurementStrategy.PreferInventoryThenManual,
+        FulfillmentMode.InventoryCode,
+        DeliveryArtifactType.DigitalCode)]
+    [InlineData(
+        ProcurementStrategy.OnDemandSupplierApi,
+        FulfillmentMode.ExternalAutomation,
+        DeliveryArtifactType.AccountAccess)]
+    [InlineData(
+        ProcurementStrategy.NotRequired,
+        FulfillmentMode.InstructionOnly,
+        DeliveryArtifactType.Instructions)]
+    public async Task CreateAsync_FuturePolicyModes_DoNotChangeLegacyRuntimeMode(
+        ProcurementStrategy procurementStrategy,
+        FulfillmentMode policyFulfillmentMode,
+        DeliveryArtifactType deliveryArtifactType)
+    {
+        var setup = CreateSetup();
+        setup.FulfillmentPolicyResolver.Snapshot =
+            OrderFulfillmentPolicySnapshot.Create(
+                Guid.NewGuid(),
+                5,
+                procurementStrategy,
+                policyFulfillmentMode,
+                deliveryArtifactType);
+
+        var result = await setup.Service.CreateAsync(
+            Guid.NewGuid(),
+            ValidRequest(setup));
+
+        Assert.True(result.Success);
+        var order = Assert.IsType<Domain.Entities.Order>(
+            setup.OrderRepository.AddedOrder);
+        Assert.Equal(policyFulfillmentMode, order.PolicyFulfillmentModeSnapshot);
+        Assert.Equal(FulfillmentMode.ManualAgent, order.ServiceFulfillmentModeSnapshot);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenFulfillmentPolicyIsMissing_StopsBeforeOrderAndCredentials()
+    {
+        var setup = CreateSetup();
+        setup.FulfillmentPolicyResolver.Snapshot = null;
+
+        var result = await setup.Service.CreateAsync(
+            Guid.NewGuid(),
+            ValidRequest(setup));
+
+        Assert.False(result.Success);
+        Assert.Equal(409, result.StatusCode);
+        Assert.Equal(AppConstants.ErrorCodes.FulfillmentPolicyRequired, result.ErrorCode);
+        Assert.Null(setup.OrderRepository.AddedOrder);
+        Assert.Equal(0, setup.OrderRepository.SaveCount);
+        Assert.Equal(0, setup.OrderFieldProtector.ProtectCallCount);
     }
 
     [Fact]
@@ -559,19 +641,38 @@ public class OrderCreationServiceTests
             ? new FakeOrderNumberGenerator("PB-20260621-ABC12345")
             : new FakeOrderNumberGenerator(orderNumbers);
 
+        var fulfillmentPolicyResolver = new FakeFulfillmentPolicyResolver
+        {
+            Snapshot = OrderFulfillmentPolicySnapshot.Create(
+                Guid.NewGuid(),
+                2,
+                ProcurementStrategy.OnDemandManual,
+                FulfillmentMode.ManualAgent,
+                DeliveryArtifactType.AccountAccess)
+        };
+        var orderFieldProtector = new FakeOrderFieldProtector();
+
         var service = new OrderCreationService(
             orderRepository,
             new PricingResolver(pricingRepository, new PricingCalculator()),
+            fulfillmentPolicyResolver,
             new OrderFieldValidator(),
             numberGenerator,
-            new OrderFactory(new FakeOrderFieldProtector()),
+            new OrderFactory(orderFieldProtector),
             new FakeNotificationService());
 
-        return new TestSetup(service, orderRepository, pricingRepository);
+        return new TestSetup(
+            service,
+            orderRepository,
+            pricingRepository,
+            fulfillmentPolicyResolver,
+            orderFieldProtector);
     }
 
     private sealed record TestSetup(
         OrderCreationService Service,
         FakeOrderCreationRepository OrderRepository,
-        FakePricingRepository PricingRepository);
+        FakePricingRepository PricingRepository,
+        FakeFulfillmentPolicyResolver FulfillmentPolicyResolver,
+        FakeOrderFieldProtector OrderFieldProtector);
 }
