@@ -39,6 +39,8 @@ builder.Services.Configure<MessageOutboxSettings>(
     builder.Configuration.GetSection(MessageOutboxSettings.SectionName));
 builder.Services.Configure<InventoryCodeProtectionOptions>(
     builder.Configuration.GetSection(InventoryCodeProtectionOptions.SectionName));
+builder.Services.Configure<DeliveryArtifactProtectionOptions>(
+    builder.Configuration.GetSection(DeliveryArtifactProtectionOptions.SectionName));
 builder.Services.AddSingleton<IValidateOptions<EmailOptions>, EmailOptionsValidator>();
 builder.Services.AddOptions<EmailOptions>()
     .Bind(builder.Configuration.GetSection(EmailOptions.SectionName))
@@ -170,6 +172,10 @@ builder.Services.AddScoped<GetUserRefundHistoryQuery>();
 builder.Services.AddScoped<GetAdminRefundListQuery>();
 builder.Services.AddSingleton<IOrderFieldProtector, DataProtectionOrderFieldProtector>();
 builder.Services.AddSingleton<IInventoryCodeProtector, DataProtectionInventoryCodeProtector>();
+builder.Services.AddSingleton<
+    IDeliveryArtifactProtector,
+    DataProtectionDeliveryArtifactProtector>();
+builder.Services.AddScoped<IDeliveryArtifactWriter, DeliveryArtifactWriter>();
 builder.Services.AddSingleton<IOrderFieldValidator, OrderFieldValidator>();
 builder.Services.AddSingleton<IOrderNumberGenerator, OrderNumberGenerator>();
 builder.Services.AddSingleton<ITicketNumberGenerator, TicketNumberGenerator>();
